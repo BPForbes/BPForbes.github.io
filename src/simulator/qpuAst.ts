@@ -17,12 +17,20 @@ export type ProtocolProcess = {
   lines: string[];
 };
 
+export type ProcessParam = {
+  name: string;
+  type: string;
+  qubitIndex: number;
+};
+
 export type CompileResult = {
   gates: CircuitGate[];
   qubitCount: number;
   parsed: ParsedCommand[];
   log: string[];
   tokenMap: Record<string, number>;
+  /** User-facing inputs from the PARAMS line only (excludes ancilla and reset targets). */
+  processParams: ProcessParam[];
 };
 
 const primitiveGates = new Set(['X', 'H', 'CNOT', 'CCNOT', 'PHASE']);
@@ -466,11 +474,18 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     tokenMap[token] = qubit;
   });
 
+  const processParams: ProcessParam[] = main.params.flatMap((param) => {
+    const qubitIndex = tokenMap[param.name];
+    if (qubitIndex === undefined) return [];
+    return [{ name: param.name, type: param.type, qubitIndex }];
+  });
+
   return {
     gates: state.gates.map((gate, step) => ({ ...gate, step })),
     qubitCount: Math.max(1, state.tokenToQubit.size),
     parsed: state.parsed,
     log: state.log,
     tokenMap,
+    processParams,
   };
 };

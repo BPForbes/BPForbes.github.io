@@ -7,7 +7,7 @@ import { examples } from './data/examples';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess, QpucirPayload } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, runCircuit } from './simulator/engine';
-import { compileQpuProtocol, supportedQpuOperations } from './simulator/qpuAst';
+import { compileQpuProtocol, ProcessParam, supportedQpuOperations } from './simulator/qpuAst';
 import { extractMainProcessName, qpucirFileNameForSource, serializeCircuitToQpuProtocol } from './simulator/qpuFormat';
 import { CircuitGate, GateType, MeasurementMap, ParticleStartState, gateTypes } from './simulator/types';
 import { Complex } from './simulator/complex';
@@ -96,6 +96,7 @@ function App() {
   const [protocolSource, setProtocolSource] = useState(protocolExamples[0].source);
   const [compileSummary, setCompileSummary] = useState('Paste or load a QPU protocol, then compile it into visual gates.');
   const [tokenMap, setTokenMap] = useState<Record<string, number>>({});
+  const [processParams, setProcessParams] = useState<ProcessParam[]>([]);
   const [activeView, setActiveView] = useState<AppView>('builder');
   const [menuOpen, setMenuOpen] = useState(false);
   const [fileStatus, setFileStatus] = useState('Upload a .qpucir file or download one of the bundled AST circuits.');
@@ -118,6 +119,12 @@ function App() {
   }, [qubitCount, tokenMap]);
   const selectedTarget = Math.min(targetQubit, qubitCount - 1);
   const phaseRadians = (phaseDegrees * Math.PI) / 180;
+  const controllableParams = useMemo(
+    () => (processParams.length > 0
+      ? processParams
+      : Array.from({ length: qubitCount }, (_, qubit) => ({ name: `q${qubit}`, type: '1', qubitIndex: qubit }))),
+    [processParams, qubitCount],
+  );
 
   const chooseDistinctQubit = (avoid: number[]) => {
     const option = Array.from({ length: qubitCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));
@@ -206,6 +213,7 @@ function App() {
     setProtocolSource(initialProtocolSource);
     setCompileSummary('Paste or load a QPU protocol, then compile it into visual gates.');
     setTokenMap({});
+    setProcessParams([]);
     setFileStatus('Site reset to the default circuit builder state.');
     setActiveView('builder');
     setMenuOpen(false);
@@ -291,6 +299,7 @@ function App() {
     setProtocolSource(serializeCircuitToQpuProtocol(example.gates, example.qubitCount, nextStartStates, example.name));
     setStartStates(nextStartStates);
     setTokenMap({});
+    setProcessParams([]);
     resetRuntime(example.qubitCount, `Loaded ${example.name}.`, nextStartStates);
   };
 
@@ -302,7 +311,11 @@ function App() {
       setStartStates(nextStartStates);
       setGates(result.gates);
       setTokenMap(result.tokenMap);
-      setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${result.qubitCount} register(s).`);
+      setProcessParams(result.processParams);
+      const paramSummary = result.processParams.length
+        ? `${result.processParams.length} process parameter(s) (${result.processParams.map((param) => param.name).join(', ')})`
+        : 'no explicit process parameters';
+      setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${result.qubitCount} register(s) with ${paramSummary}.`);
       resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates);
       setLog((current) => [...current, ...result.log.slice(0, 24)]);
       return result;
@@ -500,11 +513,11 @@ function App() {
               <button onClick={removeParticle} type="button">Remove particle</button>
               <button onClick={measureSelectedQubit} type="button">Measure target</button>
             </div>
-            <div className="start-state-picker" aria-label="Particle start states">
-              {Array.from({ length: qubitCount }, (_, qubit) => (
-                <label key={qubit}>
-                  {qubitLabels[qubit]} start
-                  <select value={startStates[qubit] ?? '0p'} onChange={(event) => updateStartState(qubit, event.target.value as ParticleStartState)}>
+            <div className="start-state-picker" aria-label="Process parameter start states">
+              {controllableParams.map((param) => (
+                <label key={param.name}>
+                  {param.name} start
+                  <select value={startStates[param.qubitIndex] ?? '0p'} onChange={(event) => updateStartState(param.qubitIndex, event.target.value as ParticleStartState)}>
                     <option value="0p">0p</option>
                     <option value="1p">1p</option>
                     <option value="sp">sp</option>
@@ -512,7 +525,7 @@ function App() {
                 </label>
               ))}
             </div>
-            <p className="canvas-tip">Selected {selectedGate} gate will target q{selectedTarget}; controlled gates use the control selectors above. Particle start states are mirrored into SET lines in the QPU AST backend.</p>
+            <p className="canvas-tip">Selected {selectedGate} gate will target q{selectedTarget}; controlled gates use the control selectors above. Only declared process parameters are user-controllable; ancilla and reset registers are initialized by the compiler.</p>
           </section>
 
           <section className="controls panel" aria-label="Run controls">

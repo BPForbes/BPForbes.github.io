@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { compileQpuProtocol, getReturnValToken } from './qpuAst';
+import { serializeCircuitToQpuProtocol } from './qpuFormat';
 import { measureAll, runCircuit } from './engine';
 import type { ParticleStartState } from './types';
 
@@ -39,6 +40,28 @@ describe('SingleBitFullAdder via TwoBitFullAdder', () => {
     expect(readMeasured(compiled.tokenMap, measured.measurements, 'S0tmp')).toBe(1);
     expect(readMeasured(compiled.tokenMap, measured.measurements, 'S1tmp')).toBe(1);
     expect(readMeasured(compiled.tokenMap, measured.measurements, 'Cmid')).toBe(0);
+  });
+});
+
+describe('process parameter exposure', () => {
+  it('exposes only PARAMS entries for SingleBitFullAdder', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
+    expect(compiled.processParams).toEqual([
+      { name: 'A', type: '1', qubitIndex: expect.any(Number) },
+      { name: 'B', type: '1', qubitIndex: expect.any(Number) },
+      { name: 'Cin', type: '1', qubitIndex: expect.any(Number) },
+    ]);
+    expect(compiled.processParams).toHaveLength(3);
+    expect(compiled.qubitCount).toBeGreaterThan(3);
+  });
+
+  it('does not inflate qubit count when a compiled circuit is serialized and recompiled', () => {
+    const first = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
+    const roundTripSource = serializeCircuitToQpuProtocol(first.gates, first.qubitCount);
+    const second = compileQpuProtocol(roundTripSource, protocolLibrary);
+
+    expect(second.processParams).toHaveLength(first.qubitCount);
+    expect(second.qubitCount).toBe(first.qubitCount);
   });
 });
 

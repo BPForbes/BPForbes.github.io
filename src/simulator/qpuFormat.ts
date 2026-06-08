@@ -19,6 +19,8 @@ export const qpucirFileNameForSource = (source: string, fallbackName = 'CurrentC
   return `${processName}.qpucir`;
 };
 
+const canvasParamRef = (qubit: number) => `$Q${qubit}`;
+
 export const serializeCircuitToQpuProtocol = (
   gates: CircuitGate[],
   qubitCount: number,
@@ -32,21 +34,22 @@ export const serializeCircuitToQpuProtocol = (
   ];
 
   Array.from({ length: qubitCount }, (_, qubit) => {
-    lines.push(`SET ${qubit}:0 ${startStates[qubit] ?? '0p'}`);
+    const startState = startStates[qubit] ?? '0p';
+    if (startState !== '0p') {
+      lines.push(`SET ${canvasParamRef(qubit)} ${startState}`);
+    }
   });
 
   gates
     .slice()
     .sort((a, b) => a.step - b.step)
     .forEach((gate) => {
-      const target = `${gate.targets[0]}:0`;
-      const controls = gate.controls.map((control) => `${control}:0`);
+      if (gate.type === 'RESET') return;
+
+      const target = `${canvasParamRef(gate.targets[0])}:0`;
+      const controls = gate.controls.map((control) => `${canvasParamRef(control)}:0`);
       if (gate.type === 'MEASURE') {
-        lines.push(`MEASURE -I ${gate.targets[0]}`);
-        return;
-      }
-      if (gate.type === 'RESET') {
-        lines.push(`SET ${target} 0p`);
+        lines.push(`MEASURE -I ${canvasParamRef(gate.targets[0])}`);
         return;
       }
       if (gate.type === 'X' || gate.type === 'H' || gate.type === 'PHASE' || gate.type === 'NOT') {
@@ -57,6 +60,6 @@ export const serializeCircuitToQpuProtocol = (
       lines.push(`${gate.type} -I ${controls.join(' ')} -O ${target}`);
     });
 
-  lines.push(`RETURNVALS ${Array.from({ length: qubitCount }, (_, qubit) => qubit).join(' ')}`);
+  lines.push(`RETURNVALS ${Array.from({ length: qubitCount }, (_, qubit) => canvasParamRef(qubit)).join(' ')}`);
   return lines.join('\n');
 };
