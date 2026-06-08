@@ -17,6 +17,6 @@ CCNOT -I 0:0 1:0 -O Cout:0
 CCNOT -I 0:0 2:0 -O Cout:0
 CCNOT -I 1:0 2:0 -O Cout:0
 
-MEASURE -I Sum
 MEASURE -I Cout
-RETURNVALS Sum Cout
+MEASURE -I Sum
+RETURNVALS Cout Sum

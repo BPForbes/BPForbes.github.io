@@ -9,12 +9,12 @@ SET Cmid:0 0p
 SET A0:0 $A0
 SET B0:0 $B0
 SET Cin:0 $Cin
-RUNCHILD SingleBitFullAdder -I $A0 $B0 $Cin -O S0tmp Cmid:0
-ACCEPTVALS S0tmp Cmid
+RUNCHILD SingleBitFullAdder -I $A0 $B0 $Cin -O Cmid:0 S0tmp
+ACCEPTVALS Cmid S0tmp
 
 SET A1:0 $A1
 SET B1:0 $B1
-RUNCHILD SingleBitFullAdder -I $A1 $B1 Cmid -O S1tmp Cout
-ACCEPTVALS S1tmp Cout
+RUNCHILD SingleBitFullAdder -I $A1 $B1 Cmid -O Cout S1tmp
+ACCEPTVALS Cout S1tmp
 
-RETURNVALS S0tmp S1tmp Cout
+RETURNVALS Cout S1tmp S0tmp

@@ -54,7 +54,7 @@ describe('process parameter exposure', () => {
     expect(compiled.processParams).toHaveLength(3);
     expect(compiled.qubitCount).toBe(5);
     expect(compiled.logicalQubitCount).toBe(2);
-    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Sum', 'Cout']);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
   });
 
   it('excludes reset targets from process parameters in FourBitFullAdder', () => {
@@ -100,8 +100,8 @@ describe('process parameter exposure', () => {
     setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q1', '1p');
     setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q2', '0p');
 
-    const sumQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 0));
-    const carryQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 1));
+    const carryQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 0));
+    const sumQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 1));
 
     const firstMeasured = measureAll(
       runCircuit(first.qubitCount, first.gates, pollutedStartStates).state,
@@ -133,7 +133,7 @@ describe('PhaseDemo', () => {
 });
 
 describe('SingleBitFullAdder standalone', () => {
-  it('projects the displayed ket onto Sum and Cout return values', () => {
+  it('projects the displayed ket onto Cout and Sum return values', () => {
     const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
     const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
     setToken(compiled.tokenMap, startStates, 'A', '1p');
@@ -146,7 +146,7 @@ describe('SingleBitFullAdder standalone', () => {
     const projected = projectStateOntoQubits(executed.state, compiled.qubitCount, returnIndices);
 
     expect(projected).toHaveLength(4);
-    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Sum', 'Cout']);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
   });
 
   it('computes sum and carry from RETURNVALS register names', () => {
@@ -160,8 +160,8 @@ describe('SingleBitFullAdder standalone', () => {
     const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
     const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
 
-    const sumQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 0));
-    const carryQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 1));
+    const carryQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 0));
+    const sumQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 1));
     expect(measured.measurements[sumQubit]).toBe(0);
     expect(measured.measurements[carryQubit]).toBe(1);
   });
@@ -172,7 +172,7 @@ describe('TwoBitFullAdder', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     expect(compiled.qubitCount).toBe(9);
     expect(compiled.logicalQubitCount).toBe(3);
-    expect(compiled.returnValues.map((value) => value.name)).toEqual(['S0tmp', 'S1tmp', 'Cout']);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'S1tmp', 'S0tmp']);
     expect(Object.keys(compiled.tokenMap)).not.toContain('SingleBitFullAdder#1/2');
   });
 
