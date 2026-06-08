@@ -101,10 +101,17 @@ function App() {
   const [fileStatus, setFileStatus] = useState('Upload a .qpucir file or download one of the bundled AST circuits.');
 
   const orderedGates = useMemo(() => gates.slice().sort((a, b) => a.step - b.step), [gates]);
+  // Issue #2 fix (qubit index mismatch): After compilation the tokenMap produced by the
+  // compiler maps canonical register names (e.g. "TwoBitFullAdder#0/A0") to physical qubit
+  // indices.  We derive human-readable labels from those entries so the start-state pickers
+  // and the particle view both show the token name beside the qubit number.  Without this,
+  // users were setting "q0 start" thinking they were initialising operand A0, but q0 was
+  // actually an internal scratch register allocated first by CREATETOKEN.
   const qubitLabels = useMemo(() => {
     const labels = Array.from({ length: qubitCount }, (_, qubit) => `q${qubit}`);
     Object.entries(tokenMap).forEach(([token, qubit]) => {
       if (qubit < qubitCount) {
+        // Strip the scope prefix (everything before the last '/') for brevity in the UI.
         const shortName = token.includes('/') ? token.split('/').pop() ?? token : token;
         labels[qubit] = `q${qubit} · ${shortName}`;
       }
