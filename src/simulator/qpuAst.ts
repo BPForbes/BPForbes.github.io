@@ -258,12 +258,6 @@ const emitGate = (state: CompilerState, type: GateType, targets: number[], contr
 
 const resolveInputQubit = (state: CompilerState, frame: Frame, token: string) => ensureQubit(state, scopedName(frame, token));
 
-// Issue #3 fix (orphaned CREATETOKEN registers): Before compiling a child process we
-// need to know which of the child's internal registers will be exposed as return values.
-// By scanning the child's RETURNVALS line up-front we can pre-bind those registers to the
-// parent's output tokens, so the child writes its results directly into the parent's
-// physical qubits instead of allocating separate orphaned registers that the parent would
-// never read.
 const returnRegistersForProcess = (process: ProtocolProcess): string[] => {
   for (const line of process.lines) {
     try {
@@ -274,6 +268,14 @@ const returnRegistersForProcess = (process: ProtocolProcess): string[] => {
     }
   }
   return [];
+};
+
+export const getReturnValTokens = (source: string): string[] => returnRegistersForProcess(parseProtocol(source));
+
+export const getReturnValToken = (source: string, index: number): string => {
+  const token = getReturnValTokens(source)[index];
+  if (!token) throw new Error(`RETURNVALS index ${index} is out of range for this protocol`);
+  return token;
 };
 
 const executeProcess = (
@@ -291,35 +293,16 @@ const executeProcess = (
     const provided = passedParams[index];
     let resolved: string;
     if (provided !== undefined && parentFrame) {
-      // Issue #1 / #4 fix (shared input qubit + int/output params collapsed): When a
-      // caller wires a concrete token into this parameter, resolve it through the parent
-      // frame so we get the caller's physical register name (e.g. "TwoBitFullAdder#0/A0").
-      // Previously the fallback was `defaultValueForType(param.type)` which returned the
-      // shared constant string "0p" (for state params) or "0" (for int params), meaning
-      // every unbound param pointed at the same `const/0p` or `const/0` qubit.
       resolved = scopedName(parentFrame, provided);
     } else {
-      // Issue #1 / #4 fix continued: When no caller token is supplied the parameter gets
-      // its own distinct register named after the param itself (e.g. "A0", "Sum0").
-      // The old code collapsed ALL unbound params to the same constant register, making
-      // independent inputs like |10⟩ + |01⟩ physically impossible.
       resolved = param.name;
     }
     params.set(param.name, resolved);
   });
   const frame: Frame = { process, scope, aliases: new Map(), params };
-  // Issue #3 fix (orphaned CREATETOKEN): Seed the new frame's alias map with any
-  // pre-computed output bindings from the parent.  This means that when the child
-  // later emits a gate on one of its return registers (e.g. "3" or "4" in
-  // SingleBitFullAdder), `scopedName` will resolve it directly to the parent token
-  // (e.g. "S0tmp" or "Cmid") rather than creating a fresh scoped register that the
-  // parent would never read.
   outputBindings.forEach((parentToken, childRegister) => {
     frame.aliases.set(childRegister, parentToken);
   });
-  // Pre-allocate a physical qubit for every parameter before lowering the process body.
-  // This guarantees that qubit indices are stable and match what the UI's start-state
-  // pickers initialize (Issue #2 – qubit index mismatch fix).
   process.params.forEach((param) => ensureQubit(state, params.get(param.name)!));
   let returns: string[] = [];
 
@@ -380,17 +363,11 @@ const executeProcess = (
       const childName = command.op === 'RUNCHILD' ? command.args[0] : command.args[0];
       const child = library.get(childName);
       if (!child) throw new Error(`Unknown child process '${childName}'`);
-      // Issue #3 fix: Look up which internal registers the child will expose via
-      // RETURNVALS (e.g. ["3", "4"] for SingleBitFullAdder's sum and carry).
       const childReturnRegisters = returnRegistersForProcess(child);
-      // Build the output-binding map that maps each child return register name to the
-      // corresponding parent output token.  We also call ensureQubit for the parent token
-      // here so it exists before the child's compilation begins (Issue #2 – ensures parent
-      // output registers are allocated with stable indices before child gates are emitted).
       const childOutputBindings = new Map<string, string>();
       command.outputs.forEach((output, index) => {
         const childRegister = childReturnRegisters[index];
-
+        if (!childRegister) return;
         const parentToken = scopedName(frame, stripCycle(output));
         ensureQubit(state, parentToken);
         childOutputBindings.set(childRegister, parentToken);

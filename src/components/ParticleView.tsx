@@ -6,10 +6,6 @@ type ParticleViewProps = {
   gates?: CircuitGate[];
   activeStep?: number;
   startStates?: ParticleStartState[];
-  // Issue #2 fix (qubit index mismatch): Optional array of human-readable labels derived
-  // from the compiler's tokenMap (e.g. "q0 · A0", "q1 · B0").  When provided, each
-  // particle card shows the token name instead of the bare qubit index so users can
-  // identify which wire corresponds to which protocol parameter.
   qubitLabels?: string[];
 };
 
@@ -58,9 +54,6 @@ const mixedColor = (qubits: number[]) => {
   return oklabToCss(average);
 };
 
-// Issue #2 fix: `qubitLabels` defaults to an empty array; the JSX below falls back to
-// `q${qubit}` for any index without a label so the component works in both workbench
-// (manual) and compiled-protocol modes.
 export function ParticleView({ qubitCount, measurements, gates = [], activeStep = -1, startStates = [], qubitLabels = [] }: ParticleViewProps) {
   const sorted = gates.slice().sort((a, b) => a.step - b.step);
 
@@ -76,8 +69,6 @@ export function ParticleView({ qubitCount, measurements, gates = [], activeStep 
           const baseColor = oklabToCss(rgbToOklab(seededColor(qubit)));
           return (
             <div className={`particle-card ${measured !== undefined ? 'collapsed' : ''}`} key={qubit} style={{ ['--particle-color' as string]: baseColor }}>
-              {/* Issue #2 fix: use the token-name label when available so the particle
-                  card matches the start-state picker label in the workbench. */}
               <div className="qubit-label">{qubitLabels[qubit] ?? `q${qubit}`} · {startStates[qubit] ?? '0p'}</div>
               {measured === undefined ? (
                 <div className="sphere" aria-label={`q${qubit} unmeasured quantum sphere`} />

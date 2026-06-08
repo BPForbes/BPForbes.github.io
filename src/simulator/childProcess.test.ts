@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
-import { compileQpuProtocol } from './qpuAst';
+import { describe, expect, it } from 'vitest';
+import { compileQpuProtocol, getReturnValToken } from './qpuAst';
 import { measureAll, runCircuit } from './engine';
 import type { ParticleStartState } from './types';
 
@@ -23,101 +24,84 @@ const setToken = (tokenMap: Record<string, number>, startStates: ParticleStartSt
 const readMeasured = (tokenMap: Record<string, number>, measurements: Record<number, 0 | 1>, name: string) =>
   measurements[tokenQubit(tokenMap, name)];
 
-const assertEqual = (actual: unknown, expected: unknown, label: string) => {
-  if (actual !== expected) throw new Error(`${label}: expected ${expected}, got ${actual}`);
-};
+describe('SingleBitFullAdder via TwoBitFullAdder', () => {
+  it('writes child sum and carry into S0tmp, S1tmp, and Cmid', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A0', '0p');
+    setToken(compiled.tokenMap, startStates, 'A1', '1p');
+    setToken(compiled.tokenMap, startStates, 'B0', '1p');
+    setToken(compiled.tokenMap, startStates, 'B1', '0p');
 
-const testSingleBitFullAdderChildOutputs = () => {
-  const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
-  const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
-  setToken(compiled.tokenMap, startStates, 'A0', '0p');
-  setToken(compiled.tokenMap, startStates, 'A1', '1p');
-  setToken(compiled.tokenMap, startStates, 'B0', '1p');
-  setToken(compiled.tokenMap, startStates, 'B1', '0p');
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
+    const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
 
-  const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
-  const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S0tmp')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S1tmp')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'Cmid')).toBe(0);
+  });
+});
 
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'S0tmp'), 1, 'single-bit child sum bit 0');
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'S1tmp'), 1, 'single-bit child sum bit 1');
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'Cmid'), 0, 'single-bit child carry between nibbles');
-};
+describe('SingleBitFullAdder standalone', () => {
+  it('computes sum and carry from RETURNVALS register names', () => {
+    const source = protocolLibrary.SingleBitFullAdder;
+    const compiled = compileQpuProtocol(source, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A', '1p');
+    setToken(compiled.tokenMap, startStates, 'B', '1p');
+    setToken(compiled.tokenMap, startStates, 'Cin', '0p');
 
-const testSingleBitFullAdderStandalone = () => {
-  const source = protocolLibrary.SingleBitFullAdder;
-  const compiled = compileQpuProtocol(source, protocolLibrary);
-  const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
-  setToken(compiled.tokenMap, startStates, 'A', '1p');
-  setToken(compiled.tokenMap, startStates, 'B', '1p');
-  setToken(compiled.tokenMap, startStates, 'Cin', '0p');
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
+    const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
 
-  const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
-  const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
+    const sumQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 0));
+    const carryQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 1));
+    expect(measured.measurements[sumQubit]).toBe(0);
+    expect(measured.measurements[carryQubit]).toBe(1);
+  });
+});
 
-  const sumQubit = tokenQubit(compiled.tokenMap, '3');
-  const carryQubit = tokenQubit(compiled.tokenMap, '4');
-  assertEqual(measured.measurements[sumQubit], 0, 'standalone single-bit sum');
-  assertEqual(measured.measurements[carryQubit], 1, 'standalone single-bit carry');
-};
+describe('TwoBitFullAdder', () => {
+  it('adds |10> and |01> to produce sum 3', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A0', '0p');
+    setToken(compiled.tokenMap, startStates, 'A1', '1p');
+    setToken(compiled.tokenMap, startStates, 'B0', '1p');
+    setToken(compiled.tokenMap, startStates, 'B1', '0p');
 
-const testTwoBitFullAdder = () => {
-  const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
-  const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
-  setToken(compiled.tokenMap, startStates, 'A0', '0p');
-  setToken(compiled.tokenMap, startStates, 'A1', '1p');
-  setToken(compiled.tokenMap, startStates, 'B0', '1p');
-  setToken(compiled.tokenMap, startStates, 'B1', '0p');
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
+    const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
 
-  const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
-  const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S0tmp')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S1tmp')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'Cout')).toBe(0);
+  });
+});
 
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'S0tmp'), 1, 'two-bit sum0');
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'S1tmp'), 1, 'two-bit sum1');
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'Cout'), 0, 'two-bit cout');
-};
+describe('FourBitFullAdder nested children', () => {
+  it('computes low-nibble 2 + 1 = 3', () => {
+    const source = readProcess('four-bit-full-adder.qpucir');
+    const compiled = compileQpuProtocol(source, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
 
-const testFourBitFullAdder = () => {
-  const source = readProcess('four-bit-full-adder.qpucir');
-  const compiled = compileQpuProtocol(source, protocolLibrary);
-  const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A0', '0p');
+    setToken(compiled.tokenMap, startStates, 'A1', '1p');
+    setToken(compiled.tokenMap, startStates, 'A2', '0p');
+    setToken(compiled.tokenMap, startStates, 'A3', '0p');
+    setToken(compiled.tokenMap, startStates, 'B0', '1p');
+    setToken(compiled.tokenMap, startStates, 'B1', '0p');
+    setToken(compiled.tokenMap, startStates, 'B2', '0p');
+    setToken(compiled.tokenMap, startStates, 'B3', '0p');
+    setToken(compiled.tokenMap, startStates, 'Cin', '0p');
 
-  setToken(compiled.tokenMap, startStates, 'A0', '0p');
-  setToken(compiled.tokenMap, startStates, 'A1', '1p');
-  setToken(compiled.tokenMap, startStates, 'A2', '0p');
-  setToken(compiled.tokenMap, startStates, 'A3', '0p');
-  setToken(compiled.tokenMap, startStates, 'B0', '1p');
-  setToken(compiled.tokenMap, startStates, 'B1', '0p');
-  setToken(compiled.tokenMap, startStates, 'B2', '0p');
-  setToken(compiled.tokenMap, startStates, 'B3', '0p');
-  setToken(compiled.tokenMap, startStates, 'Cin', '0p');
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
+    const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
 
-  const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
-  const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
-
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'Sum0'), 1, 'four-bit sum0');
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'Sum1'), 1, 'four-bit sum1');
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'Sum2'), 0, 'four-bit sum2');
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'Sum3'), 0, 'four-bit sum3');
-  assertEqual(readMeasured(compiled.tokenMap, measured.measurements, 'C4'), 0, 'four-bit final carry');
-};
-
-const tests = [
-  ['SingleBitFullAdder standalone', testSingleBitFullAdderStandalone],
-  ['SingleBitFullAdder via TwoBitFullAdder', testSingleBitFullAdderChildOutputs],
-  ['TwoBitFullAdder', testTwoBitFullAdder],
-  ['FourBitFullAdder nested children', testFourBitFullAdder],
-] as const;
-
-let failures = 0;
-for (const [name, test] of tests) {
-  try {
-    test();
-    console.log(`ok - ${name}`);
-  } catch (error) {
-    failures += 1;
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`fail - ${name}: ${message}`);
-  }
-}
-
-if (failures > 0) process.exit(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'Sum0')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'Sum1')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'Sum2')).toBe(0);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'Sum3')).toBe(0);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'C4')).toBe(0);
+  });
+});
