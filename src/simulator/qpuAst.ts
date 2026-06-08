@@ -23,17 +23,24 @@ export type ProcessParam = {
   qubitIndex: number;
 };
 
+export type ReturnValue = {
+  name: string;
+  qubitIndex: number;
+};
+
 export type CompileResult = {
   gates: CircuitGate[];
   /** Physical registers used by the compiled circuit. */
   qubitCount: number;
-  /** User-facing parameter count (PARAMS line); use for ket / UI width when > 0. */
+  /** Ket width for RETURNVALS outputs when present, otherwise process parameter count. */
   logicalQubitCount: number;
   parsed: ParsedCommand[];
   log: string[];
   tokenMap: Record<string, number>;
   /** User-facing inputs from the PARAMS line only (excludes ancilla and reset targets). */
   processParams: ProcessParam[];
+  /** Output registers from RETURNVALS; drive the displayed ket. */
+  returnValues: ReturnValue[];
 };
 
 const primitiveGates = new Set(['X', 'H', 'CNOT', 'CCNOT', 'PHASE']);
@@ -560,13 +567,22 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     processParams,
   );
 
+  const returnValues: ReturnValue[] = returnRegistersForProcess(main).flatMap((name) => {
+    const entry = Object.entries(compacted.tokenMap).find(([token]) => token === name || token.endsWith(`/${name}`));
+    if (entry === undefined) return [];
+    return [{ name, qubitIndex: entry[1] }];
+  });
+
   return {
     gates: compacted.gates,
     qubitCount: compacted.qubitCount,
-    logicalQubitCount: compacted.processParams.length > 0 ? compacted.processParams.length : compacted.qubitCount,
+    logicalQubitCount: returnValues.length > 0 ? returnValues.length : compacted.processParams.length > 0
+      ? compacted.processParams.length
+      : compacted.qubitCount,
     parsed: state.parsed,
     log: state.log,
     tokenMap: compacted.tokenMap,
     processParams: compacted.processParams,
+    returnValues,
   };
 };

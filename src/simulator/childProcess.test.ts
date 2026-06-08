@@ -47,12 +47,14 @@ describe('process parameter exposure', () => {
   it('exposes only PARAMS entries for SingleBitFullAdder', () => {
     const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
     expect(compiled.processParams).toEqual([
-      { name: 'A', type: '1', qubitIndex: expect.any(Number) },
-      { name: 'B', type: '1', qubitIndex: expect.any(Number) },
-      { name: 'Cin', type: '1', qubitIndex: expect.any(Number) },
+      { name: 'A', type: 'state', qubitIndex: expect.any(Number) },
+      { name: 'B', type: 'state', qubitIndex: expect.any(Number) },
+      { name: 'Cin', type: 'state', qubitIndex: expect.any(Number) },
     ]);
     expect(compiled.processParams).toHaveLength(3);
-    expect(compiled.qubitCount).toBeGreaterThan(3);
+    expect(compiled.qubitCount).toBe(5);
+    expect(compiled.logicalQubitCount).toBe(2);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Sum', 'Cout']);
   });
 
   it('excludes reset targets from process parameters in FourBitFullAdder', () => {
@@ -120,6 +122,22 @@ describe('process parameter exposure', () => {
 });
 
 describe('SingleBitFullAdder standalone', () => {
+  it('projects the displayed ket onto Sum and Cout return values', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A', '1p');
+    setToken(compiled.tokenMap, startStates, 'B', '0p');
+    setToken(compiled.tokenMap, startStates, 'Cin', '0p');
+
+    const paramIndices = compiled.processParams.map((param) => param.qubitIndex);
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates, paramIndices);
+    const returnIndices = compiled.returnValues.map((value) => value.qubitIndex);
+    const projected = projectStateOntoQubits(executed.state, compiled.qubitCount, returnIndices);
+
+    expect(projected).toHaveLength(4);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Sum', 'Cout']);
+  });
+
   it('computes sum and carry from RETURNVALS register names', () => {
     const source = protocolLibrary.SingleBitFullAdder;
     const compiled = compileQpuProtocol(source, protocolLibrary);
@@ -141,13 +159,13 @@ describe('SingleBitFullAdder standalone', () => {
 describe('TwoBitFullAdder', () => {
   it('allocates only live qubits instead of one ancilla per child invocation', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
-    expect(compiled.qubitCount).toBe(10);
-    expect(compiled.logicalQubitCount).toBe(5);
+    expect(compiled.qubitCount).toBe(9);
+    expect(compiled.logicalQubitCount).toBe(3);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['S0tmp', 'S1tmp', 'Cout']);
     expect(Object.keys(compiled.tokenMap)).not.toContain('SingleBitFullAdder#1/2');
-    expect(Object.keys(compiled.tokenMap)).toContain('TwoBitFullAdder#0/@ancilla');
   });
 
-  it('projects the final state onto five logical parameter qubits', () => {
+  it('projects the final state onto RETURNVALS outputs for TwoBitFullAdder', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
     setToken(compiled.tokenMap, startStates, 'A0', '0p');
@@ -158,9 +176,10 @@ describe('TwoBitFullAdder', () => {
 
     const paramIndices = compiled.processParams.map((param) => param.qubitIndex);
     const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates, paramIndices);
-    const projected = projectStateOntoQubits(executed.state, compiled.qubitCount, paramIndices);
+    const returnIndices = compiled.returnValues.map((value) => value.qubitIndex);
+    const projected = projectStateOntoQubits(executed.state, compiled.qubitCount, returnIndices);
 
-    expect(projected).toHaveLength(32);
+    expect(projected).toHaveLength(8);
     expect(projected.filter((amplitude) => Math.abs(amplitude.re) > 1e-8 || Math.abs(amplitude.im) > 1e-8)).toHaveLength(1);
   });
 

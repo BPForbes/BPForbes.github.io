@@ -7,7 +7,7 @@ import { examples } from './data/examples';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess, QpucirPayload } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, projectStateOntoQubits, runCircuit } from './simulator/engine';
-import { compileQpuProtocol, ProcessParam, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
+import { compileQpuProtocol, ProcessParam, ReturnValue, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
 import { extractMainProcessName, qpucirFileNameForSource, serializeCircuitToQpuProtocol } from './simulator/qpuFormat';
 import { CircuitGate, GateType, MeasurementMap, ParticleStartState, gateTypes } from './simulator/types';
 import { Complex } from './simulator/complex';
@@ -98,6 +98,7 @@ function App() {
   const [compileSummary, setCompileSummary] = useState('Paste or load a QPU protocol, then compile it into visual gates.');
   const [tokenMap, setTokenMap] = useState<Record<string, number>>({});
   const [processParams, setProcessParams] = useState<ProcessParam[]>([]);
+  const [returnValues, setReturnValues] = useState<ReturnValue[]>([]);
   const [activeView, setActiveView] = useState<AppView>('builder');
   const [menuOpen, setMenuOpen] = useState(false);
   const [fileStatus, setFileStatus] = useState('Upload a .qpucir file or download one of the bundled AST circuits.');
@@ -126,20 +127,41 @@ function App() {
     return Array.from({ length: qubitCount }, (_, qubit) => ({ name: `q${qubit}`, type: '1', qubitIndex: qubit }));
   }, [processParams, qubitCount, simulationQubitCount]);
   const paramQubitIndices = useMemo(() => controllableParams.map((param) => param.qubitIndex), [controllableParams]);
-  const displayQubitCount = processParams.length > 0 ? controllableParams.length : qubitCount;
+  const displayQubitIndices = useMemo(
+    () => (returnValues.length > 0 ? returnValues.map((value) => value.qubitIndex) : paramQubitIndices),
+    [returnValues, paramQubitIndices],
+  );
+  const displayQubitCount = returnValues.length > 0
+    ? returnValues.length
+    : processParams.length > 0
+      ? controllableParams.length
+      : qubitCount;
   const selectedTarget = Math.min(targetQubit, displayQubitCount - 1);
   const selectedSimulationQubit = controllableParams[selectedTarget]?.qubitIndex ?? selectedTarget;
   const displayQubitLabels = useMemo(
-    () => (processParams.length > 0 ? controllableParams.map((param) => param.name) : qubitLabels.slice(0, qubitCount)),
-    [processParams.length, controllableParams, qubitLabels, qubitCount],
+    () => (returnValues.length > 0
+      ? returnValues.map((value) => value.name)
+      : processParams.length > 0
+        ? controllableParams.map((param) => param.name)
+        : qubitLabels.slice(0, qubitCount)),
+    [returnValues, processParams.length, controllableParams, qubitLabels, qubitCount],
   );
   const displayState = useMemo(() => {
-    if (processParams.length > 0 && simulationQubitCount > displayQubitCount) {
-      return projectStateOntoQubits(state, simulationQubitCount, paramQubitIndices);
+    if (displayQubitIndices.length > 0 && simulationQubitCount > displayQubitCount) {
+      return projectStateOntoQubits(state, simulationQubitCount, displayQubitIndices);
     }
     return state;
-  }, [state, simulationQubitCount, displayQubitCount, processParams.length, paramQubitIndices]);
+  }, [state, simulationQubitCount, displayQubitCount, displayQubitIndices]);
   const displayMeasurements = useMemo(() => {
+    if (returnValues.length > 0) {
+      const mapped: MeasurementMap = {};
+      returnValues.forEach((value, displayIndex) => {
+        if (measurements[value.qubitIndex] !== undefined) {
+          mapped[displayIndex] = measurements[value.qubitIndex]!;
+        }
+      });
+      return mapped;
+    }
     if (processParams.length === 0) return measurements;
     const mapped: MeasurementMap = {};
     controllableParams.forEach((param, displayIndex) => {
@@ -148,7 +170,7 @@ function App() {
       }
     });
     return mapped;
-  }, [measurements, controllableParams, processParams.length]);
+  }, [measurements, returnValues, controllableParams, processParams.length]);
 
   const chooseDistinctQubit = (avoid: number[]) => {
     const option = Array.from({ length: qubitCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));
@@ -256,6 +278,7 @@ function App() {
     setCompileSummary('Paste or load a QPU protocol, then compile it into visual gates.');
     setTokenMap({});
     setProcessParams([]);
+    setReturnValues([]);
     setFileStatus('Site reset to the default circuit builder state.');
     setActiveView('builder');
     setMenuOpen(false);
@@ -345,6 +368,7 @@ function App() {
     setStartStates(nextStartStates);
     setTokenMap({});
     setProcessParams([]);
+    setReturnValues([]);
     resetRuntime(example.qubitCount, `Loaded ${example.name}.`, nextStartStates);
   };
 
@@ -358,11 +382,15 @@ function App() {
       setGates(result.gates);
       setTokenMap(result.tokenMap);
       setProcessParams(result.processParams);
+      setReturnValues(result.returnValues);
       const paramSummary = result.processParams.length
         ? `${result.processParams.length} process parameter(s) (${result.processParams.map((param) => param.name).join(', ')})`
         : 'no explicit process parameters';
+      const returnSummary = result.returnValues.length
+        ? `; ket displays ${result.returnValues.map((value) => value.name).join(', ')}`
+        : '';
       const registerSummary = result.logicalQubitCount < result.qubitCount
-        ? `${result.logicalQubitCount} logical qubit(s) over ${result.qubitCount} simulation register(s)`
+        ? `${result.logicalQubitCount} return qubit(s) over ${result.qubitCount} simulation register(s)${returnSummary}`
         : `${result.qubitCount} register(s)`;
       setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${registerSummary} with ${paramSummary}.`);
       resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates);
