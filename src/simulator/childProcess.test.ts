@@ -139,6 +139,31 @@ describe('SingleBitFullAdder standalone', () => {
 });
 
 describe('TwoBitFullAdder', () => {
+  it('allocates only live qubits instead of one ancilla per child invocation', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    expect(compiled.qubitCount).toBe(10);
+    expect(Object.keys(compiled.tokenMap)).not.toContain('SingleBitFullAdder#1/2');
+    expect(Object.keys(compiled.tokenMap)).toContain('TwoBitFullAdder#0/@ancilla');
+  });
+
+  it('adds |10> and |11> with cin=0 to produce |101> on sum and carry outputs', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A0', '0p');
+    setToken(compiled.tokenMap, startStates, 'A1', '1p');
+    setToken(compiled.tokenMap, startStates, 'B0', '1p');
+    setToken(compiled.tokenMap, startStates, 'B1', '1p');
+    setToken(compiled.tokenMap, startStates, 'Cin', '0p');
+
+    const paramIndices = compiled.processParams.map((param) => param.qubitIndex);
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates, paramIndices);
+    const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
+
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S0tmp')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S1tmp')).toBe(0);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'Cout')).toBe(1);
+  });
+
   it('adds |10> and |01> to produce sum 3', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);

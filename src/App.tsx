@@ -125,6 +125,7 @@ function App() {
     if (inRange.length > 0) return inRange;
     return Array.from({ length: qubitCount }, (_, qubit) => ({ name: `q${qubit}`, type: '1', qubitIndex: qubit }));
   }, [processParams, qubitCount]);
+  const paramQubitIndices = useMemo(() => controllableParams.map((param) => param.qubitIndex), [controllableParams]);
 
   const chooseDistinctQubit = (avoid: number[]) => {
     const option = Array.from({ length: qubitCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));
@@ -146,9 +147,13 @@ function App() {
   };
 
   const resetRuntime = (nextQubitCount = qubitCount, reason?: string, nextStartStates = startStates) => {
-    setState(createInitialState(nextQubitCount, nextStartStates));
+    const activeParamIndices = paramQubitIndices.length ? paramQubitIndices : undefined;
+    setState(createInitialState(nextQubitCount, nextStartStates, activeParamIndices));
     setMeasurements({});
-    setLog([reason ?? `Initialized ${nextStartStates.slice(0, nextQubitCount).map((value) => value ?? '0p').join(' ')}.`]);
+    const initDesc = controllableParams.length
+      ? controllableParams.map((param) => `${param.name}=${nextStartStates[param.qubitIndex] ?? '0p'}`).join(' ')
+      : nextStartStates.slice(0, nextQubitCount).map((value) => value ?? '0p').join(' ');
+    setLog([reason ?? `Initialized ${initDesc}.`]);
     setCursor(0);
   };
 
@@ -174,7 +179,7 @@ function App() {
   };
 
   const run = () => {
-    const result = runCircuit(qubitCount, orderedGates, startStates);
+    const result = runCircuit(qubitCount, orderedGates, startStates, paramQubitIndices.length ? paramQubitIndices : undefined);
     setState(result.state);
     setMeasurements(result.measurements);
     setLog(result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared')));
