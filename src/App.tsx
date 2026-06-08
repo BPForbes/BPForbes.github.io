@@ -5,7 +5,7 @@ import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
-import { applyGate, createInitialState, measureAll, runCircuit } from './simulator/engine';
+import { applyGate, createInitialState, measureAll, measureQubit, runCircuit } from './simulator/engine';
 import { compileQpuProtocol, supportedQpuOperations } from './simulator/qpuAst';
 import { CircuitGate, GateType, MeasurementMap, gateTypes } from './simulator/types';
 import { Complex } from './simulator/complex';
@@ -24,8 +24,15 @@ const controlsForGate = (type: GateType, target: number, qubitCount: number): nu
   return [];
 };
 
-const newGate = (type: GateType, step: number, target: number, qubitCount: number): CircuitGate | null => {
-  const controls = controlsForGate(type, target, qubitCount);
+const newGate = (
+  type: GateType,
+  step: number,
+  target: number,
+  qubitCount: number,
+  overrideControls?: number[],
+  phase = Math.PI / 2,
+): CircuitGate | null => {
+  const controls = overrideControls ?? controlsForGate(type, target, qubitCount);
   if (controls === null) return null;
 
   return {
@@ -34,7 +41,7 @@ const newGate = (type: GateType, step: number, target: number, qubitCount: numbe
     step,
     targets: [target],
     controls,
-    phase: type === 'PHASE' ? Math.PI / 2 : undefined,
+    phase: type === 'PHASE' ? phase : undefined,
   };
 };
 
@@ -46,11 +53,36 @@ function App() {
   const [log, setLog] = useState<string[]>(['Initialized |000⟩.']);
   const [cursor, setCursor] = useState(0);
   const [selectedGate, setSelectedGate] = useState<GateType | null>('H');
+  const [targetQubit, setTargetQubit] = useState(0);
+  const [controlQubit, setControlQubit] = useState(1);
+  const [secondControlQubit, setSecondControlQubit] = useState(2);
+  const [phaseDegrees, setPhaseDegrees] = useState(90);
   const [protocolSource, setProtocolSource] = useState(protocolExamples[0].source);
   const [compileSummary, setCompileSummary] = useState('Paste or load a QPU protocol, then compile it into visual gates.');
   const [tokenMap, setTokenMap] = useState<Record<string, number>>({});
 
   const orderedGates = useMemo(() => gates.slice().sort((a, b) => a.step - b.step), [gates]);
+  const selectedTarget = Math.min(targetQubit, qubitCount - 1);
+  const phaseRadians = (phaseDegrees * Math.PI) / 180;
+
+  const chooseDistinctQubit = (avoid: number[]) => {
+    const option = Array.from({ length: qubitCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));
+    return option ?? 0;
+  };
+
+  const workbenchControlsForGate = (type: GateType, target: number) => {
+    if (singleControlGates.has(type)) {
+      if (qubitCount < 2) return undefined;
+      return [controlQubit === target ? chooseDistinctQubit([target]) : controlQubit];
+    }
+    if (type === 'CCNOT') {
+      if (qubitCount < 3) return undefined;
+      const first = controlQubit === target ? chooseDistinctQubit([target, secondControlQubit]) : controlQubit;
+      const second = secondControlQubit === target || secondControlQubit === first ? chooseDistinctQubit([target, first]) : secondControlQubit;
+      return [first, second];
+    }
+    return undefined;
+  };
 
   const resetRuntime = (nextQubitCount = qubitCount, reason?: string) => {
     setState(createInitialState(nextQubitCount));
@@ -59,9 +91,9 @@ function App() {
     setCursor(0);
   };
 
-  const addGate = (type: GateType, target: number) => {
+  const addGate = (type: GateType, target: number, controls?: number[]) => {
     const step = gates.length === 0 ? 0 : Math.max(...gates.map((gate) => gate.step)) + 1;
-    const gate = newGate(type, step, target, qubitCount);
+    const gate = newGate(type, step, target, qubitCount, controls, phaseRadians);
     if (!gate) {
       setLog((current) => [...current, `${type} requires more qubits than are available in this circuit.`]);
       return;
@@ -101,6 +133,63 @@ function App() {
     setState(result.state);
     setMeasurements(result.measurements);
     setLog((current) => [...current, ...result.log]);
+  };
+
+  const measureSelectedQubit = () => {
+    if (measurements[selectedTarget] !== undefined) {
+      setLog((current) => [...current, `q${selectedTarget} is already measured as ${measurements[selectedTarget]}.`]);
+      return;
+    }
+
+    const result = measureQubit(state, qubitCount, selectedTarget);
+    setState(result.state);
+    setMeasurements((current) => ({ ...current, [selectedTarget]: result.value }));
+    setLog((current) => [...current, `Measured q${selectedTarget} = ${result.value} (P(1)=${result.probabilityOne.toFixed(3)}).`]);
+  };
+
+  const addGateFromWorkbench = () => {
+    if (!selectedGate) {
+      setLog((current) => [...current, 'Select a gate before adding it to the circuit.']);
+      return;
+    }
+    addGate(selectedGate, selectedTarget, workbenchControlsForGate(selectedGate, selectedTarget));
+  };
+
+  const addParticle = () => {
+    const nextCount = Math.min(qubitCount + 1, 6);
+    if (nextCount === qubitCount) {
+      setLog((current) => [...current, 'This playground supports up to 6 qubit particles.']);
+      return;
+    }
+    setQubitCount(nextCount);
+    setTargetQubit(nextCount - 1);
+    if (nextCount > 1) setControlQubit(0);
+    if (nextCount > 2) setSecondControlQubit(1);
+    resetRuntime(nextCount, `Added particle q${nextCount - 1}; reset to |${'0'.repeat(nextCount)}⟩.`);
+  };
+
+  const removeParticle = () => {
+    const nextCount = Math.max(1, qubitCount - 1);
+    if (nextCount === qubitCount) {
+      setLog((current) => [...current, 'At least one qubit particle is required.']);
+      return;
+    }
+
+    setQubitCount(nextCount);
+    setGates((current) =>
+      current
+        .filter((gate) => gate.targets.every((target) => target < nextCount) && gate.controls.every((control) => control < nextCount))
+        .map((gate, step) => ({ ...gate, step })),
+    );
+    setTargetQubit((current) => Math.min(current, nextCount - 1));
+    setControlQubit((current) => (current >= nextCount ? 0 : current));
+    setSecondControlQubit((current) => (current >= nextCount ? Math.max(0, nextCount - 1) : current));
+    resetRuntime(nextCount, `Removed last particle; reset to |${'0'.repeat(nextCount)}⟩.`);
+  };
+
+  const clearCircuit = () => {
+    setGates([]);
+    resetRuntime();
   };
 
   const loadExample = (index: number) => {
@@ -169,11 +258,56 @@ function App() {
         selectedGate={selectedGate}
       />
 
+      <section className="panel workbench-panel" aria-labelledby="workbench-title">
+        <div className="section-heading">
+          <p className="eyebrow">Interactive workbench</p>
+          <h2 id="workbench-title">Add particles, gates, and measurements</h2>
+        </div>
+        <div className="workbench-grid">
+          <label>
+            Gate
+            <select value={selectedGate ?? ''} onChange={(event) => setSelectedGate(event.target.value as GateType)}>
+              {palette.map((gate) => <option key={gate} value={gate}>{gate}</option>)}
+            </select>
+          </label>
+          <label>
+            Target particle
+            <select value={selectedTarget} onChange={(event) => setTargetQubit(Number(event.target.value))}>
+              {Array.from({ length: qubitCount }, (_, qubit) => <option key={qubit} value={qubit}>q{qubit}</option>)}
+            </select>
+          </label>
+          <label>
+            Control A
+            <select value={controlQubit} onChange={(event) => setControlQubit(Number(event.target.value))}>
+              {Array.from({ length: qubitCount }, (_, qubit) => <option disabled={qubit === selectedTarget} key={qubit} value={qubit}>q{qubit}</option>)}
+            </select>
+          </label>
+          <label>
+            Control B
+            <select value={secondControlQubit} onChange={(event) => setSecondControlQubit(Number(event.target.value))}>
+              {Array.from({ length: qubitCount }, (_, qubit) => <option disabled={qubit === selectedTarget || qubit === controlQubit} key={qubit} value={qubit}>q{qubit}</option>)}
+            </select>
+          </label>
+          <label className="phase-control">
+            Phase angle: {phaseDegrees}°
+            <input min="0" max="360" step="15" type="range" value={phaseDegrees} onChange={(event) => setPhaseDegrees(Number(event.target.value))} />
+          </label>
+        </div>
+        <div className="workbench-actions">
+          <button onClick={addGateFromWorkbench} type="button">Add gate to target</button>
+          <button onClick={addParticle} type="button">Add particle</button>
+          <button onClick={removeParticle} type="button">Remove particle</button>
+          <button onClick={measureSelectedQubit} type="button">Measure target</button>
+        </div>
+        <p className="canvas-tip">Selected {selectedGate} gate will target q{selectedTarget}; controlled gates use the control selectors above.</p>
+      </section>
+
       <section className="controls panel" aria-label="Run controls">
-        <button onClick={run} type="button">Run</button>
-        <button disabled={cursor >= orderedGates.length} onClick={step} type="button">Step</button>
-        <button onClick={resetCircuit} type="button">Reset</button>
-        <button onClick={measure} type="button">Measure</button>
+        <button onClick={run} type="button">Run all</button>
+        <button disabled={cursor >= orderedGates.length} onClick={step} type="button">Step gate</button>
+        <button onClick={resetCircuit} type="button">Reset state</button>
+        <button onClick={measure} type="button">Measure all</button>
+        <button onClick={clearCircuit} type="button">Clear circuit</button>
       </section>
 
       <section className="examples panel" aria-labelledby="examples-title">
