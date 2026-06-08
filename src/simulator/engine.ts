@@ -141,8 +141,12 @@ export const applyGate = (
   }
 
   if (gate.type === 'RESET') {
-    log.push(`RESET prepared q${target} as |0⟩.`);
-    return { state: prepareZeroQubit(state, qubitCount, target), measurements, log };
+    let nextState = state;
+    gate.targets.forEach((qubit) => {
+      nextState = prepareZeroQubit(nextState, qubitCount, qubit);
+    });
+    log.push(`Cycle workspace prepared: q${gate.targets.join(', q')} as |0⟩.`);
+    return { state: nextState, measurements, log };
   }
 
   if (gate.type === 'CNOT' || gate.type === 'CCNOT' || gate.type === 'AND') {

@@ -65,6 +65,14 @@ describe('process parameter exposure', () => {
     expect(visibleCircuitGates(compiled.gates).some((gate) => gate.type === 'RESET')).toBe(false);
   });
 
+  it('batches workspace zeroing at cycle boundaries instead of one gate per qubit', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    const resetGates = compiled.gates.filter((gate) => gate.type === 'RESET');
+    const zeroedQubits = resetGates.reduce((count, gate) => count + gate.targets.length, 0);
+    expect(zeroedQubits).toBeGreaterThan(resetGates.length);
+    expect(resetGates.length).toBeLessThan(zeroedQubits);
+  });
+
   it('does not inflate qubit count when a compiled circuit is serialized and recompiled', () => {
     const first = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
     const roundTripSource = serializeCircuitToQpuProtocol(first.gates, first.qubitCount);

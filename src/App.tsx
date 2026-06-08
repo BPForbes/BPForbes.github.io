@@ -178,7 +178,7 @@ function App() {
     const result = runCircuit(qubitCount, orderedGates, startStates);
     setState(result.state);
     setMeasurements(result.measurements);
-    setLog(result.log.filter((entry) => !entry.startsWith('RESET')));
+    setLog(result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared')));
     setCursor(orderedGates.length);
   };
 
@@ -188,7 +188,7 @@ function App() {
     const result = applyGate(state, qubitCount, gate, measurements);
     setState(result.state);
     setMeasurements(result.measurements);
-    setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET'))]);
+    setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared'))]);
     setCursor((current) => current + 1);
   };
 
@@ -225,7 +225,7 @@ function App() {
     const result = measureAll(state, qubitCount, measurements);
     setState(result.state);
     setMeasurements(result.measurements);
-    setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET'))]);
+    setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared'))]);
   };
 
   const measureSelectedQubit = () => {
@@ -318,7 +318,7 @@ function App() {
         : 'no explicit process parameters';
       setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${result.qubitCount} register(s) with ${paramSummary}.`);
       resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates);
-      setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET')).slice(0, 24)]);
+      setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared')).slice(0, 24)]);
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

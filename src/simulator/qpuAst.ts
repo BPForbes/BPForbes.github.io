@@ -220,12 +220,13 @@ type CompilerState = {
   log: string[];
   tokenToQubit: Map<string, number>;
   resetQubits: Set<number>;
+  pendingCycleZeros: Set<number>;
   lastReturns: string[];
   currentCycle: number;
   processRuns: number;
 };
 
-/** Gates shown in the circuit UI; RESET is compiler-internal and never rendered. */
+/** Gates shown in the circuit UI; cycle workspace prep is compiler-internal and never rendered. */
 export const visibleCircuitGates = (gates: CircuitGate[]) => gates.filter((gate) => gate.type !== 'RESET');
 
 const processLibraryFromSources = (sources: Record<string, string>) => {
@@ -268,9 +269,16 @@ const emitGate = (state: CompilerState, type: GateType, targets: number[], contr
   });
 };
 
-const emitPrepareZero = (state: CompilerState, qubit: number, source: string) => {
+const scheduleCycleZero = (state: CompilerState, qubit: number) => {
   state.resetQubits.add(qubit);
-  emitGate(state, 'RESET', [qubit], [], source);
+  state.pendingCycleZeros.add(qubit);
+};
+
+const flushCycleZeros = (state: CompilerState, source: string) => {
+  if (state.pendingCycleZeros.size === 0) return;
+  const targets = [...state.pendingCycleZeros];
+  state.pendingCycleZeros.clear();
+  emitGate(state, 'RESET', targets, [], source);
 };
 
 const resolveInputQubit = (state: CompilerState, frame: Frame, token: string) => ensureQubit(state, scopedName(frame, token));
@@ -335,8 +343,9 @@ const executeProcess = (
     }
 
     if (command.op === 'INCREASECYCLE') {
+      flushCycleZeros(state, `INCREASECYCLE end of cycle ${state.currentCycle}`);
       state.currentCycle += 1;
-      state.log.push(`Cycle increased to ${state.currentCycle}.`);
+      state.log.push(`Cycle increased to ${state.currentCycle}; workspace registers prepared for the new cycle.`);
       continue;
     }
 
@@ -347,7 +356,7 @@ const executeProcess = (
       if (isConstant(value)) {
         const qubit = ensureQubit(state, targetName);
         const normalizedValue = value.replace(/^\$/, '').toLowerCase();
-        if (normalizedValue.startsWith('0p')) emitPrepareZero(state, qubit, line);
+        if (normalizedValue.startsWith('0p')) scheduleCycleZero(state, qubit);
         if (normalizedValue.startsWith('1p')) emitGate(state, 'X', [qubit], [], line);
         if (normalizedValue.startsWith('sp')) emitGate(state, 'H', [qubit], [], line);
         state.log.push(`SET ${stripCycle(target)} to ${value} at cycle ${state.currentCycle}.`);
@@ -391,10 +400,11 @@ const executeProcess = (
         const qubit = ensureQubit(state, parentToken);
         if (!preparedOutputQubits.has(qubit)) {
           preparedOutputQubits.add(qubit);
-          emitPrepareZero(state, qubit, `prepare ${stripCycle(output)} before RUNCHILD ${childName}`);
+          scheduleCycleZero(state, qubit);
         }
         childOutputBindings.set(childRegister, parentToken);
       });
+      flushCycleZeros(state, `prepare outputs before RUNCHILD ${childName} at cycle ${state.currentCycle}`);
       const childReturns = executeProcess(child, state, library, command.inputs, frame, childOutputBindings);
       command.outputs.forEach((output, index) => {
         const returned = childReturns[index];
@@ -440,6 +450,7 @@ const executeProcess = (
     }
 
     if (primitiveGates.has(command.op)) {
+      flushCycleZeros(state, `prepare workspace before gate at cycle ${state.currentCycle}`);
       const targetToken = command.outputs[0] ?? command.inputs[0];
       const target = resolveInputQubit(state, frame, targetToken);
       const controls = command.inputs.map((input) => resolveInputQubit(state, frame, input)).filter((qubit) => qubit !== target);
@@ -448,6 +459,7 @@ const executeProcess = (
     }
 
     if (derivedGates.has(command.op)) {
+      flushCycleZeros(state, `prepare workspace before gate at cycle ${state.currentCycle}`);
       const target = resolveInputQubit(state, frame, command.outputs[0]);
       const controls = command.inputs.map((input) => resolveInputQubit(state, frame, input)).filter((qubit) => qubit !== target);
       emitGate(state, command.op as GateType, [target], controls, line);
@@ -455,6 +467,7 @@ const executeProcess = (
     }
   }
 
+  flushCycleZeros(state, `end of process ${process.name}`);
   return returns;
 };
 
@@ -468,6 +481,7 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     log: [],
     tokenToQubit: new Map(),
     resetQubits: new Set(),
+    pendingCycleZeros: new Set(),
     lastReturns: [],
     currentCycle: 0,
     processRuns: 0,
