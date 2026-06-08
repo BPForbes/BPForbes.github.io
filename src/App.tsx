@@ -120,12 +120,11 @@ function App() {
   }, [qubitCount, tokenMap]);
   const selectedTarget = Math.min(targetQubit, qubitCount - 1);
   const phaseRadians = (phaseDegrees * Math.PI) / 180;
-  const controllableParams = useMemo(
-    () => (processParams.length > 0
-      ? processParams
-      : Array.from({ length: qubitCount }, (_, qubit) => ({ name: `q${qubit}`, type: '1', qubitIndex: qubit }))),
-    [processParams, qubitCount],
-  );
+  const controllableParams = useMemo(() => {
+    const inRange = processParams.filter((param) => param.qubitIndex >= 0 && param.qubitIndex < qubitCount);
+    if (inRange.length > 0) return inRange;
+    return Array.from({ length: qubitCount }, (_, qubit) => ({ name: `q${qubit}`, type: '1', qubitIndex: qubit }));
+  }, [processParams, qubitCount]);
 
   const chooseDistinctQubit = (avoid: number[]) => {
     const option = Array.from({ length: qubitCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));

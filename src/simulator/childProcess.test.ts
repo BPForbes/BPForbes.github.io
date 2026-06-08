@@ -79,7 +79,43 @@ describe('process parameter exposure', () => {
     const second = compileQpuProtocol(roundTripSource, protocolLibrary);
 
     expect(second.qubitCount).toBe(first.qubitCount);
-    expect(second.processParams).toHaveLength(first.qubitCount);
+    expect(second.processParams.length).toBeGreaterThan(0);
+    expect(second.processParams.length).toBeLessThanOrEqual(first.qubitCount);
+  });
+
+  it('preserves workspace zeroing when a compiled circuit is serialized and recompiled', () => {
+    const source = protocolLibrary.SingleBitFullAdder;
+    const first = compileQpuProtocol(source, protocolLibrary);
+    const roundTrip = compileQpuProtocol(serializeCircuitToQpuProtocol(first.gates, first.qubitCount), protocolLibrary);
+
+    const pollutedStartStates = Array.from({ length: first.qubitCount }, () => '1p' as ParticleStartState);
+    setToken(first.tokenMap, pollutedStartStates, 'A', '1p');
+    setToken(first.tokenMap, pollutedStartStates, 'B', '1p');
+    setToken(first.tokenMap, pollutedStartStates, 'Cin', '0p');
+
+    const pollutedRoundTrip = [...pollutedStartStates];
+    setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q0', '1p');
+    setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q1', '1p');
+    setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q2', '0p');
+
+    const sumQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 0));
+    const carryQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 1));
+
+    const firstMeasured = measureAll(
+      runCircuit(first.qubitCount, first.gates, pollutedStartStates).state,
+      first.qubitCount,
+      {},
+    );
+    const roundTripMeasured = measureAll(
+      runCircuit(roundTrip.qubitCount, roundTrip.gates, pollutedRoundTrip).state,
+      roundTrip.qubitCount,
+      {},
+    );
+
+    expect(roundTripMeasured.measurements[sumQubit]).toBe(firstMeasured.measurements[sumQubit]);
+    expect(roundTripMeasured.measurements[carryQubit]).toBe(firstMeasured.measurements[carryQubit]);
+    expect(firstMeasured.measurements[sumQubit]).toBe(0);
+    expect(firstMeasured.measurements[carryQubit]).toBe(1);
   });
 });
 

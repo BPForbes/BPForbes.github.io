@@ -44,7 +44,12 @@ export const serializeCircuitToQpuProtocol = (
     .slice()
     .sort((a, b) => a.step - b.step)
     .forEach((gate) => {
-      if (gate.type === 'RESET') return;
+      if (gate.type === 'RESET') {
+        gate.targets.forEach((qubit) => {
+          lines.push(`SET ${canvasParamRef(qubit)} 0p`);
+        });
+        return;
+      }
 
       const target = `${canvasParamRef(gate.targets[0])}:0`;
       const controls = gate.controls.map((control) => `${canvasParamRef(control)}:0`);
