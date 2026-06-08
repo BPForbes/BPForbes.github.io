@@ -75,6 +75,28 @@ export const applyControlledPredicateX = (
   return next;
 };
 
+export const prepareZeroQubit = (state: Complex[], qubitCount: number, qubit: number): Complex[] => {
+  const mask = bitMask(qubit, qubitCount);
+  const next = [...state];
+
+  for (let index = 0; index < state.length; index += 1) {
+    if ((index & mask) === 0) continue;
+    const zeroIndex = index & ~mask;
+    next[zeroIndex] = add(next[zeroIndex], state[index]);
+    next[index] = ZERO;
+  }
+
+  const keptProbability = next.reduce((sum, amplitude) => sum + magnitudeSquared(amplitude), 0);
+  if (keptProbability < 1e-12) {
+    const zeroState = Array.from({ length: state.length }, () => ZERO);
+    zeroState[0] = ONE;
+    return zeroState;
+  }
+
+  const normalizer = 1 / Math.sqrt(keptProbability);
+  return next.map((amplitude) => scale(amplitude, normalizer));
+};
+
 export const measureQubit = (
   state: Complex[],
   qubitCount: number,
@@ -116,6 +138,11 @@ export const applyGate = (
     const angle = gate.phase ?? 0;
     log.push(`PHASE(${angle.toFixed(3)}) rotated q${target}.`);
     return { state: applySingleQubitGate(state, qubitCount, target, phaseMatrix(angle)), measurements, log };
+  }
+
+  if (gate.type === 'RESET') {
+    log.push(`RESET prepared q${target} as |0⟩.`);
+    return { state: prepareZeroQubit(state, qubitCount, target), measurements, log };
   }
 
   if (gate.type === 'CNOT' || gate.type === 'CCNOT' || gate.type === 'AND') {

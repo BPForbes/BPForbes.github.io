@@ -225,8 +225,6 @@ const processLibraryFromSources = (sources: Record<string, string>) => {
   return library;
 };
 
-const defaultValueForType = (type: string) => (type.toLowerCase() === 'state' ? '0p' : '0');
-
 const scopedName = (frame: Frame, token: string) => {
   const base = stripCycle(token);
   if (frame.params.has(base)) return frame.params.get(base)!;
@@ -258,7 +256,31 @@ const emitGate = (state: CompilerState, type: GateType, targets: number[], contr
   });
 };
 
+const emitPrepareZero = (state: CompilerState, qubit: number, source: string) => {
+  emitGate(state, 'RESET', [qubit], [], source);
+};
+
 const resolveInputQubit = (state: CompilerState, frame: Frame, token: string) => ensureQubit(state, scopedName(frame, token));
+
+const returnRegistersForProcess = (process: ProtocolProcess): string[] => {
+  for (const line of process.lines) {
+    try {
+      const command = parseCommand(line);
+      if (command.op === 'RETURNVALS') return command.args.map(stripCycle);
+    } catch {
+      // Ignore malformed lines while scanning for the child's return register list.
+    }
+  }
+  return [];
+};
+
+export const getReturnValTokens = (source: string): string[] => returnRegistersForProcess(parseProtocol(source));
+
+export const getReturnValToken = (source: string, index: number): string => {
+  const token = getReturnValTokens(source)[index];
+  if (!token) throw new Error(`RETURNVALS index ${index} is out of range for this protocol`);
+  return token;
+};
 
 const executeProcess = (
   process: ProtocolProcess,
@@ -266,16 +288,26 @@ const executeProcess = (
   library: Map<string, ProtocolProcess>,
   passedParams: string[] = [],
   parentFrame?: Frame,
+  outputBindings: Map<string, string> = new Map(),
 ): string[] => {
   const scope = `${process.name}#${state.processRuns}`;
   state.processRuns += 1;
   const params = new Map<string, string>();
   process.params.forEach((param, index) => {
-    const provided = passedParams[index] ?? defaultValueForType(param.type);
-    const resolved = parentFrame ? scopedName(parentFrame, provided) : stripCycle(provided);
+    const provided = passedParams[index];
+    let resolved: string;
+    if (provided !== undefined && parentFrame) {
+      resolved = scopedName(parentFrame, provided);
+    } else {
+      resolved = param.name;
+    }
     params.set(param.name, resolved);
   });
   const frame: Frame = { process, scope, aliases: new Map(), params };
+  outputBindings.forEach((parentToken, childRegister) => {
+    frame.aliases.set(childRegister, parentToken);
+  });
+  process.params.forEach((param) => ensureQubit(state, params.get(param.name)!));
   let returns: string[] = [];
 
   state.log.push(`MAIN-PROCESS ${process.name} compiled in scope ${scope}.`);
@@ -302,6 +334,7 @@ const executeProcess = (
       if (isConstant(value)) {
         const qubit = ensureQubit(state, targetName);
         const normalizedValue = value.replace(/^\$/, '').toLowerCase();
+        if (normalizedValue.startsWith('0p')) emitPrepareZero(state, qubit, line);
         if (normalizedValue.startsWith('1p')) emitGate(state, 'X', [qubit], [], line);
         if (normalizedValue.startsWith('sp')) emitGate(state, 'H', [qubit], [], line);
         state.log.push(`SET ${stripCycle(target)} to ${value} at cycle ${state.currentCycle}.`);
@@ -335,7 +368,21 @@ const executeProcess = (
       const childName = command.op === 'RUNCHILD' ? command.args[0] : command.args[0];
       const child = library.get(childName);
       if (!child) throw new Error(`Unknown child process '${childName}'`);
-      const childReturns = executeProcess(child, state, library, command.inputs, frame);
+      const childReturnRegisters = returnRegistersForProcess(child);
+      const childOutputBindings = new Map<string, string>();
+      const preparedOutputQubits = new Set<number>();
+      command.outputs.forEach((output, index) => {
+        const childRegister = childReturnRegisters[index];
+        if (!childRegister) return;
+        const parentToken = scopedName(frame, stripCycle(output));
+        const qubit = ensureQubit(state, parentToken);
+        if (!preparedOutputQubits.has(qubit)) {
+          preparedOutputQubits.add(qubit);
+          emitPrepareZero(state, qubit, `prepare ${stripCycle(output)} before RUNCHILD ${childName}`);
+        }
+        childOutputBindings.set(childRegister, parentToken);
+      });
+      const childReturns = executeProcess(child, state, library, command.inputs, frame, childOutputBindings);
       command.outputs.forEach((output, index) => {
         const returned = childReturns[index];
         if (returned) frame.aliases.set(stripCycle(output), returned);

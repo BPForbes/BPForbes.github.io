@@ -21,6 +21,7 @@ export const gateLabels: Record<GateType, string> = {
   OR: 'OR',
   XOR: 'XOR',
   MEASURE: 'M',
+  RESET: 'R',
 };
 
 export function GateBlock({ type, draggable = false, selected = false, compact = false, onClick, onDragStart }: GateBlockProps) {
