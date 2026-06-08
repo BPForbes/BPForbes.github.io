@@ -7,7 +7,7 @@ import { examples } from './data/examples';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess, QpucirPayload } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, runCircuit } from './simulator/engine';
-import { compileQpuProtocol, ProcessParam, supportedQpuOperations } from './simulator/qpuAst';
+import { compileQpuProtocol, ProcessParam, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
 import { extractMainProcessName, qpucirFileNameForSource, serializeCircuitToQpuProtocol } from './simulator/qpuFormat';
 import { CircuitGate, GateType, MeasurementMap, ParticleStartState, gateTypes } from './simulator/types';
 import { Complex } from './simulator/complex';
@@ -102,6 +102,7 @@ function App() {
   const [fileStatus, setFileStatus] = useState('Upload a .qpucir file or download one of the bundled AST circuits.');
 
   const orderedGates = useMemo(() => gates.slice().sort((a, b) => a.step - b.step), [gates]);
+  const renderedGates = useMemo(() => visibleCircuitGates(orderedGates), [orderedGates]);
   const qubitLabels = useMemo(() => {
     const labels = Array.from({ length: qubitCount }, (_, qubit) => `q${qubit}`);
     Object.entries(tokenMap).forEach(([token, qubit]) => {
@@ -177,7 +178,7 @@ function App() {
     const result = runCircuit(qubitCount, orderedGates, startStates);
     setState(result.state);
     setMeasurements(result.measurements);
-    setLog(result.log);
+    setLog(result.log.filter((entry) => !entry.startsWith('RESET')));
     setCursor(orderedGates.length);
   };
 
@@ -187,7 +188,7 @@ function App() {
     const result = applyGate(state, qubitCount, gate, measurements);
     setState(result.state);
     setMeasurements(result.measurements);
-    setLog((current) => [...current, ...result.log]);
+    setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET'))]);
     setCursor((current) => current + 1);
   };
 
@@ -224,7 +225,7 @@ function App() {
     const result = measureAll(state, qubitCount, measurements);
     setState(result.state);
     setMeasurements(result.measurements);
-    setLog((current) => [...current, ...result.log]);
+    setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET'))]);
   };
 
   const measureSelectedQubit = () => {
@@ -317,7 +318,7 @@ function App() {
         : 'no explicit process parameters';
       setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${result.qubitCount} register(s) with ${paramSummary}.`);
       resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates);
-      setLog((current) => [...current, ...result.log.slice(0, 24)]);
+      setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET')).slice(0, 24)]);
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -464,7 +465,7 @@ function App() {
 
           <CircuitCanvas
             activeStep={cursor - 1}
-            gates={orderedGates}
+            gates={renderedGates}
             onDropGate={addGate}
             onRemoveGate={removeGate}
             qubitColors={Array.from({ length: qubitCount }, (_, qubit) => `hsl(${(qubit * 137.508) % 360} 88% 62%)`)}
@@ -668,7 +669,7 @@ function App() {
 
       {activeView === 'particles' && (
         <div className="results-grid standalone-results">
-          <ParticleView activeStep={cursor - 1} gates={orderedGates} measurements={measurements} qubitCount={qubitCount} qubitLabels={qubitLabels} startStates={startStates} />
+          <ParticleView activeStep={cursor - 1} gates={renderedGates} measurements={measurements} qubitCount={qubitCount} qubitLabels={qubitLabels} startStates={startStates} />
           <OutputPanel log={log} measurements={measurements} qubitCount={qubitCount} state={state} />
         </div>
       )}

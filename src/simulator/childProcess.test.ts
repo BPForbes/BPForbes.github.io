@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
-import { compileQpuProtocol, getReturnValToken } from './qpuAst';
+import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from './qpuAst';
 import { serializeCircuitToQpuProtocol } from './qpuFormat';
 import { measureAll, runCircuit } from './engine';
 import type { ParticleStartState } from './types';
@@ -55,13 +55,23 @@ describe('process parameter exposure', () => {
     expect(compiled.qubitCount).toBeGreaterThan(3);
   });
 
+  it('excludes reset targets from process parameters in FourBitFullAdder', () => {
+    const source = readProcess('four-bit-full-adder.qpucir');
+    const compiled = compileQpuProtocol(source, protocolLibrary);
+    expect(compiled.processParams.map((param) => param.name)).toEqual([
+      'A0', 'A1', 'A2', 'A3', 'B0', 'B1', 'B2', 'B3', 'Cin',
+    ]);
+    expect(compiled.gates.some((gate) => gate.type === 'RESET')).toBe(true);
+    expect(visibleCircuitGates(compiled.gates).some((gate) => gate.type === 'RESET')).toBe(false);
+  });
+
   it('does not inflate qubit count when a compiled circuit is serialized and recompiled', () => {
     const first = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
     const roundTripSource = serializeCircuitToQpuProtocol(first.gates, first.qubitCount);
     const second = compileQpuProtocol(roundTripSource, protocolLibrary);
 
-    expect(second.processParams).toHaveLength(first.qubitCount);
     expect(second.qubitCount).toBe(first.qubitCount);
+    expect(second.processParams).toHaveLength(first.qubitCount);
   });
 });
 

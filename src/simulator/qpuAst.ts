@@ -219,10 +219,14 @@ type CompilerState = {
   parsed: ParsedCommand[];
   log: string[];
   tokenToQubit: Map<string, number>;
+  resetQubits: Set<number>;
   lastReturns: string[];
   currentCycle: number;
   processRuns: number;
 };
+
+/** Gates shown in the circuit UI; RESET is compiler-internal and never rendered. */
+export const visibleCircuitGates = (gates: CircuitGate[]) => gates.filter((gate) => gate.type !== 'RESET');
 
 const processLibraryFromSources = (sources: Record<string, string>) => {
   const library = new Map<string, ProtocolProcess>();
@@ -265,6 +269,7 @@ const emitGate = (state: CompilerState, type: GateType, targets: number[], contr
 };
 
 const emitPrepareZero = (state: CompilerState, qubit: number, source: string) => {
+  state.resetQubits.add(qubit);
   emitGate(state, 'RESET', [qubit], [], source);
 };
 
@@ -462,6 +467,7 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     parsed: [],
     log: [],
     tokenToQubit: new Map(),
+    resetQubits: new Set(),
     lastReturns: [],
     currentCycle: 0,
     processRuns: 0,
@@ -477,6 +483,8 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
   const processParams: ProcessParam[] = main.params.flatMap((param) => {
     const qubitIndex = tokenMap[param.name];
     if (qubitIndex === undefined) return [];
+    if (state.resetQubits.has(qubitIndex)) return [];
+    if (param.type === 'int') return [];
     return [{ name: param.name, type: param.type, qubitIndex }];
   });
 
