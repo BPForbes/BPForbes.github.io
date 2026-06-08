@@ -225,8 +225,6 @@ const processLibraryFromSources = (sources: Record<string, string>) => {
   return library;
 };
 
-const defaultValueForType = (type: string) => (type.toLowerCase() === 'state' ? '0p' : '0');
-
 const scopedName = (frame: Frame, token: string) => {
   const base = stripCycle(token);
   if (frame.params.has(base)) return frame.params.get(base)!;
@@ -288,11 +286,9 @@ const executeProcess = (
     let resolved: string;
     if (provided !== undefined && parentFrame) {
       resolved = scopedName(parentFrame, provided);
-    } else if (param.type.toLowerCase() === 'state') {
-      // Each state parameter owns a distinct register; do not fold defaults into shared const/0p.
-      resolved = param.name;
     } else {
-      resolved = stripCycle(defaultValueForType(param.type));
+      // Every parameter owns a distinct register unless wired from a parent process.
+      resolved = param.name;
     }
     params.set(param.name, resolved);
   });
@@ -300,9 +296,7 @@ const executeProcess = (
   outputBindings.forEach((parentToken, childRegister) => {
     frame.aliases.set(childRegister, parentToken);
   });
-  process.params
-    .filter((param) => param.type.toLowerCase() === 'state')
-    .forEach((param) => ensureQubit(state, params.get(param.name)!));
+  process.params.forEach((param) => ensureQubit(state, params.get(param.name)!));
   let returns: string[] = [];
 
   state.log.push(`MAIN-PROCESS ${process.name} compiled in scope ${scope}.`);
@@ -367,7 +361,9 @@ const executeProcess = (
       command.outputs.forEach((output, index) => {
         const childRegister = childReturnRegisters[index];
         if (!childRegister) return;
-        childOutputBindings.set(childRegister, scopedName(frame, stripCycle(output)));
+        const parentToken = scopedName(frame, stripCycle(output));
+        ensureQubit(state, parentToken);
+        childOutputBindings.set(childRegister, parentToken);
       });
       const childReturns = executeProcess(child, state, library, command.inputs, frame, childOutputBindings);
       command.outputs.forEach((output, index) => {
