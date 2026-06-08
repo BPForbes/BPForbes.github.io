@@ -8,7 +8,8 @@ import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess, QpucirPayload } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, runCircuit } from './simulator/engine';
 import { compileQpuProtocol, supportedQpuOperations } from './simulator/qpuAst';
-import { CircuitGate, GateType, MeasurementMap, gateTypes } from './simulator/types';
+import { extractMainProcessName, qpucirFileNameForSource, serializeCircuitToQpuProtocol } from './simulator/qpuFormat';
+import { CircuitGate, GateType, MeasurementMap, ParticleStartState, gateTypes } from './simulator/types';
 import { Complex } from './simulator/complex';
 import './styles.css';
 
@@ -19,8 +20,6 @@ const palette: GateType[] = [...gateTypes];
 type AppView = 'builder' | 'docs' | 'qpu-docs' | 'files' | 'particles' | 'more';
 
 const initialProtocolSource = protocolExamples[0].source;
-
-const safeFileName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'circuit';
 
 const createQpucirPayload = (name: string, source: string): QpucirPayload => {
   const compiled = compileQpuProtocol(source, protocolLibrary);
@@ -47,7 +46,7 @@ const parseQpucirPayload = (contents: string): { name: string; source: string } 
   } catch {
     // Plain-text protocol uploads are accepted as a convenience for hand-authored circuits.
   }
-  return { name: 'Uploaded QPU circuit', source: contents };
+  return { name: extractMainProcessName(contents) ?? 'Uploaded QPU circuit', source: contents };
 };
 
 const singleControlGates = new Set<GateType>(['CNOT', 'AND', 'NAND', 'OR', 'XOR']);
@@ -84,6 +83,7 @@ const newGate = (
 function App() {
   const [qubitCount, setQubitCount] = useState(QUBIT_COUNT);
   const [gates, setGates] = useState<CircuitGate[]>([]);
+  const [startStates, setStartStates] = useState<ParticleStartState[]>(() => Array.from({ length: QUBIT_COUNT }, () => '0p'));
   const [state, setState] = useState<Complex[]>(() => createInitialState(QUBIT_COUNT));
   const [measurements, setMeasurements] = useState<MeasurementMap>({});
   const [log, setLog] = useState<string[]>(['Initialized |000⟩.']);
@@ -123,10 +123,10 @@ function App() {
     return undefined;
   };
 
-  const resetRuntime = (nextQubitCount = qubitCount, reason?: string) => {
-    setState(createInitialState(nextQubitCount));
+  const resetRuntime = (nextQubitCount = qubitCount, reason?: string, nextStartStates = startStates) => {
+    setState(createInitialState(nextQubitCount, nextStartStates));
     setMeasurements({});
-    setLog([reason ?? `Initialized |${'0'.repeat(nextQubitCount)}⟩.`]);
+    setLog([reason ?? `Initialized ${nextStartStates.slice(0, nextQubitCount).map((value) => value ?? '0p').join(' ')}.`]);
     setCursor(0);
   };
 
@@ -137,18 +137,22 @@ function App() {
       setLog((current) => [...current, `${type} requires more qubits than are available in this circuit.`]);
       return;
     }
-    setGates((current) => [...current, gate]);
+    const nextGates = [...gates, gate];
+    setGates(nextGates);
+    setProtocolSource(serializeCircuitToQpuProtocol(nextGates, qubitCount, startStates));
     setSelectedGate(type);
     resetRuntime();
   };
 
   const removeGate = (gateId: string) => {
-    setGates((current) => current.filter((gate) => gate.id !== gateId).map((gate, step) => ({ ...gate, step })));
+    const nextGates = gates.filter((gate) => gate.id !== gateId).map((gate, step) => ({ ...gate, step }));
+    setGates(nextGates);
+    setProtocolSource(serializeCircuitToQpuProtocol(nextGates, qubitCount, startStates));
     resetRuntime();
   };
 
   const run = () => {
-    const result = runCircuit(qubitCount, orderedGates);
+    const result = runCircuit(qubitCount, orderedGates, startStates);
     setState(result.state);
     setMeasurements(result.measurements);
     setLog(result.log);
@@ -167,8 +171,17 @@ function App() {
 
   const resetCircuit = () => resetRuntime();
 
+  const updateStartState = (qubit: number, value: ParticleStartState) => {
+    const nextStartStates = Array.from({ length: qubitCount }, (_, index) => (index === qubit ? value : startStates[index] ?? '0p'));
+    setStartStates(nextStartStates);
+    setProtocolSource(serializeCircuitToQpuProtocol(gates, qubitCount, nextStartStates));
+    resetRuntime(qubitCount, `Set q${qubit} start state to ${value}.`, nextStartStates);
+  };
+
   const resetSite = () => {
     setQubitCount(QUBIT_COUNT);
+    const defaultStartStates = Array.from({ length: QUBIT_COUNT }, () => '0p' as ParticleStartState);
+    setStartStates(defaultStartStates);
     setGates([]);
     setSelectedGate('H');
     setTargetQubit(0);
@@ -181,7 +194,7 @@ function App() {
     setFileStatus('Site reset to the default circuit builder state.');
     setActiveView('builder');
     setMenuOpen(false);
-    resetRuntime(QUBIT_COUNT);
+    resetRuntime(QUBIT_COUNT, undefined, defaultStartStates);
   };
 
   const measure = () => {
@@ -221,7 +234,10 @@ function App() {
     setTargetQubit(nextCount - 1);
     if (nextCount > 1) setControlQubit(0);
     if (nextCount > 2) setSecondControlQubit(1);
-    resetRuntime(nextCount, `Added particle q${nextCount - 1}; reset to |${'0'.repeat(nextCount)}⟩.`);
+    const nextStartStates = [...startStates, '0p' as ParticleStartState];
+    setStartStates(nextStartStates);
+    setProtocolSource(serializeCircuitToQpuProtocol(gates, nextCount, nextStartStates));
+    resetRuntime(nextCount, `Added particle q${nextCount - 1}; reset start states.`, nextStartStates);
   };
 
   const removeParticle = () => {
@@ -232,6 +248,8 @@ function App() {
     }
 
     setQubitCount(nextCount);
+    const nextStartStates = startStates.slice(0, nextCount);
+    setStartStates(nextStartStates);
     setGates((current) =>
       current
         .filter((gate) => gate.targets.every((target) => target < nextCount) && gate.controls.every((control) => control < nextCount))
@@ -240,30 +258,37 @@ function App() {
     setTargetQubit((current) => Math.min(current, nextCount - 1));
     setControlQubit((current) => (current >= nextCount ? 0 : current));
     setSecondControlQubit((current) => (current >= nextCount ? Math.max(0, nextCount - 1) : current));
-    resetRuntime(nextCount, `Removed last particle; reset to |${'0'.repeat(nextCount)}⟩.`);
+    setProtocolSource(serializeCircuitToQpuProtocol(gates.filter((gate) => gate.targets.every((target) => target < nextCount) && gate.controls.every((control) => control < nextCount)), nextCount, nextStartStates));
+    resetRuntime(nextCount, `Removed last particle; reset start states.`, nextStartStates);
   };
 
   const clearCircuit = () => {
     setGates([]);
+    setProtocolSource(serializeCircuitToQpuProtocol([], qubitCount, startStates));
     resetRuntime();
   };
 
   const loadExample = (index: number) => {
     const example = examples[index];
+    const nextStartStates = Array.from({ length: example.qubitCount }, () => '0p' as ParticleStartState);
     setQubitCount(example.qubitCount);
     setGates(example.gates);
+    setProtocolSource(serializeCircuitToQpuProtocol(example.gates, example.qubitCount, nextStartStates, example.name));
+    setStartStates(nextStartStates);
     setTokenMap({});
-    resetRuntime(example.qubitCount, `Loaded ${example.name}.`);
+    resetRuntime(example.qubitCount, `Loaded ${example.name}.`, nextStartStates);
   };
 
   const compileProtocolSource = (source: string, label = 'QPU AST protocol') => {
     try {
       const result = compileQpuProtocol(source, protocolLibrary);
       setQubitCount(result.qubitCount);
+      const nextStartStates = Array.from({ length: result.qubitCount }, () => '0p' as ParticleStartState);
+      setStartStates(nextStartStates);
       setGates(result.gates);
       setTokenMap(result.tokenMap);
       setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${result.qubitCount} register(s).`);
-      resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`);
+      resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates);
       setLog((current) => [...current, ...result.log.slice(0, 24)]);
       return result;
     } catch (error) {
@@ -283,7 +308,7 @@ function App() {
   };
 
   const downloadQpucirContents = (name: string, fileName: string, contents: string) => {
-    const blob = new Blob([contents], { type: 'application/json' });
+    const blob = new Blob([contents], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -303,14 +328,15 @@ function App() {
     let payload: string;
     const name = 'Current editor protocol';
     try {
-      payload = JSON.stringify(createQpucirPayload(name, protocolSource), null, 2);
+      createQpucirPayload(name, protocolSource);
+      payload = protocolSource;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setFileStatus(`Download error: ${message}`);
       return;
     }
 
-    downloadQpucirContents(name, `${safeFileName(name)}.qpucir`, payload);
+    downloadQpucirContents(name, qpucirFileNameForSource(protocolSource, name), payload);
   };
 
   const uploadProtocol = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -413,6 +439,7 @@ function App() {
             gates={orderedGates}
             onDropGate={addGate}
             onRemoveGate={removeGate}
+            qubitColors={Array.from({ length: qubitCount }, (_, qubit) => `hsl(${(qubit * 137.508) % 360} 88% 62%)`)}
             qubitCount={qubitCount}
             selectedGate={selectedGate}
           />
@@ -458,7 +485,19 @@ function App() {
               <button onClick={removeParticle} type="button">Remove particle</button>
               <button onClick={measureSelectedQubit} type="button">Measure target</button>
             </div>
-            <p className="canvas-tip">Selected {selectedGate} gate will target q{selectedTarget}; controlled gates use the control selectors above.</p>
+            <div className="start-state-picker" aria-label="Particle start states">
+              {Array.from({ length: qubitCount }, (_, qubit) => (
+                <label key={qubit}>
+                  q{qubit} start
+                  <select value={startStates[qubit] ?? '0p'} onChange={(event) => updateStartState(qubit, event.target.value as ParticleStartState)}>
+                    <option value="0p">0p</option>
+                    <option value="1p">1p</option>
+                    <option value="sp">sp</option>
+                  </select>
+                </label>
+              ))}
+            </div>
+            <p className="canvas-tip">Selected {selectedGate} gate will target q{selectedTarget}; controlled gates use the control selectors above. Particle start states are mirrored into SET lines in the QPU AST backend.</p>
           </section>
 
           <section className="controls panel" aria-label="Run controls">
@@ -562,7 +601,7 @@ function App() {
           </div>
           <p className="canvas-tip">The repository PDF is embedded below for quick reference. If the browser cannot render it, open it directly.</p>
           <div className="pdf-frame">
-            <iframe title="QPU Circuit Docs PDF" src="/QPU_Circuit_Docs.pdf" />
+            <iframe title="QPU Circuit Docs PDF" src="/qpu-docs.html" />
           </div>
           <a className="primary-link" href="/QPU_Circuit_Docs.pdf" target="_blank" rel="noreferrer">Open PDF in a new tab</a>
         </section>
@@ -599,7 +638,7 @@ function App() {
 
       {activeView === 'particles' && (
         <div className="results-grid standalone-results">
-          <ParticleView measurements={measurements} qubitCount={qubitCount} />
+          <ParticleView activeStep={cursor - 1} gates={orderedGates} measurements={measurements} qubitCount={qubitCount} startStates={startStates} />
           <OutputPanel log={log} measurements={measurements} qubitCount={qubitCount} state={state} />
         </div>
       )}

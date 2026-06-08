@@ -1,5 +1,5 @@
 import { basisLabel } from '../simulator/engine';
-import { formatComplex } from '../simulator/complex';
+import { formatComplex, magnitudeSquared } from '../simulator/complex';
 import { Complex } from '../simulator/complex';
 import { MeasurementMap } from '../simulator/types';
 
@@ -11,9 +11,8 @@ type OutputPanelProps = {
 };
 
 export function OutputPanel({ state, qubitCount, measurements, log }: OutputPanelProps) {
-  const nonZero = state
-    .map((amplitude, index) => ({ amplitude, index }))
-    .filter(({ amplitude }) => Math.abs(amplitude.re) > 1e-8 || Math.abs(amplitude.im) > 1e-8);
+  const rows = state.map((amplitude, index) => ({ amplitude, index, probability: magnitudeSquared(amplitude) }));
+  const nonZero = rows.filter(({ amplitude }) => Math.abs(amplitude.re) > 1e-8 || Math.abs(amplitude.im) > 1e-8);
 
   return (
     <section className="panel output" aria-labelledby="output-title">
@@ -32,6 +31,29 @@ export function OutputPanel({ state, qubitCount, measurements, log }: OutputPane
           <code key={index}>{formatComplex(amplitude)} |{basisLabel(index, qubitCount)}⟩</code>
         ))}
       </div>
+      <details className="truth-table-panel">
+        <summary>Outcome truth table / probabilities</summary>
+        <div className="truth-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Outcome</th>
+                <th>Amplitude</th>
+                <th>Probability</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ amplitude, index, probability }) => (
+                <tr className={probability > 1e-8 ? 'possible' : ''} key={index}>
+                  <td>|{basisLabel(index, qubitCount)}⟩</td>
+                  <td><code>{formatComplex(amplitude)}</code></td>
+                  <td>{(probability * 100).toFixed(2)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
       <h3>Execution log</h3>
       <ol className="log-list">
         {log.map((entry, index) => <li key={`${entry}-${index}`}>{entry}</li>)}

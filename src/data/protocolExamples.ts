@@ -3,6 +3,7 @@ import phaseDemoQpucir from './processes/phase-demo.qpucir?raw';
 import singleBitFullAdderQpucir from './processes/single-bit-full-adder.qpucir?raw';
 import twoBitFullAdderQpucir from './processes/two-bit-full-adder.qpucir?raw';
 import type { CircuitGate } from '../simulator/types';
+import { extractMainProcessName } from '../simulator/qpuFormat';
 
 export type QpucirPayload = {
   format: 'qpucir';
@@ -17,18 +18,32 @@ export type QpucirPayload = {
   exportedAt?: string;
 };
 
-export type ConfiguredQpucirProcess = QpucirPayload & {
+export type ConfiguredQpucirProcess = {
+  format: 'qpucir';
+  version: 1;
+  name: string;
+  source: string;
   fileName: string;
   contents: string;
+  compiled?: QpucirPayload['compiled'];
+  exportedAt?: string;
 };
 
 const parseConfiguredProcess = (fileName: string, contents: string): ConfiguredQpucirProcess => {
-  const payload = JSON.parse(contents) as QpucirPayload;
+  let payload: QpucirPayload;
+
+  try {
+    payload = JSON.parse(contents) as QpucirPayload;
+  } catch {
+    const name = extractMainProcessName(contents) ?? fileName.replace(/\.qpucir$/i, '');
+    return { format: 'qpucir', version: 1, name, source: contents, fileName, contents };
+  }
+
   if (payload.format !== 'qpucir' || payload.version !== 1 || typeof payload.name !== 'string' || typeof payload.source !== 'string') {
     throw new Error(`${fileName} is not a valid .qpucir process file.`);
   }
 
-  return { ...payload, fileName, contents };
+  return { ...payload, fileName, contents: payload.source };
 };
 
 export const configuredProcesses = [

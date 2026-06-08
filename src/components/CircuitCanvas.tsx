@@ -6,13 +6,14 @@ type CircuitCanvasProps = {
   gates: CircuitGate[];
   activeStep: number;
   selectedGate: GateType | null;
+  qubitColors: string[];
   onDropGate: (gate: GateType, qubit: number) => void;
   onRemoveGate: (gateId: string) => void;
 };
 
 const gateTouchesQubit = (gate: CircuitGate, qubit: number) => gate.targets.includes(qubit) || gate.controls.includes(qubit);
 
-export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, onDropGate, onRemoveGate }: CircuitCanvasProps) {
+export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, qubitColors, onDropGate, onRemoveGate }: CircuitCanvasProps) {
   const sorted = gates.slice().sort((a, b) => a.step - b.step);
   const columns = Math.max(6, sorted.length + 2);
 
@@ -35,7 +36,7 @@ export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, onD
       <div className="canvas-scroll" style={{ ['--columns' as string]: columns }}>
         <div className="circuit-grid">
           {Array.from({ length: qubitCount }, (_, qubit) => (
-            <div className="wire-row" key={qubit}>
+            <div className="wire-row" key={qubit} style={{ ['--particle-color' as string]: qubitColors[qubit] }}>
               <div className="wire-label">q{qubit}</div>
               <div
                 className={`wire-lane ${selectedGate ? 'ready' : ''}`}
@@ -55,8 +56,8 @@ export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, onD
                   const isControl = gate.controls.includes(qubit);
                   return (
                     <span
-                      className={`placed-gate step-${gate.step} ${activeStep === gate.step ? 'active' : ''}`}
-                      style={{ ['--step' as string]: gate.step + 1 }}
+                      className={`placed-gate step-${gate.step} ${activeStep === gate.step ? 'active' : ''} ${activeStep >= gate.step ? 'done' : ''}`}
+                      style={{ ['--step' as string]: gate.step + 1, ['--gate-color' as string]: qubitColors[qubit] }}
                       key={`${gate.id}-${qubit}`}
                     >
                       {isControl ? <span className="control-dot" title={`${gate.type} control`} /> : null}
@@ -79,7 +80,7 @@ export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, onD
           ))}
         </div>
       </div>
-      <p className="canvas-tip">Tip: CNOT targets the wire you drop on and auto-selects a nearby control. CCNOT uses two controls.</p>
+      <p className="canvas-tip">Tip: each q-line gets a particle color; mixed control/target operations are connected across the colored wires.</p>
     </section>
   );
 }

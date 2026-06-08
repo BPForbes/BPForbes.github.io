@@ -3,6 +3,7 @@ import { Complex } from './complex';
 export type PrimitiveGateType = 'X' | 'H' | 'CNOT' | 'CCNOT' | 'PHASE' | 'MEASURE';
 export type DerivedGateType = 'NOT' | 'AND' | 'NAND' | 'OR' | 'XOR';
 export type GateType = PrimitiveGateType | DerivedGateType;
+export type ParticleStartState = '0p' | '1p' | 'sp';
 
 export const gateTypes = ['X', 'H', 'CNOT', 'CCNOT', 'PHASE', 'MEASURE', 'NOT', 'AND', 'NAND', 'OR', 'XOR'] as const satisfies readonly GateType[];
 export const isGateType = (value: string): value is GateType => (gateTypes as readonly string[]).includes(value);

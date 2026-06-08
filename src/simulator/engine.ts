@@ -1,14 +1,20 @@
 import { add, Complex, complex, magnitudeSquared, mul, ONE, scale, ZERO } from './complex';
-import { CircuitGate, ExecutionResult, MeasurementMap } from './types';
+import { CircuitGate, ExecutionResult, MeasurementMap, ParticleStartState } from './types';
 
 const INV_SQRT2 = 1 / Math.sqrt(2);
 const X = [[ZERO, ONE], [ONE, ZERO]];
 const H = [[complex(INV_SQRT2), complex(INV_SQRT2)], [complex(INV_SQRT2), complex(-INV_SQRT2)]];
 const phaseMatrix = (angle: number) => [[ONE, ZERO], [ZERO, complex(Math.cos(angle), Math.sin(angle))]];
 
-export const createInitialState = (qubitCount: number): Complex[] => {
-  const state = Array.from({ length: 2 ** qubitCount }, () => ZERO);
+export const createInitialState = (qubitCount: number, startStates: ParticleStartState[] = []): Complex[] => {
+  let state = Array.from({ length: 2 ** qubitCount }, () => ZERO);
   state[0] = ONE;
+
+  startStates.slice(0, qubitCount).forEach((startState, qubit) => {
+    if (startState === '1p') state = applySingleQubitGate(state, qubitCount, qubit, X);
+    if (startState === 'sp') state = applySingleQubitGate(state, qubitCount, qubit, H);
+  });
+
   return state;
 };
 
@@ -143,7 +149,7 @@ export const applyGate = (
   return { state: measured.state, measurements: { ...measurements, [target]: measured.value }, log };
 };
 
-export const runCircuit = (qubitCount: number, gates: CircuitGate[]): ExecutionResult => {
+export const runCircuit = (qubitCount: number, gates: CircuitGate[], startStates: ParticleStartState[] = []): ExecutionResult => {
   return gates
     .slice()
     .sort((a, b) => a.step - b.step)
@@ -152,7 +158,11 @@ export const runCircuit = (qubitCount: number, gates: CircuitGate[]): ExecutionR
         const next = applyGate(result.state, qubitCount, gate, result.measurements);
         return { state: next.state, measurements: next.measurements, log: [...result.log, ...next.log] };
       },
-      { state: createInitialState(qubitCount), measurements: {}, log: [`Initialized |${'0'.repeat(qubitCount)}⟩.`] },
+      {
+        state: createInitialState(qubitCount, startStates),
+        measurements: {},
+        log: [`Initialized ${Array.from({ length: qubitCount }, (_, index) => startStates[index] ?? '0p').join(' ')}.`],
+      },
     );
 };
 

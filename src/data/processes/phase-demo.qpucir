@@ -1,57 +1,9 @@
-{
-  "format": "qpucir",
-  "version": 1,
-  "name": "PHASE / BPHASE demo",
-  "source": "PARAMS: Theta:float\n\nMAIN-PROCESS PhaseDemo\nSET 0:0 0p\nH -I 0:0 -O 0:0\nPHASE=1.5708 -I 0:0 -O 0:0\nBPHASE=0.7854 -I 0:0 -O 0:0\nMEASURE -I 0",
-  "exportedAt": "2026-06-08T00:00:00.000Z",
-  "compiled": {
-    "qubitCount": 1,
-    "gates": [
-      {
-        "id": "H-0-0",
-        "type": "H",
-        "step": 0,
-        "targets": [
-          0
-        ],
-        "controls": [],
-        "source": "H -I 0:0 -O 0:0"
-      },
-      {
-        "id": "PHASE-1-0",
-        "type": "PHASE",
-        "step": 1,
-        "targets": [
-          0
-        ],
-        "controls": [],
-        "phase": 1.5708,
-        "source": "PHASE=1.5708 -I 0:0 -O 0:0"
-      },
-      {
-        "id": "PHASE-2-0",
-        "type": "PHASE",
-        "step": 2,
-        "targets": [
-          0
-        ],
-        "controls": [],
-        "phase": -0.7854,
-        "source": "BPHASE=0.7854 -I 0:0 -O 0:0"
-      },
-      {
-        "id": "MEASURE-3-0",
-        "type": "MEASURE",
-        "step": 3,
-        "targets": [
-          0
-        ],
-        "controls": [],
-        "source": "MEASURE -I 0"
-      }
-    ],
-    "tokenMap": {
-      "PhaseDemo#0/0": 0
-    }
-  }
-}
+PARAMS: Theta:float
+
+MAIN-PROCESS PhaseDemo
+SET 0:0 0p
+H -I 0:0 -O 0:0
+PHASE=1.5708 -I 0:0 -O 0:0
+BPHASE=0.7854 -I 0:0 -O 0:0
+MEASURE -I 0
+RETURNVALS 0
