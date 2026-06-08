@@ -256,6 +256,10 @@ const emitGate = (state: CompilerState, type: GateType, targets: number[], contr
   });
 };
 
+const emitPrepareZero = (state: CompilerState, qubit: number, source: string) => {
+  emitGate(state, 'RESET', [qubit], [], source);
+};
+
 const resolveInputQubit = (state: CompilerState, frame: Frame, token: string) => ensureQubit(state, scopedName(frame, token));
 
 const returnRegistersForProcess = (process: ProtocolProcess): string[] => {
@@ -330,6 +334,7 @@ const executeProcess = (
       if (isConstant(value)) {
         const qubit = ensureQubit(state, targetName);
         const normalizedValue = value.replace(/^\$/, '').toLowerCase();
+        if (normalizedValue.startsWith('0p')) emitPrepareZero(state, qubit, line);
         if (normalizedValue.startsWith('1p')) emitGate(state, 'X', [qubit], [], line);
         if (normalizedValue.startsWith('sp')) emitGate(state, 'H', [qubit], [], line);
         state.log.push(`SET ${stripCycle(target)} to ${value} at cycle ${state.currentCycle}.`);
@@ -365,11 +370,16 @@ const executeProcess = (
       if (!child) throw new Error(`Unknown child process '${childName}'`);
       const childReturnRegisters = returnRegistersForProcess(child);
       const childOutputBindings = new Map<string, string>();
+      const preparedOutputQubits = new Set<number>();
       command.outputs.forEach((output, index) => {
         const childRegister = childReturnRegisters[index];
         if (!childRegister) return;
         const parentToken = scopedName(frame, stripCycle(output));
-        ensureQubit(state, parentToken);
+        const qubit = ensureQubit(state, parentToken);
+        if (!preparedOutputQubits.has(qubit)) {
+          preparedOutputQubits.add(qubit);
+          emitPrepareZero(state, qubit, `prepare ${stripCycle(output)} before RUNCHILD ${childName}`);
+        }
         childOutputBindings.set(childRegister, parentToken);
       });
       const childReturns = executeProcess(child, state, library, command.inputs, frame, childOutputBindings);

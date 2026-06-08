@@ -77,6 +77,26 @@ describe('TwoBitFullAdder', () => {
     expect(readMeasured(compiled.tokenMap, measured.measurements, 'S1tmp')).toBe(1);
     expect(readMeasured(compiled.tokenMap, measured.measurements, 'Cout')).toBe(0);
   });
+
+  it('ignores incorrect 1p start states on child output registers', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A0', '0p');
+    setToken(compiled.tokenMap, startStates, 'A1', '1p');
+    setToken(compiled.tokenMap, startStates, 'B0', '1p');
+    setToken(compiled.tokenMap, startStates, 'B1', '0p');
+    setToken(compiled.tokenMap, startStates, 'S0tmp', '1p');
+    setToken(compiled.tokenMap, startStates, 'Cmid', '1p');
+    setToken(compiled.tokenMap, startStates, 'S1tmp', '1p');
+    setToken(compiled.tokenMap, startStates, 'Cout', '1p');
+
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
+    const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
+
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S0tmp')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S1tmp')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'Cout')).toBe(0);
+  });
 });
 
 describe('FourBitFullAdder nested children', () => {

@@ -1,6 +1,6 @@
 import { Complex } from './complex';
 
-export type PrimitiveGateType = 'X' | 'H' | 'CNOT' | 'CCNOT' | 'PHASE' | 'MEASURE';
+export type PrimitiveGateType = 'X' | 'H' | 'CNOT' | 'CCNOT' | 'PHASE' | 'MEASURE' | 'RESET';
 export type DerivedGateType = 'NOT' | 'AND' | 'NAND' | 'OR' | 'XOR';
 export type GateType = PrimitiveGateType | DerivedGateType;
 export type ParticleStartState = '0p' | '1p' | 'sp';

@@ -45,6 +45,10 @@ export const serializeCircuitToQpuProtocol = (
         lines.push(`MEASURE -I ${gate.targets[0]}`);
         return;
       }
+      if (gate.type === 'RESET') {
+        lines.push(`SET ${target} 0p`);
+        return;
+      }
       if (gate.type === 'X' || gate.type === 'H' || gate.type === 'PHASE' || gate.type === 'NOT') {
         const op = gate.type === 'PHASE' ? `PHASE=${gate.phase ?? 0}` : gate.type;
         lines.push(`${op} -I ${target} -O ${target}`);
