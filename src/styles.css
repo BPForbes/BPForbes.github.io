@@ -131,3 +131,49 @@ button { font: inherit; }
   .workbench-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .controls { grid-template-columns: repeat(5, 1fr); }
 }
+
+.hamburger-button { position: fixed; top: 1rem; left: 1rem; z-index: 40; width: 3rem; height: 3rem; display: grid; place-content: center; gap: .28rem; border: 1px solid rgba(125,211,252,.42); border-radius: .9rem; background: rgba(15,23,42,.92); box-shadow: 0 18px 45px rgba(0,0,0,.28); cursor: pointer; }
+.hamburger-button span { display: block; width: 1.35rem; height: .18rem; border-radius: 999px; background: #e0f2fe; }
+.site-menu { position: fixed; z-index: 50; top: 0; left: 0; width: min(21rem, 86vw); min-height: 100vh; display: flex; flex-direction: column; gap: .5rem; padding: 1rem; background: linear-gradient(180deg, rgba(15,23,42,.98), rgba(30,41,59,.98)); border-right: 1px solid rgba(148,163,184,.24); box-shadow: 24px 0 80px rgba(0,0,0,.4); transform: translateX(-105%); transition: transform .24s ease; }
+.site-menu.open { transform: translateX(0); }
+.menu-backdrop { position: fixed; inset: 0; z-index: 45; border: 0; background: rgba(2,6,23,.58); cursor: pointer; }
+.menu-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .5rem; color: #f8fafc; }
+.menu-heading button,
+.site-menu button { border: 1px solid rgba(148,163,184,.22); color: #e2e8f0; background: rgba(51,65,85,.7); border-radius: .8rem; padding: .7rem .8rem; text-align: left; font-weight: 850; cursor: pointer; }
+.menu-heading button { padding: .35rem .65rem; font-size: 1.35rem; line-height: 1; }
+.site-menu button:hover,
+.site-menu button.active { color: #082f49; background: linear-gradient(135deg, #67e8f9, #38bdf8); }
+.site-menu button.danger { margin-top: auto; color: #fee2e2; background: rgba(127,29,29,.72); border-color: rgba(248,113,113,.38); }
+.site-menu details { display: grid; gap: .45rem; color: #cbd5e1; border: 1px solid rgba(148,163,184,.18); border-radius: .9rem; padding: .65rem; background: rgba(2,6,23,.32); }
+.site-menu summary { cursor: pointer; font-weight: 950; color: #f8fafc; margin-bottom: .45rem; }
+.site-menu details button { width: 100%; margin-top: .35rem; }
+.docs-panel,
+.files-panel,
+.standalone-results { grid-column: 1 / -1; }
+.docs-grid { display: grid; gap: 1rem; }
+.docs-grid article { border: 1px solid rgba(148,163,184,.18); border-radius: 1rem; padding: 1rem; background: rgba(2,6,23,.36); }
+.docs-grid h3 { margin: 0 0 .65rem; color: #e0f2fe; }
+.docs-grid p,
+.docs-grid li { color: #dbeafe; line-height: 1.55; }
+.docs-grid code { color: #bef264; background: rgba(2,6,23,.72); border-radius: .35rem; padding: .08rem .28rem; }
+.reference-links { display: flex; flex-wrap: wrap; gap: .55rem; }
+.reference-links a,
+.primary-link { display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(125,211,252,.34); border-radius: 999px; color: #082f49; background: #67e8f9; padding: .58rem .8rem; font-weight: 900; text-decoration: none; }
+.pdf-frame { width: 100%; height: min(72vh, 52rem); overflow: hidden; border: 1px solid rgba(148,163,184,.24); border-radius: 1rem; background: rgba(2,6,23,.7); margin: 1rem 0; }
+.pdf-frame iframe { width: 100%; height: 100%; border: 0; }
+.file-grid { display: grid; gap: 1rem; }
+.upload-card,
+.download-card { display: grid; gap: .75rem; border: 1px solid rgba(148,163,184,.2); border-radius: 1rem; padding: 1rem; background: rgba(2,6,23,.38); color: #dbeafe; }
+.upload-card strong,
+.download-card strong { color: #e0f2fe; font-size: 1.05rem; }
+.upload-card input { width: 100%; border: 1px dashed rgba(125,211,252,.4); border-radius: .9rem; padding: .9rem; background: rgba(15,23,42,.72); color: #e2e8f0; }
+.download-list { display: grid; gap: .55rem; }
+.download-list button,
+.quick-actions button { border: 1px solid rgba(125,211,252,.28); color: #082f49; background: linear-gradient(135deg, #67e8f9, #38bdf8); border-radius: .8rem; padding: .75rem .85rem; font-weight: 900; cursor: pointer; }
+.file-status { color: #bef264; font-weight: 850; margin-bottom: 0; }
+.quick-actions { display: flex; flex-wrap: wrap; gap: .7rem; }
+@media (min-width: 780px) {
+  .docs-grid,
+  .file-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .docs-grid article:last-child { grid-column: 1 / -1; }
+}
