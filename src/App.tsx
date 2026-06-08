@@ -106,7 +106,12 @@ function App() {
     Object.entries(tokenMap).forEach(([token, qubit]) => {
       if (qubit < qubitCount) {
         const shortName = token.includes('/') ? token.split('/').pop() ?? token : token;
-        labels[qubit] = `q${qubit} · ${shortName}`;
+        const isNumeric = /^\d+$/.test(shortName);
+        const existing = labels[qubit];
+        const existingIsDefault = existing === `q${qubit}` || /^\d+$/.test(existing.split(' · ')[1] ?? '');
+        if (existingIsDefault || !isNumeric) {
+          labels[qubit] = `q${qubit} · ${shortName}`;
+        }
       }
     });
     return labels;

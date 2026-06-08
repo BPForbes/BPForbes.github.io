@@ -270,6 +270,14 @@ const returnRegistersForProcess = (process: ProtocolProcess): string[] => {
   return [];
 };
 
+export const getReturnValTokens = (source: string): string[] => returnRegistersForProcess(parseProtocol(source));
+
+export const getReturnValToken = (source: string, index: number): string => {
+  const token = getReturnValTokens(source)[index];
+  if (!token) throw new Error(`RETURNVALS index ${index} is out of range for this protocol`);
+  return token;
+};
+
 const executeProcess = (
   process: ProtocolProcess,
   state: CompilerState,
