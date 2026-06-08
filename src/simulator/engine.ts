@@ -27,6 +27,27 @@ export const createInitialState = (
 
 export const basisLabel = (index: number, qubitCount: number): string => index.toString(2).padStart(qubitCount, '0');
 
+/** Marginalize a state vector onto the selected qubit indices for logical-param display. */
+export const projectStateOntoQubits = (
+  state: Complex[],
+  sourceQubitCount: number,
+  qubits: number[],
+): Complex[] => {
+  const targetCount = qubits.length;
+  const projected = Array.from({ length: 2 ** targetCount }, () => ZERO);
+
+  state.forEach((amplitude, sourceIndex) => {
+    if (magnitudeSquared(amplitude) < 1e-20) return;
+    let targetIndex = 0;
+    qubits.forEach((sourceQubit) => {
+      targetIndex = (targetIndex << 1) | (hasBit(sourceIndex, sourceQubit, sourceQubitCount) ? 1 : 0);
+    });
+    projected[targetIndex] = add(projected[targetIndex], amplitude);
+  });
+
+  return projected;
+};
+
 const bitMask = (qubit: number, qubitCount: number) => 1 << (qubitCount - qubit - 1);
 const hasBit = (basisIndex: number, qubit: number, qubitCount: number) => (basisIndex & bitMask(qubit, qubitCount)) !== 0;
 

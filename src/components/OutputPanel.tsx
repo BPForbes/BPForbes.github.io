@@ -8,9 +8,10 @@ type OutputPanelProps = {
   qubitCount: number;
   measurements: MeasurementMap;
   log: string[];
+  qubitLabels?: string[];
 };
 
-export function OutputPanel({ state, qubitCount, measurements, log }: OutputPanelProps) {
+export function OutputPanel({ state, qubitCount, measurements, log, qubitLabels = [] }: OutputPanelProps) {
   const rows = state.map((amplitude, index) => ({ amplitude, index, probability: magnitudeSquared(amplitude) }));
   const nonZero = rows.filter(({ amplitude }) => Math.abs(amplitude.re) > 1e-8 || Math.abs(amplitude.im) > 1e-8);
 
@@ -22,7 +23,7 @@ export function OutputPanel({ state, qubitCount, measurements, log }: OutputPane
       </div>
       <div className="measurements">
         {Array.from({ length: qubitCount }, (_, qubit) => (
-          <span className="measurement-pill" key={qubit}>q{qubit}: {measurements[qubit] ?? '—'}</span>
+          <span className="measurement-pill" key={qubit}>{qubitLabels[qubit] ?? `q${qubit}`}: {measurements[qubit] ?? '—'}</span>
         ))}
       </div>
       <h3>Final state vector</h3>

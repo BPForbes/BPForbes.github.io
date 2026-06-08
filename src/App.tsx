@@ -6,7 +6,7 @@ import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess, QpucirPayload } from './data/protocolExamples';
-import { applyGate, createInitialState, measureAll, measureQubit, runCircuit } from './simulator/engine';
+import { applyGate, createInitialState, measureAll, measureQubit, projectStateOntoQubits, runCircuit } from './simulator/engine';
 import { compileQpuProtocol, ProcessParam, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
 import { extractMainProcessName, qpucirFileNameForSource, serializeCircuitToQpuProtocol } from './simulator/qpuFormat';
 import { CircuitGate, GateType, MeasurementMap, ParticleStartState, gateTypes } from './simulator/types';
@@ -82,6 +82,7 @@ const newGate = (
 
 function App() {
   const [qubitCount, setQubitCount] = useState(QUBIT_COUNT);
+  const [simulationQubitCount, setSimulationQubitCount] = useState(QUBIT_COUNT);
   const [gates, setGates] = useState<CircuitGate[]>([]);
   const [startStates, setStartStates] = useState<ParticleStartState[]>(() => Array.from({ length: QUBIT_COUNT }, () => '0p'));
   const [state, setState] = useState<Complex[]>(() => createInitialState(QUBIT_COUNT));
@@ -118,14 +119,36 @@ function App() {
     });
     return labels;
   }, [qubitCount, tokenMap]);
-  const selectedTarget = Math.min(targetQubit, qubitCount - 1);
   const phaseRadians = (phaseDegrees * Math.PI) / 180;
   const controllableParams = useMemo(() => {
-    const inRange = processParams.filter((param) => param.qubitIndex >= 0 && param.qubitIndex < qubitCount);
+    const inRange = processParams.filter((param) => param.qubitIndex >= 0 && param.qubitIndex < simulationQubitCount);
     if (inRange.length > 0) return inRange;
     return Array.from({ length: qubitCount }, (_, qubit) => ({ name: `q${qubit}`, type: '1', qubitIndex: qubit }));
-  }, [processParams, qubitCount]);
+  }, [processParams, qubitCount, simulationQubitCount]);
   const paramQubitIndices = useMemo(() => controllableParams.map((param) => param.qubitIndex), [controllableParams]);
+  const displayQubitCount = processParams.length > 0 ? controllableParams.length : qubitCount;
+  const selectedTarget = Math.min(targetQubit, displayQubitCount - 1);
+  const selectedSimulationQubit = controllableParams[selectedTarget]?.qubitIndex ?? selectedTarget;
+  const displayQubitLabels = useMemo(
+    () => (processParams.length > 0 ? controllableParams.map((param) => param.name) : qubitLabels.slice(0, qubitCount)),
+    [processParams.length, controllableParams, qubitLabels, qubitCount],
+  );
+  const displayState = useMemo(() => {
+    if (processParams.length > 0 && simulationQubitCount > displayQubitCount) {
+      return projectStateOntoQubits(state, simulationQubitCount, paramQubitIndices);
+    }
+    return state;
+  }, [state, simulationQubitCount, displayQubitCount, processParams.length, paramQubitIndices]);
+  const displayMeasurements = useMemo(() => {
+    if (processParams.length === 0) return measurements;
+    const mapped: MeasurementMap = {};
+    controllableParams.forEach((param, displayIndex) => {
+      if (measurements[param.qubitIndex] !== undefined) {
+        mapped[displayIndex] = measurements[param.qubitIndex]!;
+      }
+    });
+    return mapped;
+  }, [measurements, controllableParams, processParams.length]);
 
   const chooseDistinctQubit = (avoid: number[]) => {
     const option = Array.from({ length: qubitCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));
@@ -146,13 +169,17 @@ function App() {
     return undefined;
   };
 
-  const resetRuntime = (nextQubitCount = qubitCount, reason?: string, nextStartStates = startStates) => {
+  const resetRuntime = (
+    nextSimulationQubitCount = simulationQubitCount,
+    reason?: string,
+    nextStartStates = startStates,
+  ) => {
     const activeParamIndices = paramQubitIndices.length ? paramQubitIndices : undefined;
-    setState(createInitialState(nextQubitCount, nextStartStates, activeParamIndices));
+    setState(createInitialState(nextSimulationQubitCount, nextStartStates, activeParamIndices));
     setMeasurements({});
     const initDesc = controllableParams.length
       ? controllableParams.map((param) => `${param.name}=${nextStartStates[param.qubitIndex] ?? '0p'}`).join(' ')
-      : nextStartStates.slice(0, nextQubitCount).map((value) => value ?? '0p').join(' ');
+      : nextStartStates.slice(0, nextSimulationQubitCount).map((value) => value ?? '0p').join(' ');
     setLog([reason ?? `Initialized ${initDesc}.`]);
     setCursor(0);
   };
@@ -179,7 +206,12 @@ function App() {
   };
 
   const run = () => {
-    const result = runCircuit(qubitCount, orderedGates, startStates, paramQubitIndices.length ? paramQubitIndices : undefined);
+    const result = runCircuit(
+      simulationQubitCount,
+      orderedGates,
+      startStates,
+      paramQubitIndices.length ? paramQubitIndices : undefined,
+    );
     setState(result.state);
     setMeasurements(result.measurements);
     setLog(result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared')));
@@ -189,7 +221,7 @@ function App() {
   const step = () => {
     const gate = orderedGates[cursor];
     if (!gate) return;
-    const result = applyGate(state, qubitCount, gate, measurements);
+    const result = applyGate(state, simulationQubitCount, gate, measurements);
     setState(result.state);
     setMeasurements(result.measurements);
     setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared'))]);
@@ -199,14 +231,19 @@ function App() {
   const resetCircuit = () => resetRuntime();
 
   const updateStartState = (qubit: number, value: ParticleStartState) => {
-    const nextStartStates = Array.from({ length: qubitCount }, (_, index) => (index === qubit ? value : startStates[index] ?? '0p'));
+    const nextStartStates = Array.from(
+      { length: simulationQubitCount },
+      (_, index) => (index === qubit ? value : startStates[index] ?? '0p'),
+    );
     setStartStates(nextStartStates);
-    setProtocolSource(serializeCircuitToQpuProtocol(gates, qubitCount, nextStartStates));
-    resetRuntime(qubitCount, `Set q${qubit} start state to ${value}.`, nextStartStates);
+    setProtocolSource(serializeCircuitToQpuProtocol(gates, simulationQubitCount, nextStartStates));
+    const paramName = controllableParams.find((param) => param.qubitIndex === qubit)?.name ?? `q${qubit}`;
+    resetRuntime(simulationQubitCount, `Set ${paramName} start state to ${value}.`, nextStartStates);
   };
 
   const resetSite = () => {
     setQubitCount(QUBIT_COUNT);
+    setSimulationQubitCount(QUBIT_COUNT);
     const defaultStartStates = Array.from({ length: QUBIT_COUNT }, () => '0p' as ParticleStartState);
     setStartStates(defaultStartStates);
     setGates([]);
@@ -226,7 +263,7 @@ function App() {
   };
 
   const measure = () => {
-    const result = measureAll(state, qubitCount, measurements);
+    const result = measureAll(state, simulationQubitCount, measurements);
     setState(result.state);
     setMeasurements(result.measurements);
     setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared'))]);
@@ -238,7 +275,7 @@ function App() {
       return;
     }
 
-    const result = measureQubit(state, qubitCount, selectedTarget);
+    const result = measureQubit(state, simulationQubitCount, controllableParams[selectedTarget]?.qubitIndex ?? selectedTarget);
     setState(result.state);
     setMeasurements((current) => ({ ...current, [selectedTarget]: result.value }));
     setLog((current) => [...current, `Measured q${selectedTarget} = ${result.value} (P(1)=${result.probabilityOne.toFixed(3)}).`]);
@@ -249,7 +286,7 @@ function App() {
       setLog((current) => [...current, 'Select a gate before adding it to the circuit.']);
       return;
     }
-    addGate(selectedGate, selectedTarget, workbenchControlsForGate(selectedGate, selectedTarget));
+    addGate(selectedGate, selectedSimulationQubit, workbenchControlsForGate(selectedGate, selectedSimulationQubit));
   };
 
   const addParticle = () => {
@@ -259,6 +296,7 @@ function App() {
       return;
     }
     setQubitCount(nextCount);
+    setSimulationQubitCount(nextCount);
     setTargetQubit(nextCount - 1);
     if (nextCount > 1) setControlQubit(0);
     if (nextCount > 2) setSecondControlQubit(1);
@@ -276,6 +314,7 @@ function App() {
     }
 
     setQubitCount(nextCount);
+    setSimulationQubitCount(nextCount);
     const nextStartStates = startStates.slice(0, nextCount);
     setStartStates(nextStartStates);
     setGates((current) =>
@@ -300,6 +339,7 @@ function App() {
     const example = examples[index];
     const nextStartStates = Array.from({ length: example.qubitCount }, () => '0p' as ParticleStartState);
     setQubitCount(example.qubitCount);
+    setSimulationQubitCount(example.qubitCount);
     setGates(example.gates);
     setProtocolSource(serializeCircuitToQpuProtocol(example.gates, example.qubitCount, nextStartStates, example.name));
     setStartStates(nextStartStates);
@@ -311,7 +351,8 @@ function App() {
   const compileProtocolSource = (source: string, label = 'QPU AST protocol') => {
     try {
       const result = compileQpuProtocol(source, protocolLibrary);
-      setQubitCount(result.qubitCount);
+      setSimulationQubitCount(result.qubitCount);
+      setQubitCount(result.logicalQubitCount);
       const nextStartStates = Array.from({ length: result.qubitCount }, () => '0p' as ParticleStartState);
       setStartStates(nextStartStates);
       setGates(result.gates);
@@ -320,7 +361,10 @@ function App() {
       const paramSummary = result.processParams.length
         ? `${result.processParams.length} process parameter(s) (${result.processParams.map((param) => param.name).join(', ')})`
         : 'no explicit process parameters';
-      setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${result.qubitCount} register(s) with ${paramSummary}.`);
+      const registerSummary = result.logicalQubitCount < result.qubitCount
+        ? `${result.logicalQubitCount} logical qubit(s) over ${result.qubitCount} simulation register(s)`
+        : `${result.qubitCount} register(s)`;
+      setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${registerSummary} with ${paramSummary}.`);
       resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates);
       setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared')).slice(0, 24)]);
       return result;
@@ -472,8 +516,8 @@ function App() {
             gates={renderedGates}
             onDropGate={addGate}
             onRemoveGate={removeGate}
-            qubitColors={Array.from({ length: qubitCount }, (_, qubit) => `hsl(${(qubit * 137.508) % 360} 88% 62%)`)}
-            qubitCount={qubitCount}
+            qubitColors={Array.from({ length: simulationQubitCount }, (_, qubit) => `hsl(${(qubit * 137.508) % 360} 88% 62%)`)}
+            qubitCount={simulationQubitCount}
             selectedGate={selectedGate}
           />
 
@@ -673,8 +717,21 @@ function App() {
 
       {activeView === 'particles' && (
         <div className="results-grid standalone-results">
-          <ParticleView activeStep={cursor - 1} gates={renderedGates} measurements={measurements} qubitCount={qubitCount} qubitLabels={qubitLabels} startStates={startStates} />
-          <OutputPanel log={log} measurements={measurements} qubitCount={qubitCount} state={state} />
+          <ParticleView
+            activeStep={cursor - 1}
+            gates={renderedGates}
+            measurements={displayMeasurements}
+            qubitCount={displayQubitCount}
+            qubitLabels={displayQubitLabels}
+            startStates={controllableParams.map((param) => startStates[param.qubitIndex] ?? '0p')}
+          />
+          <OutputPanel
+            log={log}
+            measurements={displayMeasurements}
+            qubitCount={displayQubitCount}
+            qubitLabels={displayQubitLabels}
+            state={displayState}
+          />
         </div>
       )}
 

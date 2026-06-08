@@ -2,7 +2,7 @@ import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from './qpuAst';
 import { serializeCircuitToQpuProtocol } from './qpuFormat';
-import { measureAll, runCircuit } from './engine';
+import { measureAll, projectStateOntoQubits, runCircuit } from './engine';
 import type { ParticleStartState } from './types';
 
 const readProcess = (fileName: string) => readFileSync(new URL(`../data/processes/${fileName}`, import.meta.url), 'utf8');
@@ -142,8 +142,26 @@ describe('TwoBitFullAdder', () => {
   it('allocates only live qubits instead of one ancilla per child invocation', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     expect(compiled.qubitCount).toBe(10);
+    expect(compiled.logicalQubitCount).toBe(5);
     expect(Object.keys(compiled.tokenMap)).not.toContain('SingleBitFullAdder#1/2');
     expect(Object.keys(compiled.tokenMap)).toContain('TwoBitFullAdder#0/@ancilla');
+  });
+
+  it('projects the final state onto five logical parameter qubits', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A0', '0p');
+    setToken(compiled.tokenMap, startStates, 'A1', '1p');
+    setToken(compiled.tokenMap, startStates, 'B0', '1p');
+    setToken(compiled.tokenMap, startStates, 'B1', '1p');
+    setToken(compiled.tokenMap, startStates, 'Cin', '0p');
+
+    const paramIndices = compiled.processParams.map((param) => param.qubitIndex);
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates, paramIndices);
+    const projected = projectStateOntoQubits(executed.state, compiled.qubitCount, paramIndices);
+
+    expect(projected).toHaveLength(32);
+    expect(projected.filter((amplitude) => Math.abs(amplitude.re) > 1e-8 || Math.abs(amplitude.im) > 1e-8)).toHaveLength(1);
   });
 
   it('adds |10> and |11> with cin=0 to produce |101> on sum and carry outputs', () => {

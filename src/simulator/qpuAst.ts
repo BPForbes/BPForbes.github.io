@@ -25,7 +25,10 @@ export type ProcessParam = {
 
 export type CompileResult = {
   gates: CircuitGate[];
+  /** Physical registers used by the compiled circuit. */
   qubitCount: number;
+  /** User-facing parameter count (PARAMS line); use for ket / UI width when > 0. */
+  logicalQubitCount: number;
   parsed: ParsedCommand[];
   log: string[];
   tokenMap: Record<string, number>;
@@ -560,6 +563,7 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
   return {
     gates: compacted.gates,
     qubitCount: compacted.qubitCount,
+    logicalQubitCount: compacted.processParams.length > 0 ? compacted.processParams.length : compacted.qubitCount,
     parsed: state.parsed,
     log: state.log,
     tokenMap: compacted.tokenMap,
