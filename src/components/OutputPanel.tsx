@@ -1,0 +1,41 @@
+import { basisLabel } from '../simulator/engine';
+import { formatComplex } from '../simulator/complex';
+import { Complex } from '../simulator/complex';
+import { MeasurementMap } from '../simulator/types';
+
+type OutputPanelProps = {
+  state: Complex[];
+  qubitCount: number;
+  measurements: MeasurementMap;
+  log: string[];
+};
+
+export function OutputPanel({ state, qubitCount, measurements, log }: OutputPanelProps) {
+  const nonZero = state
+    .map((amplitude, index) => ({ amplitude, index }))
+    .filter(({ amplitude }) => Math.abs(amplitude.re) > 1e-8 || Math.abs(amplitude.im) > 1e-8);
+
+  return (
+    <section className="panel output" aria-labelledby="output-title">
+      <div className="section-heading">
+        <p className="eyebrow">Output panel</p>
+        <h2 id="output-title">Execution results</h2>
+      </div>
+      <div className="measurements">
+        {Array.from({ length: qubitCount }, (_, qubit) => (
+          <span className="measurement-pill" key={qubit}>q{qubit}: {measurements[qubit] ?? '—'}</span>
+        ))}
+      </div>
+      <h3>Final state vector</h3>
+      <div className="state-vector">
+        {nonZero.map(({ amplitude, index }) => (
+          <code key={index}>{formatComplex(amplitude)} |{basisLabel(index, qubitCount)}⟩</code>
+        ))}
+      </div>
+      <h3>Execution log</h3>
+      <ol className="log-list">
+        {log.map((entry, index) => <li key={`${entry}-${index}`}>{entry}</li>)}
+      </ol>
+    </section>
+  );
+}
