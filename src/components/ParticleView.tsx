@@ -6,6 +6,7 @@ type ParticleViewProps = {
   gates?: CircuitGate[];
   activeStep?: number;
   startStates?: ParticleStartState[];
+  qubitLabels?: string[];
 };
 
 const seededColor = (index: number): [number, number, number] => {
@@ -53,7 +54,7 @@ const mixedColor = (qubits: number[]) => {
   return oklabToCss(average);
 };
 
-export function ParticleView({ qubitCount, measurements, gates = [], activeStep = -1, startStates = [] }: ParticleViewProps) {
+export function ParticleView({ qubitCount, measurements, gates = [], activeStep = -1, startStates = [], qubitLabels = [] }: ParticleViewProps) {
   const sorted = gates.slice().sort((a, b) => a.step - b.step);
 
   return (
@@ -68,7 +69,7 @@ export function ParticleView({ qubitCount, measurements, gates = [], activeStep 
           const baseColor = oklabToCss(rgbToOklab(seededColor(qubit)));
           return (
             <div className={`particle-card ${measured !== undefined ? 'collapsed' : ''}`} key={qubit} style={{ ['--particle-color' as string]: baseColor }}>
-              <div className="qubit-label">q{qubit} · {startStates[qubit] ?? '0p'}</div>
+              <div className="qubit-label">{qubitLabels[qubit] ?? `q${qubit}`} · {startStates[qubit] ?? '0p'}</div>
               {measured === undefined ? (
                 <div className="sphere" aria-label={`q${qubit} unmeasured quantum sphere`} />
               ) : (

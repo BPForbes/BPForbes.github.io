@@ -101,6 +101,16 @@ function App() {
   const [fileStatus, setFileStatus] = useState('Upload a .qpucir file or download one of the bundled AST circuits.');
 
   const orderedGates = useMemo(() => gates.slice().sort((a, b) => a.step - b.step), [gates]);
+  const qubitLabels = useMemo(() => {
+    const labels = Array.from({ length: qubitCount }, (_, qubit) => `q${qubit}`);
+    Object.entries(tokenMap).forEach(([token, qubit]) => {
+      if (qubit < qubitCount) {
+        const shortName = token.includes('/') ? token.split('/').pop() ?? token : token;
+        labels[qubit] = `q${qubit} · ${shortName}`;
+      }
+    });
+    return labels;
+  }, [qubitCount, tokenMap]);
   const selectedTarget = Math.min(targetQubit, qubitCount - 1);
   const phaseRadians = (phaseDegrees * Math.PI) / 180;
 
@@ -488,7 +498,7 @@ function App() {
             <div className="start-state-picker" aria-label="Particle start states">
               {Array.from({ length: qubitCount }, (_, qubit) => (
                 <label key={qubit}>
-                  q{qubit} start
+                  {qubitLabels[qubit]} start
                   <select value={startStates[qubit] ?? '0p'} onChange={(event) => updateStartState(qubit, event.target.value as ParticleStartState)}>
                     <option value="0p">0p</option>
                     <option value="1p">1p</option>
@@ -638,7 +648,7 @@ function App() {
 
       {activeView === 'particles' && (
         <div className="results-grid standalone-results">
-          <ParticleView activeStep={cursor - 1} gates={orderedGates} measurements={measurements} qubitCount={qubitCount} startStates={startStates} />
+          <ParticleView activeStep={cursor - 1} gates={orderedGates} measurements={measurements} qubitCount={qubitCount} qubitLabels={qubitLabels} startStates={startStates} />
           <OutputPanel log={log} measurements={measurements} qubitCount={qubitCount} state={state} />
         </div>
       )}

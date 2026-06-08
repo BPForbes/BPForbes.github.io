@@ -260,22 +260,49 @@ const emitGate = (state: CompilerState, type: GateType, targets: number[], contr
 
 const resolveInputQubit = (state: CompilerState, frame: Frame, token: string) => ensureQubit(state, scopedName(frame, token));
 
+const returnRegistersForProcess = (process: ProtocolProcess): string[] => {
+  for (const line of process.lines) {
+    try {
+      const command = parseCommand(line);
+      if (command.op === 'RETURNVALS') return command.args.map(stripCycle);
+    } catch {
+      // Ignore malformed lines while scanning for the child's return register list.
+    }
+  }
+  return [];
+};
+
 const executeProcess = (
   process: ProtocolProcess,
   state: CompilerState,
   library: Map<string, ProtocolProcess>,
   passedParams: string[] = [],
   parentFrame?: Frame,
+  outputBindings: Map<string, string> = new Map(),
 ): string[] => {
   const scope = `${process.name}#${state.processRuns}`;
   state.processRuns += 1;
   const params = new Map<string, string>();
   process.params.forEach((param, index) => {
-    const provided = passedParams[index] ?? defaultValueForType(param.type);
-    const resolved = parentFrame ? scopedName(parentFrame, provided) : stripCycle(provided);
+    const provided = passedParams[index];
+    let resolved: string;
+    if (provided !== undefined && parentFrame) {
+      resolved = scopedName(parentFrame, provided);
+    } else if (param.type.toLowerCase() === 'state') {
+      // Each state parameter owns a distinct register; do not fold defaults into shared const/0p.
+      resolved = param.name;
+    } else {
+      resolved = stripCycle(defaultValueForType(param.type));
+    }
     params.set(param.name, resolved);
   });
   const frame: Frame = { process, scope, aliases: new Map(), params };
+  outputBindings.forEach((parentToken, childRegister) => {
+    frame.aliases.set(childRegister, parentToken);
+  });
+  process.params
+    .filter((param) => param.type.toLowerCase() === 'state')
+    .forEach((param) => ensureQubit(state, params.get(param.name)!));
   let returns: string[] = [];
 
   state.log.push(`MAIN-PROCESS ${process.name} compiled in scope ${scope}.`);
@@ -335,7 +362,14 @@ const executeProcess = (
       const childName = command.op === 'RUNCHILD' ? command.args[0] : command.args[0];
       const child = library.get(childName);
       if (!child) throw new Error(`Unknown child process '${childName}'`);
-      const childReturns = executeProcess(child, state, library, command.inputs, frame);
+      const childReturnRegisters = returnRegistersForProcess(child);
+      const childOutputBindings = new Map<string, string>();
+      command.outputs.forEach((output, index) => {
+        const childRegister = childReturnRegisters[index];
+        if (!childRegister) return;
+        childOutputBindings.set(childRegister, scopedName(frame, stripCycle(output)));
+      });
+      const childReturns = executeProcess(child, state, library, command.inputs, frame, childOutputBindings);
       command.outputs.forEach((output, index) => {
         const returned = childReturns[index];
         if (returned) frame.aliases.set(stripCycle(output), returned);
