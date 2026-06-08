@@ -557,7 +557,7 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     const qubitIndex = tokenMap[param.name];
     if (qubitIndex === undefined) return [];
     if (state.resetQubits.has(qubitIndex)) return [];
-    if (param.type === 'int') return [];
+    if (param.type === 'int' || param.type === 'float') return [];
     return [{ name: param.name, type: param.type, qubitIndex }];
   });
 

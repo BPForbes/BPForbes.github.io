@@ -121,6 +121,17 @@ describe('process parameter exposure', () => {
   });
 });
 
+describe('PhaseDemo', () => {
+  it('uses one qubit and displays the RETURNVALS wire', () => {
+    const source = readProcess('phase-demo.qpucir');
+    const compiled = compileQpuProtocol(source, protocolLibrary);
+    expect(compiled.qubitCount).toBe(1);
+    expect(compiled.logicalQubitCount).toBe(1);
+    expect(compiled.processParams).toHaveLength(0);
+    expect(compiled.returnValues).toEqual([{ name: 'Q0', qubitIndex: 0 }]);
+  });
+});
+
 describe('SingleBitFullAdder standalone', () => {
   it('projects the displayed ket onto Sum and Cout return values', () => {
     const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
