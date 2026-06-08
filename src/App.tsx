@@ -601,9 +601,11 @@ function App() {
           </div>
           <p className="canvas-tip">The repository PDF is embedded below for quick reference. If the browser cannot render it, open it directly.</p>
           <div className="pdf-frame">
-            <iframe title="QPU Circuit Docs PDF" src="/qpu-docs.html" />
+            <object aria-label="QPU Circuit Docs PDF" data={`${import.meta.env.BASE_URL}QPU_Circuit_Docs.pdf`} type="application/pdf">
+              <embed src={`${import.meta.env.BASE_URL}QPU_Circuit_Docs.pdf`} type="application/pdf" title="QPU Circuit Docs PDF" />
+            </object>
           </div>
-          <a className="primary-link" href="/QPU_Circuit_Docs.pdf" target="_blank" rel="noreferrer">Open PDF in a new tab</a>
+          <a className="primary-link" href={`${import.meta.env.BASE_URL}QPU_Circuit_Docs.pdf`} target="_blank" rel="noreferrer">Open PDF in a new tab</a>
         </section>
       )}
 
