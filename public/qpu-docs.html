@@ -5,11 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>QPU Circuit Docs</title>
     <style>
-      html, body { margin: 0; width: 100%; height: 100%; background: #0f172a; }
-      iframe { display: block; width: 100%; height: 100%; border: 0; background: #0f172a; }
+      html, body { margin: 0; width: 100%; height: 100%; background: #0f172a; color: #e2e8f0; font-family: system-ui, sans-serif; }
+      .pdf-shell { width: 100%; height: 100%; }
+      object, embed, iframe { display: block; width: 100%; height: 100%; border: 0; background: #0f172a; }
+      .fallback { padding: 1.5rem; line-height: 1.6; }
+      .fallback a { color: #7dd3fc; }
     </style>
   </head>
   <body>
-    <iframe title="QPU Circuit Docs PDF" src="/QPU_Circuit_Docs.pdf"></iframe>
+    <div class="pdf-shell">
+      <object data="./QPU_Circuit_Docs.pdf" type="application/pdf">
+        <embed src="./QPU_Circuit_Docs.pdf" type="application/pdf" />
+        <div class="fallback">
+          <p>Your browser could not embed this PDF inline.</p>
+          <p><a href="./QPU_Circuit_Docs.pdf">Open QPU Circuit Docs (PDF)</a></p>
+        </div>
+      </object>
+    </div>
   </body>
 </html>
