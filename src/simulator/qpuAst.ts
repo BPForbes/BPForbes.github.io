@@ -27,6 +27,18 @@ export type CompileResult = {
 
 const primitiveGates = new Set(['X', 'H', 'CNOT', 'CCNOT', 'PHASE']);
 const derivedGates = new Set(['NOT', 'AND', 'NAND', 'OR', 'XOR']);
+const gateInputCounts: Partial<Record<QpuOperation, number>> = {
+  X: 1,
+  H: 1,
+  PHASE: 1,
+  CNOT: 1,
+  CCNOT: 2,
+  NOT: 1,
+  AND: 2,
+  NAND: 2,
+  OR: 2,
+  XOR: 2,
+};
 
 export const supportedQpuOperations: QpuOperation[] = [
   'INCREASECYCLE',
@@ -167,6 +179,10 @@ export const parseCommand = (line: string): ParsedCommand => {
   if ((primitiveGates.has(op) || derivedGates.has(op)) && op !== 'MEASURE' && !outputs.length) {
     throw new Error(`${op} requires -O output`);
   }
+  const expectedInputs = gateInputCounts[op];
+  if (expectedInputs !== undefined && inputs.length < expectedInputs) {
+    throw new Error(`${op} requires ${expectedInputs} input${expectedInputs === 1 ? '' : 's'}`);
+  }
 
   return { op, raw: line, inputs, outputs, args: tokens.slice(1), phase, reverse, noParameterSubstitution };
 };
@@ -285,7 +301,9 @@ const executeProcess = (
       if (!value) throw new Error(`SET requires a value in '${line}'`);
       if (isConstant(value)) {
         const qubit = ensureQubit(state, targetName);
-        if (value.replace(/^\$/, '').toLowerCase().startsWith('1p')) emitGate(state, 'X', [qubit], [], line);
+        const normalizedValue = value.replace(/^\$/, '').toLowerCase();
+        if (normalizedValue.startsWith('1p')) emitGate(state, 'X', [qubit], [], line);
+        if (normalizedValue.startsWith('sp')) emitGate(state, 'H', [qubit], [], line);
         state.log.push(`SET ${stripCycle(target)} to ${value} at cycle ${state.currentCycle}.`);
       } else {
         const valueName = scopedName(frame, value);
@@ -343,8 +361,11 @@ const executeProcess = (
     }
 
     if (command.op === 'MEASURE') {
-      const measureInputs = command.inputs.length ? command.inputs : Array.from(state.tokenToQubit.keys());
-      measureInputs.forEach((token) => emitGate(state, 'MEASURE', [resolveInputQubit(state, frame, token)], [], line));
+      if (command.inputs.length) {
+        command.inputs.forEach((token) => emitGate(state, 'MEASURE', [resolveInputQubit(state, frame, token)], [], line));
+      } else {
+        state.tokenToQubit.forEach((qubit) => emitGate(state, 'MEASURE', [qubit], [], line));
+      }
       continue;
     }
 

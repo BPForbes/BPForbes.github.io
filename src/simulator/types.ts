@@ -4,6 +4,9 @@ export type PrimitiveGateType = 'X' | 'H' | 'CNOT' | 'CCNOT' | 'PHASE' | 'MEASUR
 export type DerivedGateType = 'NOT' | 'AND' | 'NAND' | 'OR' | 'XOR';
 export type GateType = PrimitiveGateType | DerivedGateType;
 
+export const gateTypes = ['X', 'H', 'CNOT', 'CCNOT', 'PHASE', 'MEASURE', 'NOT', 'AND', 'NAND', 'OR', 'XOR'] as const satisfies readonly GateType[];
+export const isGateType = (value: string): value is GateType => (gateTypes as readonly string[]).includes(value);
+
 export type QpuOperation =
   | 'INCREASECYCLE'
   | 'COMPILEPROCESS'

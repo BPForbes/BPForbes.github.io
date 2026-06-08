@@ -1,4 +1,4 @@
-import { CircuitGate, GateType } from '../simulator/types';
+import { CircuitGate, GateType, isGateType } from '../simulator/types';
 import { GateBlock } from './GateBlock';
 
 type CircuitCanvasProps = {
@@ -18,8 +18,12 @@ export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, onD
 
   const handleDrop = (event: React.DragEvent, qubit: number) => {
     event.preventDefault();
-    const droppedGate = event.dataTransfer.getData('text/plain') as GateType;
-    if (droppedGate) onDropGate(droppedGate, qubit);
+    const droppedGate = event.dataTransfer.getData('text/plain');
+    if (isGateType(droppedGate)) onDropGate(droppedGate, qubit);
+  };
+
+  const placeSelectedGate = (qubit: number) => {
+    if (selectedGate) onDropGate(selectedGate, qubit);
   };
 
   return (
@@ -33,12 +37,16 @@ export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, onD
           {Array.from({ length: qubitCount }, (_, qubit) => (
             <div className="wire-row" key={qubit}>
               <div className="wire-label">q{qubit}</div>
-              <button
+              <div
                 className={`wire-lane ${selectedGate ? 'ready' : ''}`}
-                onClick={() => selectedGate && onDropGate(selectedGate, qubit)}
+                onClick={() => placeSelectedGate(qubit)}
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => handleDrop(event, qubit)}
-                type="button"
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') placeSelectedGate(qubit);
+                }}
+                role="button"
+                tabIndex={0}
               >
                 <span className="wire-line" />
                 {sorted.map((gate) => {
@@ -53,14 +61,20 @@ export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, onD
                     >
                       {isControl ? <span className="control-dot" title={`${gate.type} control`} /> : null}
                       {isTarget ? (
-                        <span className="placed-target">
-                          <GateBlock type={gate.type} compact onClick={() => onRemoveGate(gate.id)} />
+                        <span
+                          className="placed-target"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onRemoveGate(gate.id);
+                          }}
+                        >
+                          <GateBlock type={gate.type} compact />
                         </span>
                       ) : null}
                     </span>
                   );
                 })}
-              </button>
+              </div>
             </div>
           ))}
         </div>

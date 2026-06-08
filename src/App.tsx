@@ -7,30 +7,36 @@ import { examples } from './data/examples';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, runCircuit } from './simulator/engine';
 import { compileQpuProtocol, supportedQpuOperations } from './simulator/qpuAst';
-import { CircuitGate, GateType, MeasurementMap } from './simulator/types';
+import { CircuitGate, GateType, MeasurementMap, gateTypes } from './simulator/types';
 import { Complex } from './simulator/complex';
 import './styles.css';
 
 const QUBIT_COUNT = 3;
-const palette: GateType[] = ['X', 'H', 'PHASE', 'CNOT', 'CCNOT', 'NOT', 'AND', 'NAND', 'OR', 'XOR', 'MEASURE'];
+const palette: GateType[] = [...gateTypes];
 
-const controlsForGate = (type: GateType, target: number, qubitCount: number) => {
-  if (type === 'CNOT' || type === 'AND' || type === 'NAND' || type === 'OR' || type === 'XOR') return [target === 0 ? 1 : target - 1];
-  if (type === 'CCNOT') {
-    const candidates = Array.from({ length: qubitCount }, (_, qubit) => qubit).filter((qubit) => qubit !== target);
-    return candidates.slice(0, 2);
-  }
+const singleControlGates = new Set<GateType>(['CNOT', 'AND', 'NAND', 'OR', 'XOR']);
+
+const controlsForGate = (type: GateType, target: number, qubitCount: number): number[] | null => {
+  const candidates = Array.from({ length: qubitCount }, (_, qubit) => qubit).filter((qubit) => qubit !== target);
+
+  if (singleControlGates.has(type)) return candidates.length >= 1 ? [candidates[0]] : null;
+  if (type === 'CCNOT') return candidates.length >= 2 ? candidates.slice(0, 2) : null;
   return [];
 };
 
-const newGate = (type: GateType, step: number, target: number, qubitCount: number): CircuitGate => ({
-  id: `${type}-${step}-${target}-${crypto.randomUUID()}`,
-  type,
-  step,
-  targets: [target],
-  controls: controlsForGate(type, target, qubitCount),
-  phase: type === 'PHASE' ? Math.PI / 2 : undefined,
-});
+const newGate = (type: GateType, step: number, target: number, qubitCount: number): CircuitGate | null => {
+  const controls = controlsForGate(type, target, qubitCount);
+  if (controls === null) return null;
+
+  return {
+    id: `${type}-${step}-${target}-${crypto.randomUUID()}`,
+    type,
+    step,
+    targets: [target],
+    controls,
+    phase: type === 'PHASE' ? Math.PI / 2 : undefined,
+  };
+};
 
 function App() {
   const [qubitCount, setQubitCount] = useState(QUBIT_COUNT);
@@ -55,7 +61,12 @@ function App() {
 
   const addGate = (type: GateType, target: number) => {
     const step = gates.length === 0 ? 0 : Math.max(...gates.map((gate) => gate.step)) + 1;
-    setGates((current) => [...current, newGate(type, step, target, qubitCount)]);
+    const gate = newGate(type, step, target, qubitCount);
+    if (!gate) {
+      setLog((current) => [...current, `${type} requires more qubits than are available in this circuit.`]);
+      return;
+    }
+    setGates((current) => [...current, gate]);
     setSelectedGate(type);
     resetRuntime();
   };
