@@ -137,7 +137,9 @@ function App() {
       ? controllableParams.length
       : qubitCount;
   const selectedTarget = Math.min(targetQubit, displayQubitCount - 1);
-  const selectedSimulationQubit = controllableParams[selectedTarget]?.qubitIndex ?? selectedTarget;
+  const selectedSimulationQubit = displayQubitIndices[selectedTarget]
+    ?? controllableParams[selectedTarget]?.qubitIndex
+    ?? selectedTarget;
   const displayQubitLabels = useMemo(
     () => (returnValues.length > 0
       ? returnValues.map((value) => value.name)
@@ -195,12 +197,18 @@ function App() {
     nextSimulationQubitCount = simulationQubitCount,
     reason?: string,
     nextStartStates = startStates,
+    nextProcessParams = processParams,
   ) => {
-    const activeParamIndices = paramQubitIndices.length ? paramQubitIndices : undefined;
+    const activeControllable = nextProcessParams.filter(
+      (param) => param.qubitIndex >= 0 && param.qubitIndex < nextSimulationQubitCount,
+    );
+    const activeParamIndices = activeControllable.length
+      ? activeControllable.map((param) => param.qubitIndex)
+      : undefined;
     setState(createInitialState(nextSimulationQubitCount, nextStartStates, activeParamIndices));
     setMeasurements({});
-    const initDesc = controllableParams.length
-      ? controllableParams.map((param) => `${param.name}=${nextStartStates[param.qubitIndex] ?? '0p'}`).join(' ')
+    const initDesc = activeControllable.length
+      ? activeControllable.map((param) => `${param.name}=${nextStartStates[param.qubitIndex] ?? '0p'}`).join(' ')
       : nextStartStates.slice(0, nextSimulationQubitCount).map((value) => value ?? '0p').join(' ');
     setLog([reason ?? `Initialized ${initDesc}.`]);
     setCursor(0);
@@ -393,7 +401,7 @@ function App() {
         ? `${result.logicalQubitCount} return qubit(s) over ${result.qubitCount} simulation register(s)${returnSummary}`
         : `${result.qubitCount} register(s)`;
       setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${registerSummary} with ${paramSummary}.`);
-      resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates);
+      resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates, result.processParams);
       setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared')).slice(0, 24)]);
       return result;
     } catch (error) {

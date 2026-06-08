@@ -2,7 +2,8 @@ import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from './qpuAst';
 import { serializeCircuitToQpuProtocol } from './qpuFormat';
-import { measureAll, projectStateOntoQubits, runCircuit } from './engine';
+import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from './engine';
+import { complex, magnitudeSquared } from './complex';
 import type { ParticleStartState } from './types';
 
 const readProcess = (fileName: string) => readFileSync(new URL(`../data/processes/${fileName}`, import.meta.url), 'utf8');
@@ -118,6 +119,16 @@ describe('process parameter exposure', () => {
     expect(roundTripMeasured.measurements[carryQubit]).toBe(firstMeasured.measurements[carryQubit]);
     expect(firstMeasured.measurements[sumQubit]).toBe(0);
     expect(firstMeasured.measurements[carryQubit]).toBe(1);
+  });
+});
+
+describe('projectStateOntoQubits', () => {
+  it('marginalizes probabilities instead of summing amplitudes when hidden qubits interfere', () => {
+    const fullState = createInitialState(2, ['0p', 'sp']);
+    const projected = projectStateOntoQubits(fullState, 2, [0]);
+
+    expect(magnitudeSquared(projected[0])).toBeCloseTo(1, 8);
+    expect(magnitudeSquared(projected[1] ?? complex(0, 0))).toBeCloseTo(0, 8);
   });
 });
 

@@ -15,8 +15,11 @@ export const createInitialState = (
   state[0] = ONE;
 
   const indices = paramQubitIndices ?? Array.from({ length: Math.min(qubitCount, startStates.length) }, (_, qubit) => qubit);
+  const invalid = indices.filter((qubit) => qubit < 0 || qubit >= qubitCount);
+  if (invalid.length > 0) {
+    throw new RangeError(`Invalid qubit indices: ${invalid.join(', ')} (qubitCount=${qubitCount})`);
+  }
   indices.forEach((qubit) => {
-    if (qubit < 0 || qubit >= qubitCount) return;
     const startState = startStates[qubit] ?? '0p';
     if (startState === '1p') state = applySingleQubitGate(state, qubitCount, qubit, X);
     if (startState === 'sp') state = applySingleQubitGate(state, qubitCount, qubit, H);
@@ -34,18 +37,19 @@ export const projectStateOntoQubits = (
   qubits: number[],
 ): Complex[] => {
   const targetCount = qubits.length;
-  const projected = Array.from({ length: 2 ** targetCount }, () => ZERO);
+  const probabilities = Array.from({ length: 2 ** targetCount }, () => 0);
 
   state.forEach((amplitude, sourceIndex) => {
-    if (magnitudeSquared(amplitude) < 1e-20) return;
+    const probability = magnitudeSquared(amplitude);
+    if (probability < 1e-20) return;
     let targetIndex = 0;
     qubits.forEach((sourceQubit) => {
       targetIndex = (targetIndex << 1) | (hasBit(sourceIndex, sourceQubit, sourceQubitCount) ? 1 : 0);
     });
-    projected[targetIndex] = add(projected[targetIndex], amplitude);
+    probabilities[targetIndex] += probability;
   });
 
-  return projected;
+  return probabilities.map((probability) => (probability > 0 ? complex(Math.sqrt(probability), 0) : ZERO));
 };
 
 const bitMask = (qubit: number, qubitCount: number) => 1 << (qubitCount - qubit - 1);

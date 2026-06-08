@@ -43,6 +43,8 @@ export type CompileResult = {
   returnValues: ReturnValue[];
 };
 
+const NUMERIC_PARAM_TYPES = ['int', 'float'] as const;
+
 const primitiveGates = new Set(['X', 'H', 'CNOT', 'CCNOT', 'PHASE']);
 const derivedGates = new Set(['NOT', 'AND', 'NAND', 'OR', 'XOR']);
 const gateInputCounts: Partial<Record<QpuOperation, number>> = {
@@ -249,14 +251,14 @@ const processLibraryFromSources = (sources: Record<string, string>) => {
   return library;
 };
 
-const sharedChildAncillaKey = (parentFrame: Frame) => `${parentFrame.scope}/@ancilla`;
+const childWorkspaceKey = (parentFrame: Frame, base: string) => `${parentFrame.scope}/ws/${base}`;
 
 const scopedName = (frame: Frame, token: string, parentFrame?: Frame) => {
   const base = stripCycle(token);
   if (frame.params.has(base)) return frame.params.get(base)!;
   if (frame.aliases.has(base)) return frame.aliases.get(base)!;
   if (isConstant(base)) return base.toLowerCase();
-  if (parentFrame && /^\d+$/.test(base)) return sharedChildAncillaKey(parentFrame);
+  if (parentFrame && /^\d+$/.test(base)) return childWorkspaceKey(parentFrame, base);
   return `${frame.scope}/${base}`;
 };
 
@@ -505,7 +507,7 @@ const compactQubitLayout = (
 
   const sorted = [...used].sort((left, right) => left - right);
   if (sorted.length === 0) {
-    return { gates, tokenMap, processParams, qubitCount: 1 };
+    return { gates, tokenMap, processParams, qubitCount: 0 };
   }
 
   const remap = new Map(sorted.map((old, index) => [old, index]));
@@ -557,7 +559,7 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     const qubitIndex = tokenMap[param.name];
     if (qubitIndex === undefined) return [];
     if (state.resetQubits.has(qubitIndex)) return [];
-    if (param.type === 'int' || param.type === 'float') return [];
+    if (NUMERIC_PARAM_TYPES.includes(param.type as (typeof NUMERIC_PARAM_TYPES)[number])) return [];
     return [{ name: param.name, type: param.type, qubitIndex }];
   });
 
