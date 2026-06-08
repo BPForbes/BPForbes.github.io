@@ -5,6 +5,7 @@ import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
+import type { ConfiguredQpucirProcess, QpucirPayload } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, runCircuit } from './simulator/engine';
 import { compileQpuProtocol, supportedQpuOperations } from './simulator/qpuAst';
 import { CircuitGate, GateType, MeasurementMap, gateTypes } from './simulator/types';
@@ -17,24 +18,11 @@ const palette: GateType[] = [...gateTypes];
 
 type AppView = 'builder' | 'docs' | 'qpu-docs' | 'files' | 'particles' | 'more';
 
-type QpucirFile = {
-  format: 'qpucir';
-  version: 1;
-  name: string;
-  source: string;
-  compiled: {
-    qubitCount: number;
-    gates: CircuitGate[];
-    tokenMap: Record<string, number>;
-  };
-  exportedAt: string;
-};
-
 const initialProtocolSource = protocolExamples[0].source;
 
 const safeFileName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'circuit';
 
-const createQpucirPayload = (name: string, source: string): QpucirFile => {
+const createQpucirPayload = (name: string, source: string): QpucirPayload => {
   const compiled = compileQpuProtocol(source, protocolLibrary);
   return {
     format: 'qpucir',
@@ -52,7 +40,7 @@ const createQpucirPayload = (name: string, source: string): QpucirFile => {
 
 const parseQpucirPayload = (contents: string): { name: string; source: string } => {
   try {
-    const parsed = JSON.parse(contents) as Partial<QpucirFile>;
+    const parsed = JSON.parse(contents) as Partial<QpucirPayload>;
     if (parsed.format === 'qpucir' && typeof parsed.source === 'string') {
       return { name: parsed.name ?? 'Uploaded QPU circuit', source: parsed.source };
     }
@@ -294,25 +282,35 @@ function App() {
     }
   };
 
-  const downloadProtocol = (name: string, source: string) => {
+  const downloadQpucirContents = (name: string, fileName: string, contents: string) => {
+    const blob = new Blob([contents], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setFileStatus(`Downloaded ${name} as ${fileName}.`);
+  };
+
+  const downloadConfiguredProtocol = (process: ConfiguredQpucirProcess) => {
+    downloadQpucirContents(process.name, process.fileName, process.contents);
+  };
+
+  const downloadCurrentProtocol = () => {
     let payload: string;
+    const name = 'Current editor protocol';
     try {
-      payload = JSON.stringify(createQpucirPayload(name, source), null, 2);
+      payload = JSON.stringify(createQpucirPayload(name, protocolSource), null, 2);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setFileStatus(`Download error: ${message}`);
       return;
     }
-    const blob = new Blob([payload], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${safeFileName(name)}.qpucir`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    setFileStatus(`Downloaded ${name} as a .qpucir compiled AST file.`);
+
+    downloadQpucirContents(name, `${safeFileName(name)}.qpucir`, payload);
   };
 
   const uploadProtocol = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -587,11 +585,11 @@ function App() {
               <span>Bundled AST examples are exported as pre-saved .qpucir payloads.</span>
               <div className="download-list">
                 {protocolExamples.map((example) => (
-                  <button key={example.name} onClick={() => downloadProtocol(example.name, example.source)} type="button">
+                  <button key={example.name} onClick={() => downloadConfiguredProtocol(example)} type="button">
                     Download {example.name}
                   </button>
                 ))}
-                <button onClick={() => downloadProtocol('Current editor protocol', protocolSource)} type="button">Download current editor protocol</button>
+                <button onClick={downloadCurrentProtocol} type="button">Download current editor protocol</button>
               </div>
             </div>
           </div>
