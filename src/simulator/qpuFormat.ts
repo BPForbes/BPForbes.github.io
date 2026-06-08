@@ -15,7 +15,7 @@ export const extractMainProcessName = (source: string): string | null => {
 };
 
 export const qpucirFileNameForSource = (source: string, fallbackName = 'CurrentCircuit') => {
-  const processName = extractMainProcessName(source) ?? sanitizeProcessName(fallbackName);
+  const processName = sanitizeProcessName(extractMainProcessName(source) ?? fallbackName);
   return `${processName}.qpucir`;
 };
 

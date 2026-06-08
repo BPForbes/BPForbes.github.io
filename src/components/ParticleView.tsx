@@ -41,10 +41,10 @@ const oklabToCss = ([L, a, b]: number[]) => {
   const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
   const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
   const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
-  const r = linearToSrgb(1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s);
-  const g = linearToSrgb(-0.429 * l + 1.6806995451 * m - 0.2517005013 * s);
-  const bl = linearToSrgb(0.0259040371 * l - 0.7827717662 * m + 1.756675766 * s);
-  return `rgb(${r} ${g} ${bl})`;
+  const rLin = 4.0767416621 * l - 3.3077115903 * m + 0.2309699292 * s;
+  const gLin = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
+  const bLin = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
+  return `rgb(${linearToSrgb(rLin)} ${linearToSrgb(gLin)} ${linearToSrgb(bLin)})`;
 };
 
 const mixedColor = (qubits: number[]) => {

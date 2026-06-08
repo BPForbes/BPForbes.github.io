@@ -158,7 +158,11 @@ export const runCircuit = (qubitCount: number, gates: CircuitGate[], startStates
         const next = applyGate(result.state, qubitCount, gate, result.measurements);
         return { state: next.state, measurements: next.measurements, log: [...result.log, ...next.log] };
       },
-      { state: createInitialState(qubitCount, startStates), measurements: {}, log: [`Initialized ${startStates.slice(0, qubitCount).map((value) => value ?? '0p').join(' ')}.`] },
+      {
+        state: createInitialState(qubitCount, startStates),
+        measurements: {},
+        log: [`Initialized ${Array.from({ length: qubitCount }, (_, index) => startStates[index] ?? '0p').join(' ')}.`],
+      },
     );
 };
 

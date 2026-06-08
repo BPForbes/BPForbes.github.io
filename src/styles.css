@@ -214,3 +214,8 @@ button { font: inherit; }
   from { transform: scale(1); }
   to { transform: scale(1.08); }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .placed-gate.active .gate,
+  .placed-gate.active .control-dot { animation: none !important; }
+}

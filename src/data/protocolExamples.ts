@@ -30,17 +30,20 @@ export type ConfiguredQpucirProcess = {
 };
 
 const parseConfiguredProcess = (fileName: string, contents: string): ConfiguredQpucirProcess => {
-  try {
-    const payload = JSON.parse(contents) as QpucirPayload;
-    if (payload.format !== 'qpucir' || payload.version !== 1 || typeof payload.name !== 'string' || typeof payload.source !== 'string') {
-      throw new Error(`${fileName} is not a valid .qpucir process file.`);
-    }
+  let payload: QpucirPayload;
 
-    return { ...payload, fileName, contents: payload.source };
+  try {
+    payload = JSON.parse(contents) as QpucirPayload;
   } catch {
     const name = extractMainProcessName(contents) ?? fileName.replace(/\.qpucir$/i, '');
     return { format: 'qpucir', version: 1, name, source: contents, fileName, contents };
   }
+
+  if (payload.format !== 'qpucir' || payload.version !== 1 || typeof payload.name !== 'string' || typeof payload.source !== 'string') {
+    throw new Error(`${fileName} is not a valid .qpucir process file.`);
+  }
+
+  return { ...payload, fileName, contents: payload.source };
 };
 
 export const configuredProcesses = [
