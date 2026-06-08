@@ -1,0 +1,408 @@
+import { CircuitGate, GateType, QpuOperation } from './types';
+
+export type ParsedCommand = {
+  op: QpuOperation;
+  raw: string;
+  inputs: string[];
+  outputs: string[];
+  args: string[];
+  phase?: number;
+  reverse: boolean;
+  noParameterSubstitution: boolean;
+};
+
+export type ProtocolProcess = {
+  name: string;
+  params: Array<{ name: string; type: string }>;
+  lines: string[];
+};
+
+export type CompileResult = {
+  gates: CircuitGate[];
+  qubitCount: number;
+  parsed: ParsedCommand[];
+  log: string[];
+  tokenMap: Record<string, number>;
+};
+
+const primitiveGates = new Set(['X', 'H', 'CNOT', 'CCNOT', 'PHASE']);
+const derivedGates = new Set(['NOT', 'AND', 'NAND', 'OR', 'XOR']);
+
+export const supportedQpuOperations: QpuOperation[] = [
+  'INCREASECYCLE',
+  'COMPILEPROCESS',
+  'FREE',
+  'SET',
+  'JOIN',
+  'SPLIT',
+  'CALL',
+  'DECLARECHILD',
+  'RUNCHILD',
+  'AND',
+  'NAND',
+  'OR',
+  'NOT',
+  'XOR',
+  'MEASURE',
+  'RETURNVALS',
+  'ACCEPTVALS',
+  'MASTERVAL',
+  'SAVE_STATE',
+  'LOAD_STATE',
+  'MAIN-PROCESS',
+  'CREATETOKEN',
+  'DELETETOKEN',
+  'X',
+  'H',
+  'CNOT',
+  'CCNOT',
+  'PHASE',
+];
+
+const stripCycle = (token: string) => token.replace(/^\$/, '').split(':')[0];
+const isConstant = (token: string) => /^(0p|1p|sp)(?:_dim\d+)?$/i.test(token.replace(/^\$/, ''));
+
+export const readProtocolLines = (source: string): string[] => {
+  const joined: string[] = [];
+  let buffer = '';
+
+  source.replace(/\r\n/g, '\n').split('\n').forEach((raw) => {
+    const line = raw.endsWith('\\') ? raw.slice(0, -1).trimEnd() : raw;
+    if (raw.endsWith('\\')) {
+      buffer += `${line} `;
+      return;
+    }
+    joined.push(`${buffer}${line}`);
+    buffer = '';
+  });
+  if (buffer.trim()) joined.push(buffer);
+
+  let inBlockComment = false;
+  return joined
+    .map((raw) => {
+      let line = raw.trim();
+      if (!line) return '';
+      if (inBlockComment) {
+        if (!line.includes('*/')) return '';
+        line = line.split('*/', 2)[1].trim();
+        inBlockComment = false;
+      }
+      if (line.includes('/*')) {
+        const [prefix, rest] = line.split('/*', 2);
+        if (rest.includes('*/')) {
+          line = `${prefix} ${rest.split('*/', 2)[1]}`.trim();
+        } else {
+          line = prefix.trim();
+          inBlockComment = true;
+        }
+      }
+      if (line.includes('#')) line = line.split('#', 1)[0].trim();
+      return line;
+    })
+    .filter(Boolean);
+};
+
+export const parseParameters = (line: string): ProtocolProcess['params'] => {
+  if (!line.toUpperCase().startsWith('PARAMS:')) return [];
+  return line
+    .slice(line.indexOf(':') + 1)
+    .trim()
+    .split(/\s+/)
+    .filter((part) => part.includes(':'))
+    .map((part) => {
+      const [name, type] = part.split(':', 2);
+      return { name, type };
+    });
+};
+
+const splitFlagArgs = (tokens: string[], flag: '-I' | '-O') => {
+  const upper = tokens.map((token) => token.toUpperCase());
+  const start = upper.indexOf(flag);
+  if (start === -1) return [];
+  const end = upper.findIndex((token, index) => index > start && token.startsWith('-'));
+  return tokens.slice(start + 1, end === -1 ? tokens.length : end);
+};
+
+export const parseCommand = (line: string): ParsedCommand => {
+  let tokens = line.trim().split(/\s+/);
+  if (!tokens.length) throw new Error('Empty command');
+  if (tokens[0].endsWith('=') && tokens[1]) tokens = [`${tokens[0]}${tokens[1]}`, ...tokens.slice(2)];
+
+  const rawOp = tokens[0];
+  const upperTokens = tokens.map((token) => token.toUpperCase());
+  const noParameterSubstitution = upperTokens.includes('-$R');
+  let reverse = false;
+  let normalized = rawOp.toUpperCase();
+  let phase: number | undefined;
+
+  if (normalized.startsWith('B')) {
+    const candidate = normalized.slice(1).split('=', 1)[0];
+    if (primitiveGates.has(candidate)) {
+      reverse = true;
+      normalized = normalized.slice(1);
+    }
+  }
+
+  if (normalized.startsWith('BPHASE=')) {
+    reverse = true;
+    normalized = normalized.slice(1);
+  }
+
+  if (normalized.includes('=')) {
+    const [gate, value] = normalized.split('=', 2);
+    normalized = gate;
+    phase = Number(value);
+    if (!Number.isFinite(phase)) throw new Error(`Invalid ${gate} parameter '${value}'`);
+    if (reverse && normalized === 'PHASE') phase *= -1;
+  }
+
+  const inputs = splitFlagArgs(tokens, '-I');
+  const outputs = splitFlagArgs(tokens, '-O');
+  const op = normalized as QpuOperation;
+
+  if (!supportedQpuOperations.includes(op)) throw new Error(`Unknown command: ${normalized}`);
+  if ((primitiveGates.has(op) || derivedGates.has(op)) && !inputs.length && op !== 'MEASURE') {
+    throw new Error(`${op} requires -I inputs`);
+  }
+  if ((primitiveGates.has(op) || derivedGates.has(op)) && op !== 'MEASURE' && !outputs.length) {
+    throw new Error(`${op} requires -O output`);
+  }
+
+  return { op, raw: line, inputs, outputs, args: tokens.slice(1), phase, reverse, noParameterSubstitution };
+};
+
+export const parseProtocol = (source: string): ProtocolProcess => {
+  const lines = readProtocolLines(source);
+  const params = lines[0]?.toUpperCase().startsWith('PARAMS:') ? parseParameters(lines[0]) : [];
+  const body = params.length ? lines.slice(1) : lines;
+  const main = body.find((line) => line.toUpperCase().startsWith('MAIN-PROCESS '));
+  return {
+    name: main?.split(/\s+/)[1] ?? 'InlineProcess',
+    params,
+    lines: body,
+  };
+};
+
+type Frame = {
+  process: ProtocolProcess;
+  scope: string;
+  aliases: Map<string, string>;
+  params: Map<string, string>;
+};
+
+type CompilerState = {
+  gates: CircuitGate[];
+  parsed: ParsedCommand[];
+  log: string[];
+  tokenToQubit: Map<string, number>;
+  lastReturns: string[];
+  currentCycle: number;
+  processRuns: number;
+};
+
+const processLibraryFromSources = (sources: Record<string, string>) => {
+  const library = new Map<string, ProtocolProcess>();
+  Object.values(sources).forEach((source) => {
+    const process = parseProtocol(source);
+    library.set(process.name, process);
+  });
+  return library;
+};
+
+const defaultValueForType = (type: string) => (type.toLowerCase() === 'state' ? '0p' : '0');
+
+const scopedName = (frame: Frame, token: string) => {
+  const base = stripCycle(token);
+  if (frame.params.has(base)) return frame.params.get(base)!;
+  if (frame.aliases.has(base)) return frame.aliases.get(base)!;
+  if (isConstant(base)) return base.toLowerCase();
+  return `${frame.scope}/${base}`;
+};
+
+const ensureQubit = (state: CompilerState, canonical: string) => {
+  const key = isConstant(canonical) ? `const/${canonical.toLowerCase()}` : canonical;
+  const existing = state.tokenToQubit.get(key);
+  if (existing !== undefined) return existing;
+  const next = state.tokenToQubit.size;
+  state.tokenToQubit.set(key, next);
+  if (key === 'const/1p') emitGate(state, 'X', [next], [], 'initialize constant 1p');
+  if (key === 'const/sp') emitGate(state, 'H', [next], [], 'initialize superposition sp');
+  return next;
+};
+
+const emitGate = (state: CompilerState, type: GateType, targets: number[], controls: number[], source: string, phase?: number) => {
+  state.gates.push({
+    id: `${type}-${state.gates.length}-${targets.join('-')}`,
+    type,
+    step: state.gates.length,
+    targets,
+    controls,
+    phase,
+    source,
+  });
+};
+
+const resolveInputQubit = (state: CompilerState, frame: Frame, token: string) => ensureQubit(state, scopedName(frame, token));
+
+const executeProcess = (
+  process: ProtocolProcess,
+  state: CompilerState,
+  library: Map<string, ProtocolProcess>,
+  passedParams: string[] = [],
+  parentFrame?: Frame,
+): string[] => {
+  const scope = `${process.name}#${state.processRuns}`;
+  state.processRuns += 1;
+  const params = new Map<string, string>();
+  process.params.forEach((param, index) => {
+    const provided = passedParams[index] ?? defaultValueForType(param.type);
+    const resolved = parentFrame ? scopedName(parentFrame, provided) : stripCycle(provided);
+    params.set(param.name, resolved);
+  });
+  const frame: Frame = { process, scope, aliases: new Map(), params };
+  let returns: string[] = [];
+
+  state.log.push(`MAIN-PROCESS ${process.name} compiled in scope ${scope}.`);
+
+  for (const line of process.lines) {
+    const command = parseCommand(line);
+    state.parsed.push(command);
+
+    if (command.op === 'MAIN-PROCESS') {
+      state.log.push(`Main process '${command.args[0]}' started.`);
+      continue;
+    }
+
+    if (command.op === 'INCREASECYCLE') {
+      state.currentCycle += 1;
+      state.log.push(`Cycle increased to ${state.currentCycle}.`);
+      continue;
+    }
+
+    if (command.op === 'SET') {
+      const [target, value] = command.args;
+      const targetName = scopedName(frame, target);
+      if (!value) throw new Error(`SET requires a value in '${line}'`);
+      if (isConstant(value)) {
+        const qubit = ensureQubit(state, targetName);
+        if (value.replace(/^\$/, '').toLowerCase().startsWith('1p')) emitGate(state, 'X', [qubit], [], line);
+        state.log.push(`SET ${stripCycle(target)} to ${value} at cycle ${state.currentCycle}.`);
+      } else {
+        const valueName = scopedName(frame, value);
+        frame.aliases.set(stripCycle(target), valueName);
+        state.log.push(`SET ${stripCycle(target)} as alias of ${stripCycle(value)}.`);
+      }
+      continue;
+    }
+
+    if (command.op === 'CREATETOKEN') {
+      command.inputs.forEach((token) => {
+        ensureQubit(state, scopedName(frame, token));
+      });
+      state.log.push(`CREATETOKEN created ${command.inputs.join(', ')}.`);
+      continue;
+    }
+
+    if (command.op === 'DELETETOKEN' || command.op === 'FREE') {
+      state.log.push(`${command.op} acknowledged for ${command.inputs.join(', ')}.`);
+      continue;
+    }
+
+    if (command.op === 'DECLARECHILD') {
+      state.log.push(`Declared child '${command.args[0]}'.`);
+      continue;
+    }
+
+    if (command.op === 'RUNCHILD' || command.op === 'CALL') {
+      const childName = command.op === 'RUNCHILD' ? command.args[0] : command.args[0];
+      const child = library.get(childName);
+      if (!child) throw new Error(`Unknown child process '${childName}'`);
+      const childReturns = executeProcess(child, state, library, command.inputs, frame);
+      command.outputs.forEach((output, index) => {
+        const returned = childReturns[index];
+        if (returned) frame.aliases.set(stripCycle(output), returned);
+      });
+      state.lastReturns = childReturns;
+      state.log.push(`${command.op} ${childName} returned ${childReturns.length} value(s).`);
+      continue;
+    }
+
+    if (command.op === 'ACCEPTVALS') {
+      command.args.forEach((local, index) => {
+        const returned = state.lastReturns[index];
+        if (returned) frame.aliases.set(stripCycle(local), returned);
+      });
+      state.log.push(`ACCEPTVALS ${command.args.join(', ')}.`);
+      continue;
+    }
+
+    if (command.op === 'RETURNVALS') {
+      returns = command.args.map((token) => scopedName(frame, token));
+      state.log.push(`RETURNVALS ${command.args.join(', ')}.`);
+      continue;
+    }
+
+    if (command.op === 'MEASURE') {
+      const measureInputs = command.inputs.length ? command.inputs : Array.from(state.tokenToQubit.keys());
+      measureInputs.forEach((token) => emitGate(state, 'MEASURE', [resolveInputQubit(state, frame, token)], [], line));
+      continue;
+    }
+
+    if (command.op === 'SAVE_STATE' || command.op === 'LOAD_STATE' || command.op === 'MASTERVAL' || command.op === 'COMPILEPROCESS') {
+      state.log.push(`${command.op} parsed: ${command.args.join(' ')}.`);
+      continue;
+    }
+
+    if (command.op === 'JOIN' || command.op === 'SPLIT') {
+      state.log.push(`${command.op} parsed for register memory; visual lowering is deferred.`);
+      continue;
+    }
+
+    if (primitiveGates.has(command.op)) {
+      const targetToken = command.outputs[0] ?? command.inputs[0];
+      const target = resolveInputQubit(state, frame, targetToken);
+      const controls = command.inputs.map((input) => resolveInputQubit(state, frame, input)).filter((qubit) => qubit !== target);
+      emitGate(state, command.op as GateType, [target], controls, line, command.op === 'PHASE' ? command.phase ?? 0 : undefined);
+      continue;
+    }
+
+    if (derivedGates.has(command.op)) {
+      const target = resolveInputQubit(state, frame, command.outputs[0]);
+      const controls = command.inputs.map((input) => resolveInputQubit(state, frame, input)).filter((qubit) => qubit !== target);
+      emitGate(state, command.op as GateType, [target], controls, line);
+      continue;
+    }
+  }
+
+  return returns;
+};
+
+export const compileQpuProtocol = (source: string, librarySources: Record<string, string> = {}): CompileResult => {
+  const main = parseProtocol(source);
+  const library = processLibraryFromSources(librarySources);
+  library.set(main.name, main);
+  const state: CompilerState = {
+    gates: [],
+    parsed: [],
+    log: [],
+    tokenToQubit: new Map(),
+    lastReturns: [],
+    currentCycle: 0,
+    processRuns: 0,
+  };
+
+  executeProcess(main, state, library);
+
+  const tokenMap: Record<string, number> = {};
+  state.tokenToQubit.forEach((qubit, token) => {
+    tokenMap[token] = qubit;
+  });
+
+  return {
+    gates: state.gates.map((gate, step) => ({ ...gate, step })),
+    qubitCount: Math.max(1, state.tokenToQubit.size),
+    parsed: state.parsed,
+    log: state.log,
+    tokenMap,
+  };
+};
