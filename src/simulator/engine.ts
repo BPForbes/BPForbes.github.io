@@ -6,11 +6,21 @@ const X = [[ZERO, ONE], [ONE, ZERO]];
 const H = [[complex(INV_SQRT2), complex(INV_SQRT2)], [complex(INV_SQRT2), complex(-INV_SQRT2)]];
 const phaseMatrix = (angle: number) => [[ONE, ZERO], [ZERO, complex(Math.cos(angle), Math.sin(angle))]];
 
-export const createInitialState = (qubitCount: number, startStates: ParticleStartState[] = []): Complex[] => {
+export const createInitialState = (
+  qubitCount: number,
+  startStates: ParticleStartState[] = [],
+  paramQubitIndices?: number[],
+): Complex[] => {
   let state = Array.from({ length: 2 ** qubitCount }, () => ZERO);
   state[0] = ONE;
 
-  startStates.slice(0, qubitCount).forEach((startState, qubit) => {
+  const indices = paramQubitIndices ?? Array.from({ length: Math.min(qubitCount, startStates.length) }, (_, qubit) => qubit);
+  const invalid = indices.filter((qubit) => qubit < 0 || qubit >= qubitCount);
+  if (invalid.length > 0) {
+    throw new RangeError(`Invalid qubit indices: ${invalid.join(', ')} (qubitCount=${qubitCount})`);
+  }
+  indices.forEach((qubit) => {
+    const startState = startStates[qubit] ?? '0p';
     if (startState === '1p') state = applySingleQubitGate(state, qubitCount, qubit, X);
     if (startState === 'sp') state = applySingleQubitGate(state, qubitCount, qubit, H);
   });
@@ -19,6 +29,28 @@ export const createInitialState = (qubitCount: number, startStates: ParticleStar
 };
 
 export const basisLabel = (index: number, qubitCount: number): string => index.toString(2).padStart(qubitCount, '0');
+
+/** Marginalize a state vector onto the selected qubit indices for logical-param display. */
+export const projectStateOntoQubits = (
+  state: Complex[],
+  sourceQubitCount: number,
+  qubits: number[],
+): Complex[] => {
+  const targetCount = qubits.length;
+  const probabilities = Array.from({ length: 2 ** targetCount }, () => 0);
+
+  state.forEach((amplitude, sourceIndex) => {
+    const probability = magnitudeSquared(amplitude);
+    if (probability < 1e-20) return;
+    let targetIndex = 0;
+    qubits.forEach((sourceQubit) => {
+      targetIndex = (targetIndex << 1) | (hasBit(sourceIndex, sourceQubit, sourceQubitCount) ? 1 : 0);
+    });
+    probabilities[targetIndex] += probability;
+  });
+
+  return probabilities.map((probability) => (probability > 0 ? complex(Math.sqrt(probability), 0) : ZERO));
+};
 
 const bitMask = (qubit: number, qubitCount: number) => 1 << (qubitCount - qubit - 1);
 const hasBit = (basisIndex: number, qubit: number, qubitCount: number) => (basisIndex & bitMask(qubit, qubitCount)) !== 0;
@@ -180,7 +212,16 @@ export const applyGate = (
   return { state: measured.state, measurements: { ...measurements, [target]: measured.value }, log };
 };
 
-export const runCircuit = (qubitCount: number, gates: CircuitGate[], startStates: ParticleStartState[] = []): ExecutionResult => {
+export const runCircuit = (
+  qubitCount: number,
+  gates: CircuitGate[],
+  startStates: ParticleStartState[] = [],
+  paramQubitIndices?: number[],
+): ExecutionResult => {
+  const initSummary = paramQubitIndices?.length
+    ? paramQubitIndices.map((qubit) => startStates[qubit] ?? '0p').join(' ')
+    : Array.from({ length: qubitCount }, (_, index) => startStates[index] ?? '0p').join(' ');
+
   return gates
     .slice()
     .sort((a, b) => a.step - b.step)
@@ -190,9 +231,9 @@ export const runCircuit = (qubitCount: number, gates: CircuitGate[], startStates
         return { state: next.state, measurements: next.measurements, log: [...result.log, ...next.log] };
       },
       {
-        state: createInitialState(qubitCount, startStates),
+        state: createInitialState(qubitCount, startStates, paramQubitIndices),
         measurements: {},
-        log: [`Initialized ${Array.from({ length: qubitCount }, (_, index) => startStates[index] ?? '0p').join(' ')}.`],
+        log: [`Initialized ${initSummary}.`],
       },
     );
 };

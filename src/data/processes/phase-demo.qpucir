@@ -1,9 +1,12 @@
+# Theta:float is a numeric param (excluded from particle controls); phase gates use fixed literals.
 PARAMS: Theta:float
 
 MAIN-PROCESS PhaseDemo
-SET 0:0 0p
-H -I 0:0 -O 0:0
-PHASE=1.5708 -I 0:0 -O 0:0
-BPHASE=0.7854 -I 0:0 -O 0:0
-MEASURE -I 0
-RETURNVALS 0
+CREATETOKEN -I Q0
+
+SET Q0:0 0p
+H -I Q0:0 -O Q0:0
+PHASE=1.5708 -I Q0:0 -O Q0:0
+BPHASE=0.7854 -I Q0:0 -O Q0:0
+MEASURE -I Q0
+RETURNVALS Q0

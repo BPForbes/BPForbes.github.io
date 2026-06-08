@@ -23,15 +23,27 @@ export type ProcessParam = {
   qubitIndex: number;
 };
 
+export type ReturnValue = {
+  name: string;
+  qubitIndex: number;
+};
+
 export type CompileResult = {
   gates: CircuitGate[];
+  /** Physical registers used by the compiled circuit. */
   qubitCount: number;
+  /** Ket width for RETURNVALS outputs when present, otherwise process parameter count. */
+  logicalQubitCount: number;
   parsed: ParsedCommand[];
   log: string[];
   tokenMap: Record<string, number>;
   /** User-facing inputs from the PARAMS line only (excludes ancilla and reset targets). */
   processParams: ProcessParam[];
+  /** Output registers from RETURNVALS; drive the displayed ket. */
+  returnValues: ReturnValue[];
 };
+
+const NUMERIC_PARAM_TYPES = ['int', 'float'] as const;
 
 const primitiveGates = new Set(['X', 'H', 'CNOT', 'CCNOT', 'PHASE']);
 const derivedGates = new Set(['NOT', 'AND', 'NAND', 'OR', 'XOR']);
@@ -224,6 +236,7 @@ type CompilerState = {
   lastReturns: string[];
   currentCycle: number;
   processRuns: number;
+  rootScope: string;
 };
 
 /** Gates shown in the circuit UI; cycle workspace prep is compiler-internal and never rendered. */
@@ -238,11 +251,14 @@ const processLibraryFromSources = (sources: Record<string, string>) => {
   return library;
 };
 
-const scopedName = (frame: Frame, token: string) => {
+const childWorkspaceKey = (parentFrame: Frame, base: string) => `${parentFrame.scope}/ws/${base}`;
+
+const scopedName = (frame: Frame, token: string, parentFrame?: Frame) => {
   const base = stripCycle(token);
   if (frame.params.has(base)) return frame.params.get(base)!;
   if (frame.aliases.has(base)) return frame.aliases.get(base)!;
   if (isConstant(base)) return base.toLowerCase();
+  if (parentFrame && /^\d+$/.test(base)) return childWorkspaceKey(parentFrame, base);
   return `${frame.scope}/${base}`;
 };
 
@@ -281,7 +297,8 @@ const flushCycleZeros = (state: CompilerState, source: string) => {
   emitGate(state, 'RESET', targets, [], source);
 };
 
-const resolveInputQubit = (state: CompilerState, frame: Frame, token: string) => ensureQubit(state, scopedName(frame, token));
+const resolveInputQubit = (state: CompilerState, frame: Frame, token: string, parentFrame?: Frame) =>
+  ensureQubit(state, scopedName(frame, token, parentFrame));
 
 const returnRegistersForProcess = (process: ProtocolProcess): string[] => {
   for (const line of process.lines) {
@@ -312,13 +329,14 @@ const executeProcess = (
   outputBindings: Map<string, string> = new Map(),
 ): string[] => {
   const scope = `${process.name}#${state.processRuns}`;
+  if (!state.rootScope) state.rootScope = scope;
   state.processRuns += 1;
   const params = new Map<string, string>();
   process.params.forEach((param, index) => {
     const provided = passedParams[index];
     let resolved: string;
     if (provided !== undefined && parentFrame) {
-      resolved = scopedName(parentFrame, provided);
+      resolved = scopedName(parentFrame, provided, parentFrame);
     } else {
       resolved = param.name;
     }
@@ -351,7 +369,7 @@ const executeProcess = (
 
     if (command.op === 'SET') {
       const [target, value] = command.args;
-      const targetName = scopedName(frame, target);
+      const targetName = scopedName(frame, target, parentFrame);
       if (!value) throw new Error(`SET requires a value in '${line}'`);
       if (isConstant(value)) {
         const qubit = ensureQubit(state, targetName);
@@ -361,7 +379,7 @@ const executeProcess = (
         if (normalizedValue.startsWith('sp')) emitGate(state, 'H', [qubit], [], line);
         state.log.push(`SET ${stripCycle(target)} to ${value} at cycle ${state.currentCycle}.`);
       } else {
-        const valueName = scopedName(frame, value);
+        const valueName = scopedName(frame, value, parentFrame);
         frame.aliases.set(stripCycle(target), valueName);
         state.log.push(`SET ${stripCycle(target)} as alias of ${stripCycle(value)}.`);
       }
@@ -370,7 +388,7 @@ const executeProcess = (
 
     if (command.op === 'CREATETOKEN') {
       command.inputs.forEach((token) => {
-        ensureQubit(state, scopedName(frame, token));
+        ensureQubit(state, scopedName(frame, token, parentFrame));
       });
       state.log.push(`CREATETOKEN created ${command.inputs.join(', ')}.`);
       continue;
@@ -396,7 +414,7 @@ const executeProcess = (
       command.outputs.forEach((output, index) => {
         const childRegister = childReturnRegisters[index];
         if (!childRegister) return;
-        const parentToken = scopedName(frame, stripCycle(output));
+        const parentToken = scopedName(frame, stripCycle(output), parentFrame);
         const qubit = ensureQubit(state, parentToken);
         if (!preparedOutputQubits.has(qubit)) {
           preparedOutputQubits.add(qubit);
@@ -425,14 +443,14 @@ const executeProcess = (
     }
 
     if (command.op === 'RETURNVALS') {
-      returns = command.args.map((token) => scopedName(frame, token));
+      returns = command.args.map((token) => scopedName(frame, token, parentFrame));
       state.log.push(`RETURNVALS ${command.args.join(', ')}.`);
       continue;
     }
 
     if (command.op === 'MEASURE') {
       if (command.inputs.length) {
-        command.inputs.forEach((token) => emitGate(state, 'MEASURE', [resolveInputQubit(state, frame, token)], [], line));
+        command.inputs.forEach((token) => emitGate(state, 'MEASURE', [resolveInputQubit(state, frame, token, parentFrame)], [], line));
       } else {
         state.tokenToQubit.forEach((qubit) => emitGate(state, 'MEASURE', [qubit], [], line));
       }
@@ -452,16 +470,20 @@ const executeProcess = (
     if (primitiveGates.has(command.op)) {
       flushCycleZeros(state, `prepare workspace before gate at cycle ${state.currentCycle}`);
       const targetToken = command.outputs[0] ?? command.inputs[0];
-      const target = resolveInputQubit(state, frame, targetToken);
-      const controls = command.inputs.map((input) => resolveInputQubit(state, frame, input)).filter((qubit) => qubit !== target);
+      const target = resolveInputQubit(state, frame, targetToken, parentFrame);
+      const controls = command.inputs
+        .map((input) => resolveInputQubit(state, frame, input, parentFrame))
+        .filter((qubit) => qubit !== target);
       emitGate(state, command.op as GateType, [target], controls, line, command.op === 'PHASE' ? command.phase ?? 0 : undefined);
       continue;
     }
 
     if (derivedGates.has(command.op)) {
       flushCycleZeros(state, `prepare workspace before gate at cycle ${state.currentCycle}`);
-      const target = resolveInputQubit(state, frame, command.outputs[0]);
-      const controls = command.inputs.map((input) => resolveInputQubit(state, frame, input)).filter((qubit) => qubit !== target);
+      const target = resolveInputQubit(state, frame, command.outputs[0], parentFrame);
+      const controls = command.inputs
+        .map((input) => resolveInputQubit(state, frame, input, parentFrame))
+        .filter((qubit) => qubit !== target);
       emitGate(state, command.op as GateType, [target], controls, line);
       continue;
     }
@@ -469,6 +491,44 @@ const executeProcess = (
 
   flushCycleZeros(state, `end of process ${process.name}`);
   return returns;
+};
+
+const compactQubitLayout = (
+  gates: CircuitGate[],
+  tokenMap: Record<string, number>,
+  processParams: ProcessParam[],
+) => {
+  const used = new Set<number>();
+  gates.forEach((gate) => {
+    gate.targets.forEach((qubit) => used.add(qubit));
+    gate.controls.forEach((qubit) => used.add(qubit));
+  });
+  processParams.forEach((param) => used.add(param.qubitIndex));
+
+  const sorted = [...used].sort((left, right) => left - right);
+  if (sorted.length === 0) {
+    return { gates, tokenMap, processParams, qubitCount: 0 };
+  }
+
+  const remap = new Map(sorted.map((old, index) => [old, index]));
+  return {
+    gates: gates.map((gate) => ({
+      ...gate,
+      targets: gate.targets.map((qubit) => remap.get(qubit)!),
+      controls: gate.controls.map((qubit) => remap.get(qubit)!),
+    })),
+    tokenMap: Object.fromEntries(
+      Object.entries(tokenMap).flatMap(([token, qubit]) => {
+        const mapped = remap.get(qubit);
+        return mapped === undefined ? [] : [[token, mapped]];
+      }),
+    ),
+    processParams: processParams.map((param) => ({
+      ...param,
+      qubitIndex: remap.get(param.qubitIndex)!,
+    })),
+    qubitCount: sorted.length,
+  };
 };
 
 export const compileQpuProtocol = (source: string, librarySources: Record<string, string> = {}): CompileResult => {
@@ -485,6 +545,7 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     lastReturns: [],
     currentCycle: 0,
     processRuns: 0,
+    rootScope: '',
   };
 
   executeProcess(main, state, library);
@@ -498,16 +559,32 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     const qubitIndex = tokenMap[param.name];
     if (qubitIndex === undefined) return [];
     if (state.resetQubits.has(qubitIndex)) return [];
-    if (param.type === 'int') return [];
+    if (NUMERIC_PARAM_TYPES.includes(param.type as (typeof NUMERIC_PARAM_TYPES)[number])) return [];
     return [{ name: param.name, type: param.type, qubitIndex }];
   });
 
-  return {
-    gates: state.gates.map((gate, step) => ({ ...gate, step })),
-    qubitCount: Math.max(1, state.tokenToQubit.size),
-    parsed: state.parsed,
-    log: state.log,
+  const compacted = compactQubitLayout(
+    state.gates.map((gate, step) => ({ ...gate, step })),
     tokenMap,
     processParams,
+  );
+
+  const returnValues: ReturnValue[] = returnRegistersForProcess(main).flatMap((name) => {
+    const entry = Object.entries(compacted.tokenMap).find(([token]) => token === name || token.endsWith(`/${name}`));
+    if (entry === undefined) return [];
+    return [{ name, qubitIndex: entry[1] }];
+  });
+
+  return {
+    gates: compacted.gates,
+    qubitCount: compacted.qubitCount,
+    logicalQubitCount: returnValues.length > 0 ? returnValues.length : compacted.processParams.length > 0
+      ? compacted.processParams.length
+      : compacted.qubitCount,
+    parsed: state.parsed,
+    log: state.log,
+    tokenMap: compacted.tokenMap,
+    processParams: compacted.processParams,
+    returnValues,
   };
 };

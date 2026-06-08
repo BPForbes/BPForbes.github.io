@@ -13,8 +13,8 @@ SET B1:0 $B1
 SET Cin:0 $Cin
 RUNCHILD TwoBitFullAdder \
   -I $A0 $A1 $B0 $B1 $Cin \
-  -O Sum0 Sum1 C2:0
-ACCEPTVALS Sum0 Sum1 C2
+  -O C2:0 Sum1 Sum0
+ACCEPTVALS C2 Sum1 Sum0
 
 INCREASECYCLE
 
@@ -24,6 +24,6 @@ SET B2:1 $B2
 SET B3:1 $B3
 RUNCHILD TwoBitFullAdder \
   -I $A2 $A3 $B2 $B3 C2 \
-  -O Sum2 Sum3 C4:1
-ACCEPTVALS Sum2 Sum3 C4
-RETURNVALS Sum0 Sum1 Sum2 Sum3 C4
+  -O C4:1 Sum3 Sum2
+ACCEPTVALS C4 Sum3 Sum2
+RETURNVALS C4 Sum3 Sum2 Sum1 Sum0

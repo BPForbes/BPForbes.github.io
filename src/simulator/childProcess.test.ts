@@ -2,7 +2,8 @@ import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from './qpuAst';
 import { serializeCircuitToQpuProtocol } from './qpuFormat';
-import { measureAll, runCircuit } from './engine';
+import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from './engine';
+import { complex, magnitudeSquared } from './complex';
 import type { ParticleStartState } from './types';
 
 const readProcess = (fileName: string) => readFileSync(new URL(`../data/processes/${fileName}`, import.meta.url), 'utf8');
@@ -47,12 +48,14 @@ describe('process parameter exposure', () => {
   it('exposes only PARAMS entries for SingleBitFullAdder', () => {
     const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
     expect(compiled.processParams).toEqual([
-      { name: 'A', type: '1', qubitIndex: expect.any(Number) },
-      { name: 'B', type: '1', qubitIndex: expect.any(Number) },
-      { name: 'Cin', type: '1', qubitIndex: expect.any(Number) },
+      { name: 'A', type: 'state', qubitIndex: expect.any(Number) },
+      { name: 'B', type: 'state', qubitIndex: expect.any(Number) },
+      { name: 'Cin', type: 'state', qubitIndex: expect.any(Number) },
     ]);
     expect(compiled.processParams).toHaveLength(3);
-    expect(compiled.qubitCount).toBeGreaterThan(3);
+    expect(compiled.qubitCount).toBe(5);
+    expect(compiled.logicalQubitCount).toBe(2);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
   });
 
   it('excludes reset targets from process parameters in FourBitFullAdder', () => {
@@ -98,8 +101,8 @@ describe('process parameter exposure', () => {
     setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q1', '1p');
     setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q2', '0p');
 
-    const sumQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 0));
-    const carryQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 1));
+    const carryQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 0));
+    const sumQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 1));
 
     const firstMeasured = measureAll(
       runCircuit(first.qubitCount, first.gates, pollutedStartStates).state,
@@ -119,7 +122,44 @@ describe('process parameter exposure', () => {
   });
 });
 
+describe('projectStateOntoQubits', () => {
+  it('marginalizes probabilities instead of summing amplitudes when hidden qubits interfere', () => {
+    const fullState = createInitialState(2, ['0p', 'sp']);
+    const projected = projectStateOntoQubits(fullState, 2, [0]);
+
+    expect(magnitudeSquared(projected[0])).toBeCloseTo(1, 8);
+    expect(magnitudeSquared(projected[1] ?? complex(0, 0))).toBeCloseTo(0, 8);
+  });
+});
+
+describe('PhaseDemo', () => {
+  it('uses one qubit and displays the RETURNVALS wire', () => {
+    const source = readProcess('phase-demo.qpucir');
+    const compiled = compileQpuProtocol(source, protocolLibrary);
+    expect(compiled.qubitCount).toBe(1);
+    expect(compiled.logicalQubitCount).toBe(1);
+    expect(compiled.processParams).toHaveLength(0);
+    expect(compiled.returnValues).toEqual([{ name: 'Q0', qubitIndex: 0 }]);
+  });
+});
+
 describe('SingleBitFullAdder standalone', () => {
+  it('projects the displayed ket onto Cout and Sum return values', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A', '1p');
+    setToken(compiled.tokenMap, startStates, 'B', '0p');
+    setToken(compiled.tokenMap, startStates, 'Cin', '0p');
+
+    const paramIndices = compiled.processParams.map((param) => param.qubitIndex);
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates, paramIndices);
+    const returnIndices = compiled.returnValues.map((value) => value.qubitIndex);
+    const projected = projectStateOntoQubits(executed.state, compiled.qubitCount, returnIndices);
+
+    expect(projected).toHaveLength(4);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
+  });
+
   it('computes sum and carry from RETURNVALS register names', () => {
     const source = protocolLibrary.SingleBitFullAdder;
     const compiled = compileQpuProtocol(source, protocolLibrary);
@@ -131,14 +171,58 @@ describe('SingleBitFullAdder standalone', () => {
     const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates);
     const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
 
-    const sumQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 0));
-    const carryQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 1));
+    const carryQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 0));
+    const sumQubit = tokenQubit(compiled.tokenMap, getReturnValToken(source, 1));
     expect(measured.measurements[sumQubit]).toBe(0);
     expect(measured.measurements[carryQubit]).toBe(1);
   });
 });
 
 describe('TwoBitFullAdder', () => {
+  it('allocates only live qubits instead of one ancilla per child invocation', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    expect(compiled.qubitCount).toBe(9);
+    expect(compiled.logicalQubitCount).toBe(3);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'S1tmp', 'S0tmp']);
+    expect(Object.keys(compiled.tokenMap)).not.toContain('SingleBitFullAdder#1/2');
+  });
+
+  it('projects the final state onto RETURNVALS outputs for TwoBitFullAdder', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A0', '0p');
+    setToken(compiled.tokenMap, startStates, 'A1', '1p');
+    setToken(compiled.tokenMap, startStates, 'B0', '1p');
+    setToken(compiled.tokenMap, startStates, 'B1', '1p');
+    setToken(compiled.tokenMap, startStates, 'Cin', '0p');
+
+    const paramIndices = compiled.processParams.map((param) => param.qubitIndex);
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates, paramIndices);
+    const returnIndices = compiled.returnValues.map((value) => value.qubitIndex);
+    const projected = projectStateOntoQubits(executed.state, compiled.qubitCount, returnIndices);
+
+    expect(projected).toHaveLength(8);
+    expect(projected.filter((amplitude) => Math.abs(amplitude.re) > 1e-8 || Math.abs(amplitude.im) > 1e-8)).toHaveLength(1);
+  });
+
+  it('adds |10> and |11> with cin=0 to produce |101> on sum and carry outputs', () => {
+    const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
+    const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
+    setToken(compiled.tokenMap, startStates, 'A0', '0p');
+    setToken(compiled.tokenMap, startStates, 'A1', '1p');
+    setToken(compiled.tokenMap, startStates, 'B0', '1p');
+    setToken(compiled.tokenMap, startStates, 'B1', '1p');
+    setToken(compiled.tokenMap, startStates, 'Cin', '0p');
+
+    const paramIndices = compiled.processParams.map((param) => param.qubitIndex);
+    const executed = runCircuit(compiled.qubitCount, compiled.gates, startStates, paramIndices);
+    const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
+
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S0tmp')).toBe(1);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'S1tmp')).toBe(0);
+    expect(readMeasured(compiled.tokenMap, measured.measurements, 'Cout')).toBe(1);
+  });
+
   it('adds |10> and |01> to produce sum 3', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
