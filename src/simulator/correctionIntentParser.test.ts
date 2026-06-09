@@ -9,17 +9,17 @@ const context = {
 };
 
 describe('parseCorrectionIntent', () => {
-  it('uses the regex parser for known commands without loading WebLLM', async () => {
-    const intent = await parseCorrectionIntent('test the circuit', context, { useWebLlm: false });
+  it('uses the regex parser for known commands without calling the LLM', async () => {
+    const intent = await parseCorrectionIntent('test the circuit', context, { useLlm: false });
     expect(intent.runTest).toBe(true);
     expect(intent.autonomous).toBe(false);
   });
 
-  it('skips WebLLM when regex already handled the message', async () => {
-    const webLlm = await import('./webLlmNaturalLanguageCorrector');
-    const spy = vi.spyOn(webLlm, 'parseNaturalLanguageWithWebLlm');
+  it('skips the LLM when regex already handled the message', async () => {
+    const model = await import('./modelNaturalLanguageCorrector');
+    const spy = vi.spyOn(model, 'parseNaturalLanguageWithModel');
 
-    const intent = await parseCorrectionIntent('fix the circuit automatically', context, { useWebLlm: true });
+    const intent = await parseCorrectionIntent('fix the circuit automatically', context, { useLlm: true });
     expect(intent.autonomous).toBe(true);
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();

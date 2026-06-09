@@ -1,9 +1,7 @@
 import type { GatePreference } from './circuitCorrector';
+import { defaultLlmConfig, type LlmEndpointConfig } from './llmConfig';
 import { buildNlContextSections } from './nlContextPrompt';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
-
-const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL ?? 'http://localhost:11434/api/generate';
-const MODEL = import.meta.env.VITE_OLLAMA_MODEL ?? 'llama3.2';
 
 const ALLOWED_GATES = new Set<GatePreference>(['CNOT', 'CCNOT', 'X', 'H', 'NOT', 'AND', 'OR', 'XOR']);
 const OLLAMA_TIMEOUT_MS = 8_000;
@@ -110,6 +108,7 @@ export const sanitizeIntent = (raw: unknown): ModelCorrectionIntent | null => {
 export const parseNaturalLanguageWithModel = async (
   message: string,
   context: NlCorrectionContext,
+  endpoint: LlmEndpointConfig = defaultLlmConfig(),
 ): Promise<ModelCorrectionIntent | null> => {
   try {
     const prompt = buildPrompt(message, context);
@@ -117,12 +116,12 @@ export const parseNaturalLanguageWithModel = async (
     const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
     let response: Response;
     try {
-      response = await fetch(OLLAMA_URL, {
+      response = await fetch(endpoint.url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
         body: JSON.stringify({
-          model: MODEL,
+          model: endpoint.model,
           prompt,
           stream: false,
           format: 'json',

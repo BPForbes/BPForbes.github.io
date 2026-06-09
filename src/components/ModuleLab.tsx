@@ -9,6 +9,7 @@ import {
 } from '../data/processCatalog';
 import { downloadQpucirSource, parseQpucirPayload } from '../data/qpucirFile';
 import { parseCorrectionIntent } from '../simulator/correctionIntentParser';
+import { loadLlmConfig, saveLlmConfig, type LlmEndpointConfig } from '../simulator/llmConfig';
 import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/qpuFormat';
 import {
   CorrectionGuidance,
@@ -47,7 +48,7 @@ const generateId = () => {
 };
 
 const welcomeMessage = `Welcome to the Circuit Correction Lab. Pick a cataloged process or upload a .qpucir module, shape the truth table, then chat to test and correct circuits.
-Commands like "test the circuit" or "fix automatically" use the fast built-in parser. Enable AI parsing below for free-form questions (loads a browser model, slower).
+Commands like "test the circuit" or "fix automatically" use the fast built-in parser. For free-form questions, enable the local LLM below (Ollama — no model ships with this site).
 Try: "open SingleBitFullAdder", "test the circuit", or "fix the circuit automatically".`;
 
 const createInitialTruthTable = () => createTruthTableFromColumns(DEFAULT_INPUTS, DEFAULT_OUTPUTS);
@@ -102,7 +103,8 @@ export const ModuleLab = () => {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
-  const [useWebLlm, setUseWebLlm] = useState(false);
+  const [useLlm, setUseLlm] = useState(false);
+  const [llmConfig, setLlmConfig] = useState<LlmEndpointConfig>(() => loadLlmConfig());
   const [pendingGuidance, setPendingGuidance] = useState<CorrectionGuidance>({});
   const [catalogRefresh, setCatalogRefresh] = useState(() => getCatalogVersion());
 
@@ -277,7 +279,8 @@ export const ModuleLab = () => {
     const context = buildNlContext();
 
     const intent = await parseCorrectionIntent(text, context, {
-      useWebLlm,
+      useLlm,
+      llmEndpoint: llmConfig,
       onProgress: (progress) => setStatus(progress),
     });
 
@@ -553,9 +556,42 @@ export const ModuleLab = () => {
             <h2 id="module-lab-chat-title">Natural language assistant</h2>
           </div>
 
+          <details className="llm-settings">
+            <summary>Local LLM (Ollama)</summary>
+            <p className="canvas-tip">Run a small model locally, e.g. <code>ollama pull llama3.2:1b</code>. The site calls your Ollama API — nothing is bundled.</p>
+            <label>
+              API URL
+              <input
+                onChange={(event) => {
+                  const next = { ...llmConfig, url: event.target.value };
+                  setLlmConfig(next);
+                  saveLlmConfig(next);
+                }}
+                placeholder="http://localhost:11434/api/generate"
+                spellCheck={false}
+                type="url"
+                value={llmConfig.url}
+              />
+            </label>
+            <label>
+              Model name
+              <input
+                onChange={(event) => {
+                  const next = { ...llmConfig, model: event.target.value };
+                  setLlmConfig(next);
+                  saveLlmConfig(next);
+                }}
+                placeholder="llama3.2:1b"
+                spellCheck={false}
+                type="text"
+                value={llmConfig.model}
+              />
+            </label>
+          </details>
+
           <label className="chat-mode-toggle">
-            <input checked={useWebLlm} onChange={(event) => setUseWebLlm(event.target.checked)} type="checkbox" />
-            <span>Use AI parser for unrecognized messages (slower — loads browser model)</span>
+            <input checked={useLlm} onChange={(event) => setUseLlm(event.target.checked)} type="checkbox" />
+            <span>Use local LLM for unrecognized messages (requires Ollama running)</span>
           </label>
 
           <div className="chat-log" aria-live="polite">
