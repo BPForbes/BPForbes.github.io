@@ -1,5 +1,6 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
+import { buildProcessCatalogSummaries } from '../data/processCatalog';
 import { parseNaturalLanguageCorrection } from './naturalLanguageCorrector';
 import { singleBitFullAdderTruthTable } from './truthTable';
 
@@ -11,6 +12,7 @@ describe('parseNaturalLanguageCorrection', () => {
     truthTable: singleBitFullAdderTruthTable(),
     inputColumns: ['A', 'B', 'Cin'],
     outputColumns: ['Cout', 'Sum'],
+    processCatalog: buildProcessCatalogSummaries(),
   };
 
   it('maps add CNOT from A to Sum into guided gate specs', () => {
@@ -22,6 +24,36 @@ describe('parseNaturalLanguageCorrection', () => {
   it('maps CCNOT with multiple inputs into Cout', () => {
     const intent = parseNaturalLanguageCorrection('insert CCNOT with inputs A and B into Cout', context);
     expect(intent.guidance?.gates).toEqual([{ gate: 'CCNOT', inputs: ['A', 'B'], output: 'Cout' }]);
+  });
+
+  it('parses AST-style qubit bindings', () => {
+    const intent = parseNaturalLanguageCorrection('CNOT -I 0:0 -O Sum:0', context);
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CNOT', inputs: ['0:0'], output: 'Sum:0' }]);
+  });
+
+  it('parses multi-control AST bindings', () => {
+    const intent = parseNaturalLanguageCorrection('CCNOT -I 0:0 1:0 -O Cout:0', context);
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CCNOT', inputs: ['0:0', '1:0'], output: 'Cout:0' }]);
+  });
+
+  it('parses connect wire to output with gate', () => {
+    const intent = parseNaturalLanguageCorrection('connect 0:0 to Sum:0 with CNOT', context);
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CNOT', inputs: ['0:0'], output: 'Sum:0' }]);
+  });
+
+  it('parses gate-on bindings', () => {
+    const intent = parseNaturalLanguageCorrection('CNOT on 0:0 targeting Sum:0', context);
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CNOT', inputs: ['0:0'], output: 'Sum:0' }]);
+  });
+
+  it('opens catalog processes by filename', () => {
+    const intent = parseNaturalLanguageCorrection('open single-bit-full-adder.qpucir', context);
+    expect(intent.loadCatalogProcess).toBe('SingleBitFullAdder');
+  });
+
+  it('opens catalog processes by filename stem', () => {
+    const intent = parseNaturalLanguageCorrection('load single-bit-full-adder', context);
+    expect(intent.loadCatalogProcess).toBe('SingleBitFullAdder');
   });
 
   it('recognizes autonomous correction requests', () => {

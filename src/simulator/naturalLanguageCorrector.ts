@@ -1,3 +1,4 @@
+import { resolveCatalogEntry } from '../data/processCatalog';
 import type { GatePreference, GuidedGateSpec } from './circuitCorrector';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 import { isTruthCellValue, type TruthCellValue, type TruthTable } from './truthTable';
@@ -8,9 +9,11 @@ const GATE_ALIASES: Record<string, GatePreference> = {
   cnot: 'CNOT',
   controllednot: 'CNOT',
   'controlled-not': 'CNOT',
+  'controlled not': 'CNOT',
   ccnot: 'CCNOT',
   toffoli: 'CCNOT',
   x: 'X',
+  paulix: 'X',
   not: 'NOT',
   h: 'H',
   hadamard: 'H',
@@ -21,6 +24,7 @@ const GATE_ALIASES: Record<string, GatePreference> = {
 
 const GATE_NAMES = Object.keys(GATE_ALIASES).join('|');
 const gatePattern = new RegExp(`\\b(${GATE_NAMES})\\b`, 'gi');
+const WIRE_TOKEN = String.raw`[$\w]+(?::\d+)?|\d+:\d+`;
 
 const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0].trim();
 
@@ -31,14 +35,27 @@ const toTruthCellValue = (raw: string): TruthCellValue | null => {
   return isTruthCellValue(normalized) ? normalized : null;
 };
 
+const tokenExistsInSource = (token: string, source: string) => (
+  new RegExp(`\\b${escapeRegex(token)}\\b`).test(source)
+);
+
 const findRegister = (name: string, context: NlCorrectionContext) => {
-  const base = stripRef(name);
+  const raw = name.trim().replace(/^\$/, '');
+  const base = stripRef(raw);
+
+  if (/^[\w$]+:\d+$/.test(raw) && tokenExistsInSource(raw, context.source)) {
+    return raw;
+  }
+
   const candidates = [...context.inputColumns, ...context.outputColumns];
   const direct = candidates.find((candidate) => candidate.toLowerCase() === base.toLowerCase());
   if (direct) return direct;
 
-  const alias = context.source.match(new RegExp(`SET\\s+(\\d+:\\d+)\\s+\\$${escapeRegex(base)}\\b`, 'i'));
-  if (alias) return alias[1];
+  const paramAlias = context.source.match(new RegExp(`SET\\s+(\\d+:\\d+)\\s+\\$${escapeRegex(base)}\\b`, 'i'));
+  if (paramAlias) return paramAlias[1];
+
+  const tokenAlias = context.source.match(new RegExp(`\\b(${escapeRegex(base)}:\\d+)\\b`, 'i'));
+  if (tokenAlias) return tokenAlias[1];
 
   const wire = base.match(/^(\d+)$/);
   if (wire) {
@@ -46,54 +63,130 @@ const findRegister = (name: string, context: NlCorrectionContext) => {
     if (wireAlias) return wireAlias[1];
   }
 
-  return base;
+  return raw.includes(':') ? raw : base;
 };
 
-const parseGateName = (raw: string): GatePreference | undefined => GATE_ALIASES[raw.toLowerCase().replace(/\s+/g, '')];
+const parseGateName = (raw: string): GatePreference | undefined => (
+  GATE_ALIASES[raw.toLowerCase().replace(/\s+/g, ' ').trim()]
+  ?? GATE_ALIASES[raw.toLowerCase().replace(/\s+/g, '')]
+);
+
+const parseTokenList = (raw: string, context: NlCorrectionContext) => (
+  raw
+    .replace(/\s+and\s+/gi, ' ')
+    .replace(/,/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !/^(with|from|inputs?|controls?)$/i.test(token))
+    .map((token) => findRegister(token, context))
+);
+
+const pushGateSpec = (
+  specs: GuidedGateSpec[],
+  gate: GatePreference | undefined,
+  inputs: string[],
+  output: string | undefined,
+) => {
+  if (!gate || inputs.length === 0 || !output) return;
+  specs.push({ gate, inputs, output });
+};
 
 const extractGateSpecs = (message: string, context: NlCorrectionContext): GuidedGateSpec[] => {
   const specs: GuidedGateSpec[] = [];
   const normalized = message.replace(/\s+/g, ' ').trim();
 
-  const commandPattern = new RegExp(
-    `(?:${GATE_NAMES})\\s+-I\\s+([\\w$:,\\s]+?)\\s+-O\\s+([\\w$:]+)`,
+  const astPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+-I\\s+((?:${WIRE_TOKEN})(?:\\s+(?:${WIRE_TOKEN}))*)\\s+-O\\s+(${WIRE_TOKEN})`,
     'gi',
   );
-  let commandMatch = commandPattern.exec(normalized);
-  while (commandMatch) {
-    const gate = parseGateName(commandMatch[0].split(/\s+/)[0]);
-    if (gate) {
-      specs.push({
-        gate,
-        inputs: commandMatch[1].split(/\s+/).filter(Boolean).map((token) => findRegister(token, context)),
-        output: findRegister(commandMatch[2], context),
-      });
-    }
-    commandMatch = commandPattern.exec(normalized);
+  let astMatch = astPattern.exec(normalized);
+  while (astMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(astMatch[1]),
+      parseTokenList(astMatch[2], context),
+      findRegister(astMatch[3], context),
+    );
+    astMatch = astPattern.exec(normalized);
+  }
+  if (specs.length > 0) return specs;
+
+  const bindPattern = new RegExp(
+    `\\b(?:bind|wire|connect)\\s+(${GATE_NAMES})\\s+(?:gate\\s+)?(?:inputs?\\s+)?((?:${WIRE_TOKEN})(?:\\s+(?:${WIRE_TOKEN}))*)\\s+(?:to|into|onto|->)\\s+(${WIRE_TOKEN})`,
+    'gi',
+  );
+  let bindMatch = bindPattern.exec(normalized);
+  while (bindMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(bindMatch[1]),
+      parseTokenList(bindMatch[2], context),
+      findRegister(bindMatch[3], context),
+    );
+    bindMatch = bindPattern.exec(normalized);
+  }
+  if (specs.length > 0) return specs;
+
+  const reverseBindPattern = new RegExp(
+    `\\b(?:connect|wire|bind)\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+to\\s+(${WIRE_TOKEN})\\s+(?:with|using|via)\\s+(${GATE_NAMES})\\b`,
+    'gi',
+  );
+  let reverseMatch = reverseBindPattern.exec(normalized);
+  while (reverseMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(reverseMatch[3]),
+      parseTokenList(reverseMatch[1], context),
+      findRegister(reverseMatch[2], context),
+    );
+    reverseMatch = reverseBindPattern.exec(normalized);
+  }
+  if (specs.length > 0) return specs;
+
+  const gateOnPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+(?:gate\\s+)?on\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+(?:to|into|onto|targeting|->)\\s+(${WIRE_TOKEN})`,
+    'gi',
+  );
+  let onMatch = gateOnPattern.exec(normalized);
+  while (onMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(onMatch[1]),
+      parseTokenList(onMatch[2], context),
+      findRegister(onMatch[3], context),
+    );
+    onMatch = gateOnPattern.exec(normalized);
+  }
+  if (specs.length > 0) return specs;
+
+  const gateFromToPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+from\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+to\\s+(${WIRE_TOKEN})`,
+    'gi',
+  );
+  let fromToMatch = gateFromToPattern.exec(normalized);
+  while (fromToMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(fromToMatch[1]),
+      parseTokenList(fromToMatch[2], context),
+      findRegister(fromToMatch[3], context),
+    );
+    fromToMatch = gateFromToPattern.exec(normalized);
   }
   if (specs.length > 0) return specs;
 
   const naturalPattern = new RegExp(
-    `(?:add|insert|put|use|apply)\\s+(?:a\\s+)?(${GATE_NAMES})(?:\\s+gate)?(?:\\s+(?:with|from|using))?\\s+(.+?)(?:\\s+(?:to|into|onto|->|output|-O)\\s+([\\w$:]+))?$`,
+    `(?:add|insert|put|use|apply)\\s+(?:a\\s+)?(${GATE_NAMES})(?:\\s+gate)?(?:\\s+(?:with|from|using))?\\s+(.+?)(?:\\s+(?:to|into|onto|->|output|-O)\\s+(${WIRE_TOKEN}))?$`,
     'i',
   );
   const naturalMatch = normalized.match(naturalPattern);
   if (naturalMatch) {
-    const gate = parseGateName(naturalMatch[1]);
-    if (gate) {
-      const inputPart = naturalMatch[2]
-        .replace(/\s+and\s+/gi, ' ')
-        .replace(/,/g, ' ')
-        .trim();
-      const inputs = inputPart
-        .split(/\s+/)
-        .filter((token) => token && !/^(with|from|inputs?)$/i.test(token))
-        .map((token) => findRegister(token, context));
-      const output = naturalMatch[3] ? findRegister(naturalMatch[3], context) : context.outputColumns[0];
-      if (inputs.length > 0 && output) {
-        specs.push({ gate, inputs, output });
-      }
-    }
+    pushGateSpec(
+      specs,
+      parseGateName(naturalMatch[1]),
+      parseTokenList(naturalMatch[2], context),
+      naturalMatch[3] ? findRegister(naturalMatch[3], context) : context.outputColumns[0],
+    );
   }
 
   return specs;
@@ -111,6 +204,14 @@ const extractPreferredGates = (message: string): GatePreference[] => {
     if (gate && !preferred.includes(gate)) preferred.push(gate);
   });
   return preferred;
+};
+
+const parseCatalogOpenRequest = (message: string) => {
+  const match = message.match(
+    /\b(?:load|open|use)\s+(?:the\s+)?(?<target>[\w.-]+(?:\.qpucir)?)\b/i,
+  );
+  if (!match?.groups?.target) return null;
+  return resolveCatalogEntry(match.groups.target);
 };
 
 const parseTruthTableRowHint = (message: string, context: NlCorrectionContext): TruthTable | null => {
@@ -169,7 +270,7 @@ export const parseNaturalLanguageCorrection = (
   const text = message.trim();
   if (!text) {
     return {
-      reply: 'Tell me what to change. For example: "add a CNOT from A to Sum", "prefer CCNOT gates", or "fix the circuit automatically".',
+      reply: 'Tell me what to change. For example: "add a CNOT from A to Sum", "CNOT -I 0:0 -O Sum:0", or "open single-bit-full-adder.qpucir".',
     };
   }
 
@@ -182,24 +283,21 @@ export const parseNaturalLanguageCorrection = (
     return {
       reply: [
         'I can translate natural language into circuit corrections. Try:',
+        '• "open single-bit-full-adder.qpucir" or "open SingleBitFullAdder"',
+        '• "CNOT -I 0:0 -O Sum:0" or "connect 0:0 to Sum:0 with CNOT"',
         '• "Test the circuit against the truth table"',
-        '• "Load the full adder truth table"',
         '• "Add a CNOT from A to Sum"',
         '• "Insert CCNOT with inputs A and B into Cout"',
-        '• "Prefer CNOT and CCNOT gates"',
-        '• "When A is 1 and B is 1 and Cin is 0, Sum should be 0 and Cout should be 1"',
         '• "Fix the circuit automatically"',
       ].join('\n'),
     };
   }
 
-  const catalogProcess = context.processCatalog?.find((entry) => {
-    const pattern = new RegExp(`\\b(?:load|open|use)\\s+(?:the\\s+)?${escapeRegex(entry.name)}\\b`, 'i');
-    return pattern.test(text);
-  });
+  const catalogProcess = parseCatalogOpenRequest(text);
   if (catalogProcess) {
+    const label = catalogProcess.fileName ?? catalogProcess.name;
     return {
-      reply: `Loaded ${catalogProcess.name} from the process catalog.`,
+      reply: `Loaded ${catalogProcess.name} from the process catalog (${label}).`,
       loadCatalogProcess: catalogProcess.name,
     };
   }
@@ -283,13 +381,13 @@ export const parseNaturalLanguageCorrection = (
     const gate = parseGateName(mentionedGate);
     if (gate) {
       return {
-        reply: `I recognized a ${gate} gate. Specify inputs and output, e.g. "add ${gate} from A and B to Cout".`,
+        reply: `I recognized a ${gate} gate. Specify bindings, e.g. "${gate} -I 0:0 -O Sum:0" or "connect 0:0 to Sum:0 with ${gate}".`,
       };
     }
   }
 
   return {
-    reply: 'I could not map that request to a correction yet. Try mentioning a gate (CNOT, CCNOT), registers (A, Sum, Cout), or say "fix automatically".',
+    reply: 'I could not map that request to a correction yet. Try mentioning a gate (CNOT, CCNOT), qubit bindings (-I / -O), registers (A, Sum, Cout), or say "open single-bit-full-adder.qpucir".',
   };
 };
 

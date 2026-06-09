@@ -4,6 +4,7 @@ import {
   getCatalogEntry,
   registerCatalogProcess,
   resetProcessCatalogForTests,
+  resolveCatalogEntry,
 } from './processCatalog';
 
 describe('processCatalog', () => {
@@ -28,5 +29,21 @@ describe('processCatalog', () => {
     const entry = getCatalogEntry('IMPLIES');
     expect(entry?.origin).toBe('compiled');
     expect(entry?.description).toContain('implies');
+  });
+
+  it('resolves bundled processes by qpucir filename', () => {
+    expect(resolveCatalogEntry('single-bit-full-adder.qpucir')?.name).toBe('SingleBitFullAdder');
+    expect(resolveCatalogEntry('single-bit-full-adder')?.name).toBe('SingleBitFullAdder');
+  });
+
+  it('resolves uploaded processes by original filename', () => {
+    registerCatalogProcess({
+      name: 'MyCircuit',
+      source: 'MAIN-PROCESS MyCircuit\nRETURNVALS Y:0',
+      origin: 'uploaded',
+      fileName: 'custom-logic.qpucir',
+    });
+    expect(resolveCatalogEntry('custom-logic.qpucir')?.name).toBe('MyCircuit');
+    expect(resolveCatalogEntry('custom-logic')?.name).toBe('MyCircuit');
   });
 });

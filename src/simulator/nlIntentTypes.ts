@@ -4,6 +4,7 @@ import type { TruthTable, TruthTableTestResult } from './truthTable';
 export type ProcessCatalogSummary = {
   name: string;
   origin: string;
+  fileName?: string;
   inputColumns: string[];
   outputColumns: string[];
   rowCount?: number;

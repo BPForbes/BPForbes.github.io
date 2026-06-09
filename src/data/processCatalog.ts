@@ -13,6 +13,7 @@ export type ProcessCatalogEntry = {
   name: string;
   source: string;
   origin: ProcessCatalogOrigin;
+  fileName?: string;
   description?: string;
   updatedAt: string;
 };
@@ -81,6 +82,15 @@ const restoreCatalog = () => {
   }
 };
 
+const catalogAliases = (entry: ProcessCatalogEntry): string[] => {
+  const aliases = new Set<string>([entry.name, entry.id]);
+  if (entry.fileName) {
+    aliases.add(entry.fileName);
+    aliases.add(entry.fileName.replace(/\.qpucir$/i, ''));
+  }
+  return Array.from(aliases);
+};
+
 const seedBundledProcesses = () => {
   configuredProcesses.forEach((process) => {
     const name = process.name;
@@ -88,6 +98,7 @@ const seedBundledProcesses = () => {
       id: entryIdForName(name),
       name,
       source: process.source,
+      fileName: process.fileName,
       origin: 'bundled',
       description: `Bundled example (${process.fileName})`,
       updatedAt: process.exportedAt ?? new Date(0).toISOString(),
@@ -102,6 +113,7 @@ export const registerCatalogProcess = (input: {
   name: string;
   source: string;
   origin: ProcessCatalogOrigin;
+  fileName?: string;
   description?: string;
 }) => {
   const name = input.name.trim() || extractMainProcessName(input.source) || 'UntitledCircuit';
@@ -109,6 +121,7 @@ export const registerCatalogProcess = (input: {
     id: entryIdForName(name),
     name,
     source: input.source,
+    fileName: input.fileName?.trim() || undefined,
     origin: input.origin,
     description: input.description,
     updatedAt: new Date().toISOString(),
@@ -126,6 +139,27 @@ export const getCatalogEntries = (): ProcessCatalogEntry[] => (
 export const getCatalogEntry = (name: string): ProcessCatalogEntry | undefined => (
   catalog.get(entryIdForName(name))
 );
+
+/** Resolve a catalog entry by process name, .qpucir filename, or stem. */
+export const resolveCatalogEntry = (query: string): ProcessCatalogEntry | undefined => {
+  const normalized = query.trim().replace(/^["']|["']$/g, '');
+  if (!normalized) return undefined;
+
+  const direct = getCatalogEntry(normalized);
+  if (direct) return direct;
+
+  const lower = normalized.toLowerCase();
+  const withExt = lower.endsWith('.qpucir') ? lower : `${lower}.qpucir`;
+
+  return getCatalogEntries().find((entry) => (
+    catalogAliases(entry).some((alias) => {
+      const aliasLower = alias.toLowerCase();
+      return aliasLower === lower
+        || aliasLower === withExt
+        || aliasLower.replace(/\.qpucir$/i, '') === lower.replace(/\.qpucir$/i, '');
+    })
+  ));
+};
 
 export const getCatalogLibrarySources = (): Record<string, string> => {
   if (libraryCache) return libraryCache;
@@ -146,6 +180,7 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
     return {
       name: entry.name,
       origin: entry.origin,
+      fileName: entry.fileName,
       inputColumns: columns.inputs,
       outputColumns: columns.outputs,
       rowCount: dimensions.rowCount,

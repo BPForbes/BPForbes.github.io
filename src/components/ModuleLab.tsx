@@ -3,6 +3,7 @@ import {
   buildProcessCatalogSummaries,
   getCatalogEntries,
   getCatalogEntry,
+  resolveCatalogEntry,
   getCatalogLibrarySources,
   getCatalogVersion,
   registerCatalogProcess,
@@ -174,7 +175,7 @@ export const ModuleLab = () => {
   }, []);
 
   const loadCatalogProcess = useCallback((name: string) => {
-    const entry = getCatalogEntry(name);
+    const entry = resolveCatalogEntry(name) ?? getCatalogEntry(name);
     if (!entry) {
       setStatus(`Process "${name}" is not in the catalog.`);
       return null;
@@ -224,6 +225,7 @@ export const ModuleLab = () => {
         name: parsed.name,
         source: parsed.source,
         origin: 'uploaded',
+        fileName: file.name,
         description: `Uploaded from ${file.name}`,
       });
       refreshCatalog();

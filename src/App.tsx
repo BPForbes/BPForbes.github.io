@@ -468,6 +468,7 @@ function App() {
         name: extractMainProcessName(source) ?? label,
         source,
         origin,
+        fileName: qpucirFileNameForSource(source, label),
         description: `Compiled in circuit builder (${result.gates.length} gate(s))`,
       });
       return result;
@@ -523,6 +524,7 @@ function App() {
         name: parsed.name,
         source: parsed.source,
         origin: 'uploaded',
+        fileName: file.name,
         description: `Uploaded from ${file.name}`,
       });
       setProtocolSource(parsed.source);
