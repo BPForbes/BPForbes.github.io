@@ -1,5 +1,7 @@
 import type { GatePreference } from './circuitCorrector';
-import { defaultLlmConfig, type LlmEndpointConfig } from './llmConfig';
+import { defaultLlmSettings } from './llmConfig';
+
+export type LlmEndpointConfig = { url: string; model: string };
 import { buildNlContextSections } from './nlContextPrompt';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 
@@ -108,7 +110,10 @@ export const sanitizeIntent = (raw: unknown): ModelCorrectionIntent | null => {
 export const parseNaturalLanguageWithModel = async (
   message: string,
   context: NlCorrectionContext,
-  endpoint: LlmEndpointConfig = defaultLlmConfig(),
+  endpoint: LlmEndpointConfig = {
+    url: defaultLlmSettings().ollamaUrl,
+    model: defaultLlmSettings().ollamaModel,
+  },
 ): Promise<ModelCorrectionIntent | null> => {
   try {
     const prompt = buildPrompt(message, context);

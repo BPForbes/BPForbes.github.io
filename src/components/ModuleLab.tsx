@@ -9,7 +9,14 @@ import {
 } from '../data/processCatalog';
 import { downloadQpucirSource, parseQpucirPayload } from '../data/qpucirFile';
 import { parseCorrectionIntent } from '../simulator/correctionIntentParser';
-import { loadLlmConfig, saveLlmConfig, type LlmEndpointConfig } from '../simulator/llmConfig';
+import {
+  BROWSER_MODEL_OPTIONS,
+  loadLlmSettings,
+  saveLlmSettings,
+  type LlmSettings,
+} from '../simulator/llmConfig';
+import { getCachedBrowserModelId } from '../simulator/llmConfig';
+import { hasWebGpu } from '../simulator/webGpu';
 import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/qpuFormat';
 import {
   CorrectionGuidance,
@@ -48,7 +55,7 @@ const generateId = () => {
 };
 
 const welcomeMessage = `Welcome to the Circuit Correction Lab. Pick a cataloged process or upload a .qpucir module, shape the truth table, then chat to test and correct circuits.
-Commands like "test the circuit" or "fix automatically" use the fast built-in parser. For free-form questions, enable the local LLM below (Ollama — no model ships with this site).
+Commands like "test the circuit" or "fix automatically" use the fast built-in parser. For free-form questions, enable AI below — the browser model downloads once and is cached for later visits.
 Try: "open SingleBitFullAdder", "test the circuit", or "fix the circuit automatically".`;
 
 const createInitialTruthTable = () => createTruthTableFromColumns(DEFAULT_INPUTS, DEFAULT_OUTPUTS);
@@ -104,7 +111,11 @@ export const ModuleLab = () => {
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [useLlm, setUseLlm] = useState(false);
-  const [llmConfig, setLlmConfig] = useState<LlmEndpointConfig>(() => loadLlmConfig());
+  const [llmSettings, setLlmSettings] = useState<LlmSettings>(() => loadLlmSettings());
+  const [modelReady, setModelReady] = useState(() => (
+    getCachedBrowserModelId() === loadLlmSettings().browserModel
+  ));
+  const [modelLoading, setModelLoading] = useState(false);
   const [pendingGuidance, setPendingGuidance] = useState<CorrectionGuidance>({});
   const [catalogRefresh, setCatalogRefresh] = useState(() => getCatalogVersion());
 
@@ -280,7 +291,7 @@ export const ModuleLab = () => {
 
     const intent = await parseCorrectionIntent(text, context, {
       useLlm,
-      llmEndpoint: llmConfig,
+      llmSettings,
       onProgress: (progress) => setStatus(progress),
     });
 
@@ -415,6 +426,40 @@ export const ModuleLab = () => {
 
   const allColumns = truthTable ? [...truthTable.inputColumns, ...truthTable.outputColumns] : [];
   const allRowsPass = Boolean(lastTestResult?.passed);
+  const webGpuAvailable = hasWebGpu();
+
+  const updateLlmSettings = (patch: Partial<LlmSettings>) => {
+    setLlmSettings((current) => {
+      const next = { ...current, ...patch };
+      saveLlmSettings(next);
+      return next;
+    });
+    if (patch.browserModel) {
+      setModelReady(getCachedBrowserModelId() === patch.browserModel);
+    }
+  };
+
+  const loadBrowserModel = async () => {
+    if (!webGpuAvailable) {
+      setStatus('WebGPU is not available in this browser. Use Ollama mode or a WebGPU-capable browser.');
+      return;
+    }
+    setModelLoading(true);
+    try {
+      const { preloadBrowserModel } = await import('../simulator/webLlmNaturalLanguageCorrector');
+      const ok = await preloadBrowserModel(llmSettings.browserModel, (progress) => setStatus(progress));
+      setModelReady(ok);
+      setStatus(ok
+        ? `Browser model cached. Future AI messages will not re-download it.`
+        : 'Could not load the browser model.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Model load error: ${message}`);
+      setModelReady(false);
+    } finally {
+      setModelLoading(false);
+    }
+  };
 
   return (
     <div className="module-lab-shell">
@@ -557,41 +602,92 @@ export const ModuleLab = () => {
           </div>
 
           <details className="llm-settings">
-            <summary>Local LLM (Ollama)</summary>
-            <p className="canvas-tip">Run a small model locally, e.g. <code>ollama pull llama3.2:1b</code>. The site calls your Ollama API — nothing is bundled.</p>
-            <label>
-              API URL
-              <input
-                onChange={(event) => {
-                  const next = { ...llmConfig, url: event.target.value };
-                  setLlmConfig(next);
-                  saveLlmConfig(next);
-                }}
-                placeholder="http://localhost:11434/api/generate"
-                spellCheck={false}
-                type="url"
-                value={llmConfig.url}
-              />
-            </label>
-            <label>
-              Model name
-              <input
-                onChange={(event) => {
-                  const next = { ...llmConfig, model: event.target.value };
-                  setLlmConfig(next);
-                  saveLlmConfig(next);
-                }}
-                placeholder="llama3.2:1b"
-                spellCheck={false}
-                type="text"
-                value={llmConfig.model}
-              />
-            </label>
+            <summary>AI model settings</summary>
+            <fieldset className="llm-mode-fieldset">
+              <legend>Parser backend</legend>
+              <label>
+                <input
+                  checked={llmSettings.mode === 'browser'}
+                  name="llm-mode"
+                  onChange={() => updateLlmSettings({ mode: 'browser' })}
+                  type="radio"
+                />
+                Browser model (downloads once, cached locally)
+              </label>
+              <label>
+                <input
+                  checked={llmSettings.mode === 'ollama'}
+                  name="llm-mode"
+                  onChange={() => updateLlmSettings({ mode: 'ollama' })}
+                  type="radio"
+                />
+                Ollama (external server)
+              </label>
+            </fieldset>
+
+            {llmSettings.mode === 'browser' ? (
+              <>
+                <p className="canvas-tip">
+                  {webGpuAvailable
+                    ? 'The model downloads on first use and stays cached in your browser. Queries after that reuse it — nothing is re-uploaded per message.'
+                    : 'WebGPU is unavailable here. Switch to Ollama or use Chrome/Edge with GPU acceleration.'}
+                </p>
+                <label>
+                  Browser model
+                  <select
+                    onChange={(event) => updateLlmSettings({ browserModel: event.target.value })}
+                    value={llmSettings.browserModel}
+                  >
+                    {BROWSER_MODEL_OPTIONS.map((model) => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="module-tester-actions">
+                  <button disabled={!webGpuAvailable || modelLoading} onClick={loadBrowserModel} type="button">
+                    {modelLoading ? 'Downloading model…' : modelReady ? 'Model cached' : 'Download & cache model'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="canvas-tip">Run Ollama locally, e.g. <code>ollama pull llama3.2:1b</code>.</p>
+                <label>
+                  API URL
+                  <input
+                    onChange={(event) => updateLlmSettings({ ollamaUrl: event.target.value })}
+                    placeholder="http://localhost:11434/api/generate"
+                    spellCheck={false}
+                    type="url"
+                    value={llmSettings.ollamaUrl}
+                  />
+                </label>
+                <label>
+                  Model name
+                  <input
+                    onChange={(event) => updateLlmSettings({ ollamaModel: event.target.value })}
+                    placeholder="llama3.2:1b"
+                    spellCheck={false}
+                    type="text"
+                    value={llmSettings.ollamaModel}
+                  />
+                </label>
+              </>
+            )}
           </details>
 
           <label className="chat-mode-toggle">
-            <input checked={useLlm} onChange={(event) => setUseLlm(event.target.checked)} type="checkbox" />
-            <span>Use local LLM for unrecognized messages (requires Ollama running)</span>
+            <input
+              checked={useLlm}
+              onChange={(event) => {
+                setUseLlm(event.target.checked);
+                if (event.target.checked && llmSettings.mode === 'browser' && webGpuAvailable && !modelReady) {
+                  void loadBrowserModel();
+                }
+              }}
+              type="checkbox"
+            />
+            <span>Use AI for unrecognized messages (regex handles common commands instantly)</span>
           </label>
 
           <div className="chat-log" aria-live="polite">

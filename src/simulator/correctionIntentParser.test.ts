@@ -19,7 +19,15 @@ describe('parseCorrectionIntent', () => {
     const model = await import('./modelNaturalLanguageCorrector');
     const spy = vi.spyOn(model, 'parseNaturalLanguageWithModel');
 
-    const intent = await parseCorrectionIntent('fix the circuit automatically', context, { useLlm: true });
+    const intent = await parseCorrectionIntent('fix the circuit automatically', context, {
+      useLlm: true,
+      llmSettings: {
+        mode: 'ollama',
+        browserModel: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+        ollamaUrl: 'http://localhost:11434/api/generate',
+        ollamaModel: 'llama3.2:1b',
+      },
+    });
     expect(intent.autonomous).toBe(true);
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();

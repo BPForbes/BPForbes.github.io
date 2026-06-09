@@ -1,15 +1,15 @@
-import type { LlmEndpointConfig } from './llmConfig';
+import type { LlmSettings } from './llmConfig';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 import { isRegexFallbackIntent, parseNaturalLanguageCorrection } from './naturalLanguageCorrector';
 import { parseNaturalLanguageWithModel } from './modelNaturalLanguageCorrector';
 
 export type CorrectionIntentParseOptions = {
   useLlm?: boolean;
-  llmEndpoint?: LlmEndpointConfig;
+  llmSettings?: LlmSettings;
   onProgress?: (text: string) => void;
 };
 
-/** Fast regex parser first; optional local LLM (Ollama) only for unrecognized messages. */
+/** Fast regex parser first; optional browser or Ollama LLM for unrecognized messages. */
 export const parseCorrectionIntent = async (
   message: string,
   context: NlCorrectionContext,
@@ -20,6 +20,19 @@ export const parseCorrectionIntent = async (
     return regexIntent;
   }
 
-  options.onProgress?.(`Asking local model (${options.llmEndpoint?.model ?? 'ollama'})…`);
-  return await parseNaturalLanguageWithModel(message, context, options.llmEndpoint) ?? regexIntent;
+  const settings = options.llmSettings;
+  if (settings?.mode === 'ollama') {
+    options.onProgress?.(`Asking Ollama (${settings.ollamaModel})…`);
+    return await parseNaturalLanguageWithModel(message, context, {
+      url: settings.ollamaUrl,
+      model: settings.ollamaModel,
+    }) ?? regexIntent;
+  }
+
+  options.onProgress?.('Using cached browser model…');
+  const { parseNaturalLanguageWithWebLlm } = await import('./webLlmNaturalLanguageCorrector');
+  return await parseNaturalLanguageWithWebLlm(message, context, {
+    modelId: settings?.browserModel,
+    onProgress: options.onProgress,
+  }) ?? regexIntent;
 };
