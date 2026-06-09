@@ -21,6 +21,18 @@ const STORAGE_KEY = 'qpu-process-catalog-v1';
 
 const catalog = new Map<string, ProcessCatalogEntry>();
 
+let catalogVersion = 0;
+let summariesCache: ProcessCatalogSummary[] | null = null;
+let libraryCache: Record<string, string> | null = null;
+
+const invalidateCatalogCache = () => {
+  catalogVersion += 1;
+  summariesCache = null;
+  libraryCache = null;
+};
+
+export const getCatalogVersion = () => catalogVersion;
+
 const entryIdForName = (name: string) => name.trim().toLowerCase();
 
 const summarizeSource = (source: string, maxLines = 6) => source
@@ -102,6 +114,7 @@ export const registerCatalogProcess = (input: {
     updatedAt: new Date().toISOString(),
   };
   catalog.set(entry.id, entry);
+  invalidateCatalogCache();
   persistCatalog();
   return entry;
 };
@@ -114,12 +127,15 @@ export const getCatalogEntry = (name: string): ProcessCatalogEntry | undefined =
   catalog.get(entryIdForName(name))
 );
 
-export const getCatalogLibrarySources = (): Record<string, string> => (
-  Object.fromEntries(getCatalogEntries().map((entry) => [entry.name, entry.source]))
-);
+export const getCatalogLibrarySources = (): Record<string, string> => {
+  if (libraryCache) return libraryCache;
+  libraryCache = Object.fromEntries(getCatalogEntries().map((entry) => [entry.name, entry.source]));
+  return libraryCache;
+};
 
-export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => (
-  getCatalogEntries().map((entry) => {
+export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
+  if (summariesCache) return summariesCache;
+  summariesCache = getCatalogEntries().map((entry) => {
     const columns = readColumns(entry.source);
     let dimensions = { rowCount: 0, columnCount: 0, inputCount: 0, outputCount: 0 };
     try {
@@ -136,10 +152,14 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => (
       summary: summarizeSource(entry.source),
       description: entry.description,
     };
-  })
-);
+  });
+  return summariesCache;
+};
 
-export const formatCatalogForPrompt = (entries: ProcessCatalogSummary[] = buildProcessCatalogSummaries()) => {
+export const formatCatalogForPrompt = (
+  entries: ProcessCatalogSummary[] = buildProcessCatalogSummaries(),
+  options: { compact?: boolean } = {},
+) => {
   if (entries.length === 0) return '(no cataloged processes)';
   return entries.map((entry) => [
     `- ${entry.name} [${entry.origin}]`,
@@ -147,7 +167,9 @@ export const formatCatalogForPrompt = (entries: ProcessCatalogSummary[] = buildP
     `  outputs: ${entry.outputColumns.join(', ') || '(none)'}`,
     entry.rowCount ? `  truth-table rows: ${entry.rowCount}` : null,
     entry.description ? `  note: ${entry.description}` : null,
-    entry.summary ? `  source preview:\n${entry.summary.split('\n').map((line) => `    ${line}`).join('\n')}` : null,
+    !options.compact && entry.summary
+      ? `  source preview:\n${entry.summary.split('\n').map((line) => `    ${line}`).join('\n')}`
+      : null,
   ].filter(Boolean).join('\n')).join('\n');
 };
 
@@ -166,6 +188,7 @@ export const formatTestFailuresForPrompt = (result: TruthTableTestResult | null 
 /** @internal Test helper */
 export const resetProcessCatalogForTests = () => {
   catalog.clear();
+  invalidateCatalogCache();
   seedBundledProcesses();
   if (typeof sessionStorage !== 'undefined') {
     sessionStorage.removeItem(STORAGE_KEY);

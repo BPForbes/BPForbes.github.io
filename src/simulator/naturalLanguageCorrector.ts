@@ -292,3 +292,7 @@ export const parseNaturalLanguageCorrection = (
     reply: 'I could not map that request to a correction yet. Try mentioning a gate (CNOT, CCNOT), registers (A, Sum, Cout), or say "fix automatically".',
   };
 };
+
+export const isRegexFallbackIntent = (intent: ModelCorrectionIntent) => (
+  intent.reply.startsWith('I could not map that request')
+);

@@ -5,8 +5,8 @@ import type { NlCorrectionContext } from './nlIntentTypes';
 export const buildNlContextSections = (context: NlCorrectionContext) => {
   const activeName = context.activeProcessName ?? extractMainProcessName(context.source) ?? 'UntitledCircuit';
   const catalog = context.processCatalog?.length
-    ? formatCatalogForPrompt(context.processCatalog)
-    : formatCatalogForPrompt();
+    ? formatCatalogForPrompt(context.processCatalog, { compact: true })
+    : formatCatalogForPrompt(undefined, { compact: true });
   const failures = formatTestFailuresForPrompt(context.lastTestResult ?? null);
   const libraryNames = context.libraryProcessNames?.join(', ') || '(catalog processes available for RUNCHILD)';
 

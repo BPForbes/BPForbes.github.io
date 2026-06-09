@@ -1,22 +1,20 @@
-import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, memo, useCallback, useMemo, useState } from 'react';
 import {
   buildProcessCatalogSummaries,
   getCatalogEntries,
   getCatalogEntry,
   getCatalogLibrarySources,
+  getCatalogVersion,
   registerCatalogProcess,
 } from '../data/processCatalog';
-import { downloadQpucirSource } from '../data/qpucirFile';
-import { parseQpucirPayload } from '../data/qpucirFile';
+import { downloadQpucirSource, parseQpucirPayload } from '../data/qpucirFile';
+import { parseCorrectionIntent } from '../simulator/correctionIntentParser';
 import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/qpuFormat';
-import { parseNaturalLanguageCorrection } from '../simulator/naturalLanguageCorrector';
-import { parseNaturalLanguageWithWebLlm } from '../simulator/webLlmNaturalLanguageCorrector';
 import {
   CorrectionGuidance,
   createEmptyTruthTable,
   createTruthTableFromColumns,
   formatTestFailureSummary,
-  inferTruthTableDimensions,
   isTruthCellValue,
   probeModuleOutputs,
   resizeTruthTable,
@@ -49,7 +47,7 @@ const generateId = () => {
 };
 
 const welcomeMessage = `Welcome to the Circuit Correction Lab. Pick a cataloged process or upload a .qpucir module, shape the truth table, then chat to test and correct circuits.
-The lab uses a browser language model when WebGPU is available. If the model cannot load, the built-in command parser is used.
+Commands like "test the circuit" or "fix automatically" use the fast built-in parser. Enable AI parsing below for free-form questions (loads a browser model, slower).
 Try: "open SingleBitFullAdder", "test the circuit", or "fix the circuit automatically".`;
 
 const createInitialTruthTable = () => createTruthTableFromColumns(DEFAULT_INPUTS, DEFAULT_OUTPUTS);
@@ -57,6 +55,41 @@ const createInitialTruthTable = () => createTruthTableFromColumns(DEFAULT_INPUTS
 const nextColumnNames = (prefix: string, count: number, existing: string[] = []) => (
   Array.from({ length: count }, (_, index) => existing[index] ?? `${prefix}${index}`)
 );
+
+type TruthTableRowProps = {
+  rowIndex: number;
+  row: TruthCellValue[];
+  failed: boolean;
+  passed: boolean;
+  onCellChange: (rowIndex: number, columnIndex: number, value: TruthCellValue) => void;
+};
+
+const TruthTableRow = memo(({
+  rowIndex,
+  row,
+  failed,
+  passed,
+  onCellChange,
+}: TruthTableRowProps) => (
+  <tr className={failed ? 'truth-row-fail' : passed ? 'truth-row-pass' : undefined}>
+    <td>{rowIndex}</td>
+    {row.map((cell, columnIndex) => (
+      <td key={`${rowIndex}-${columnIndex}`}>
+        <select
+          onChange={(event) => {
+            const value = event.target.value;
+            if (isTruthCellValue(value)) onCellChange(rowIndex, columnIndex, value);
+          }}
+          value={cell}
+        >
+          {cellOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </td>
+    ))}
+  </tr>
+));
+
+TruthTableRow.displayName = 'TruthTableRow';
 
 export const ModuleLab = () => {
   const [source, setSource] = useState(() => createBlankProtocol(DEFAULT_INPUTS, DEFAULT_OUTPUTS));
@@ -69,26 +102,23 @@ export const ModuleLab = () => {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
+  const [useWebLlm, setUseWebLlm] = useState(false);
   const [pendingGuidance, setPendingGuidance] = useState<CorrectionGuidance>({});
+  const [catalogRefresh, setCatalogRefresh] = useState(() => getCatalogVersion());
 
-  const catalogEntries = useMemo(() => getCatalogEntries(), [source, status]);
-  const librarySources = useMemo(() => getCatalogLibrarySources(), [catalogEntries]);
-  const processCatalog = useMemo(() => buildProcessCatalogSummaries(), [catalogEntries]);
+  const catalogEntries = useMemo(() => getCatalogEntries(), [catalogRefresh]);
+  const librarySources = useMemo(() => getCatalogLibrarySources(), [catalogRefresh]);
+  const processCatalog = useMemo(() => buildProcessCatalogSummaries(), [catalogRefresh]);
   const activeProcessName = extractMainProcessName(source);
 
   const dimensions = useMemo(() => {
-    try {
-      return truthTable
-        ? {
-          rowCount: truthTable.rows.length,
-          columnCount: truthTable.inputColumns.length + truthTable.outputColumns.length,
-          inputCount: truthTable.inputColumns.length,
-          outputCount: truthTable.outputColumns.length,
-        }
-        : null;
-    } catch {
-      return null;
-    }
+    if (!truthTable) return null;
+    return {
+      rowCount: truthTable.rows.length,
+      columnCount: truthTable.inputColumns.length + truthTable.outputColumns.length,
+      inputCount: truthTable.inputColumns.length,
+      outputCount: truthTable.outputColumns.length,
+    };
   }, [truthTable]);
 
   const failedRowIndexes = useMemo(
@@ -96,11 +126,17 @@ export const ModuleLab = () => {
     [lastTestResult],
   );
 
-  const pushMessage = (role: ChatMessage['role'], text: string) => {
-    setMessages((current) => [...current, { id: generateId(), role, text }]);
-  };
+  const displayStatus = lastTestResult ? formatTestFailureSummary(lastTestResult) : status;
 
-  const buildNlContext = (table: TruthTable | null = truthTable) => ({
+  const refreshCatalog = useCallback(() => {
+    setCatalogRefresh(getCatalogVersion());
+  }, []);
+
+  const pushMessage = useCallback((role: ChatMessage['role'], text: string) => {
+    setMessages((current) => [...current, { id: generateId(), role, text }]);
+  }, []);
+
+  const buildNlContext = useCallback((table: TruthTable | null = truthTable) => ({
     source,
     truthTable: table,
     inputColumns: table?.inputColumns ?? [],
@@ -109,9 +145,9 @@ export const ModuleLab = () => {
     processCatalog,
     lastTestResult,
     libraryProcessNames: Object.keys(librarySources),
-  });
+  }), [source, truthTable, activeProcessName, processCatalog, lastTestResult, librarySources]);
 
-  const applySource = (nextSource: string, label: string, resetTable = true) => {
+  const applySource = useCallback((nextSource: string, label: string, resetTable = true) => {
     setSource(nextSource);
     setLastTestResult(null);
     if (resetTable) {
@@ -122,9 +158,9 @@ export const ModuleLab = () => {
       }
     }
     setStatus(label);
-  };
+  }, []);
 
-  const loadCatalogProcess = (name: string, options?: { silent?: boolean }) => {
+  const loadCatalogProcess = useCallback((name: string) => {
     const entry = getCatalogEntry(name);
     if (!entry) {
       setStatus(`Process "${name}" is not in the catalog.`);
@@ -132,20 +168,20 @@ export const ModuleLab = () => {
     }
     setSelectedCatalogId(entry.id);
     applySource(entry.source, `Loaded catalog process ${entry.name}.`);
-    if (!options?.silent) {
-      pushMessage('assistant', `Loaded ${entry.name} from the process catalog. Say "infer truth table" or "test the circuit" to continue.`);
-    }
+    pushMessage('assistant', `Loaded ${entry.name} from the process catalog. Say "infer truth table" or "test the circuit" to continue.`);
     return entry;
-  };
+  }, [applySource, pushMessage]);
 
-  const updateCell = (rowIndex: number, columnIndex: number, value: TruthCellValue) => {
-    if (!truthTable) return;
-    const nextRows = truthTable.rows.map((row, index) => (
-      index === rowIndex ? row.map((cell, cellIndex) => (cellIndex === columnIndex ? value : cell)) : row
-    ));
-    setTruthTable({ ...truthTable, rows: nextRows });
+  const updateCell = useCallback((rowIndex: number, columnIndex: number, value: TruthCellValue) => {
+    setTruthTable((current) => {
+      if (!current) return current;
+      const nextRows = current.rows.map((row, index) => (
+        index === rowIndex ? row.map((cell, cellIndex) => (cellIndex === columnIndex ? value : cell)) : row
+      ));
+      return { ...current, rows: nextRows };
+    });
     setLastTestResult(null);
-  };
+  }, []);
 
   const updateInputCount = (count: number) => {
     if (!truthTable) return;
@@ -177,6 +213,7 @@ export const ModuleLab = () => {
         origin: 'uploaded',
         description: `Uploaded from ${file.name}`,
       });
+      refreshCatalog();
       setSelectedCatalogId('');
       applySource(parsed.source, `Loaded ${file.name}.`);
       pushMessage('assistant', `Loaded ${file.name} into the catalog. Say "infer truth table" or "test the circuit" to continue.`);
@@ -189,30 +226,29 @@ export const ModuleLab = () => {
     }
   };
 
-  const inferTable = (inferSource = source) => {
-    const table = createEmptyTruthTable(inferSource);
+  const inferTable = useCallback(() => {
+    const table = createEmptyTruthTable(source);
     setTruthTable(table);
     setLastTestResult(null);
     setStatus(`Inferred ${table.rows.length} rows × ${table.inputColumns.length + table.outputColumns.length} columns.`);
     return table;
-  };
+  }, [source]);
 
-  const runTestOnly = (table: TruthTable, testSource = source) => {
-    const testResult = testCircuitAgainstTruthTable(testSource, table, librarySources);
+  const runTestOnly = useCallback((table: TruthTable) => {
+    const testResult = testCircuitAgainstTruthTable(source, table, librarySources);
     setLastTestResult(testResult);
     const summary = formatTestFailureSummary(testResult);
     setStatus(summary);
     return { testResult, summary };
-  };
+  }, [source, librarySources]);
 
-  const runCorrection = (
+  const runCorrection = useCallback((
     table: TruthTable,
     guidance: CorrectionGuidance,
     autonomous: boolean,
-    testSource = source,
   ) => {
     const response = runModuleTest({
-      source: testSource,
+      source,
       truthTable: table,
       librarySources,
       guidance,
@@ -228,24 +264,23 @@ export const ModuleLab = () => {
         origin: 'corrected',
         description: `Corrected in Circuit Correction Lab (${autonomous ? 'autonomous' : 'guided'})`,
       });
+      refreshCatalog();
     }
 
     setLastTestResult(response.testResult);
     const summary = formatTestFailureSummary(response.testResult);
     setStatus(summary);
     return { response, summary };
-  };
+  }, [source, librarySources, activeProcessName, refreshCatalog]);
 
   const handleIntent = async (text: string) => {
     const context = buildNlContext();
 
-    const intent = await parseNaturalLanguageWithWebLlm(
-      text,
-      context,
-      (progress) => setStatus(progress),
-    ) ?? parseNaturalLanguageCorrection(text, context);
+    const intent = await parseCorrectionIntent(text, context, {
+      useWebLlm,
+      onProgress: (progress) => setStatus(progress),
+    });
 
-    let currentSource = source;
     let table = truthTable;
     let guidance: CorrectionGuidance = {
       ...pendingGuidance,
@@ -258,27 +293,10 @@ export const ModuleLab = () => {
       setPendingGuidance((current) => ({ ...current, preferredGates: intent.guidance?.preferredGates }));
     }
 
-    const hasFollowUpIntent = Boolean(
-      intent.loadFullAdderTable
-      || intent.inferTable
-      || intent.truthTable
-      || intent.probeOutputs
-      || intent.runTest,
-    );
-
     if (intent.loadCatalogProcess) {
-      const entry = loadCatalogProcess(intent.loadCatalogProcess, { silent: hasFollowUpIntent });
+      const entry = loadCatalogProcess(intent.loadCatalogProcess);
       if (!entry) {
         pushMessage('assistant', `${intent.reply}\n\nI could not find "${intent.loadCatalogProcess}" in the catalog.`);
-        return;
-      }
-      currentSource = entry.source;
-      try {
-        table = createEmptyTruthTable(entry.source);
-      } catch {
-        table = createInitialTruthTable();
-      }
-      if (!hasFollowUpIntent) {
         return;
       }
     }
@@ -290,7 +308,7 @@ export const ModuleLab = () => {
     }
 
     if (intent.inferTable) {
-      table = inferTable(currentSource);
+      table = inferTable();
     }
 
     if (intent.truthTable) {
@@ -304,22 +322,22 @@ export const ModuleLab = () => {
         pushMessage('assistant', 'Infer or load a truth table before probing outputs.');
         return;
       }
-      table = probeModuleOutputs(currentSource, table, librarySources);
+      table = probeModuleOutputs(source, table, librarySources);
       setTruthTable(table);
       setLastTestResult(null);
     }
 
     if (intent.runTest) {
       if (!table) {
-        table = inferTable(currentSource);
+        table = inferTable();
       }
       try {
         if (intent.autonomous || intent.guidance?.gates?.length) {
-          const { summary } = runCorrection(table, guidance, intent.autonomous ?? false, currentSource);
+          const { summary } = runCorrection(table, guidance, intent.autonomous ?? false);
           pushMessage('assistant', `${intent.reply}\n\n${summary}`);
           if (intent.autonomous) setPendingGuidance({});
         } else {
-          const { summary } = runTestOnly(table, currentSource);
+          const { summary } = runTestOnly(table);
           pushMessage('assistant', `${intent.reply}\n\n${summary}`);
         }
       } catch (error) {
@@ -392,22 +410,8 @@ export const ModuleLab = () => {
     }
   };
 
-  const quickStatus = useMemo(() => {
-    if (lastTestResult) {
-      return formatTestFailureSummary(lastTestResult);
-    }
-    if (!truthTable || !source.trim()) return status;
-    try {
-      const result = testCircuitAgainstTruthTable(source, truthTable, librarySources);
-      return result.passed
-        ? `Circuit matches truth table (${result.totalRows}/${result.totalRows} rows).`
-        : `Mismatch on ${result.failedRows.length} row(s). Run Test circuit to highlight failures.`;
-    } catch {
-      return status;
-    }
-  }, [source, truthTable, status, lastTestResult, librarySources]);
-
   const allColumns = truthTable ? [...truthTable.inputColumns, ...truthTable.outputColumns] : [];
+  const allRowsPass = Boolean(lastTestResult?.passed);
 
   return (
     <div className="module-lab-shell">
@@ -459,17 +463,7 @@ export const ModuleLab = () => {
             <div className="module-tester-actions">
               <button onClick={() => { inferTable(); pushMessage('assistant', 'Inferred truth-table dimensions from PARAMS and RETURNVALS.'); }} type="button">Infer truth table</button>
               <button onClick={() => { setTruthTable(singleBitFullAdderTruthTable()); setLastTestResult(null); pushMessage('assistant', 'Loaded canonical full-adder truth table.'); }} type="button">Full-adder table</button>
-              <button
-                disabled={!truthTable}
-                onClick={() => {
-                  if (!truthTable) return;
-                  setTruthTable(probeModuleOutputs(source, truthTable, librarySources));
-                  setLastTestResult(null);
-                }}
-                type="button"
-              >
-                Probe outputs
-              </button>
+              <button disabled={!truthTable} onClick={() => truthTable && setTruthTable(probeModuleOutputs(source, truthTable, librarySources))} type="button">Probe outputs</button>
               <button disabled={!truthTable} onClick={downloadTruthTable} type="button">Download table</button>
               <button disabled={!source.trim()} onClick={downloadCircuit} type="button">Download .qpucir</button>
             </div>
@@ -531,25 +525,14 @@ export const ModuleLab = () => {
                 </thead>
                 <tbody>
                   {truthTable.rows.map((row, rowIndex) => (
-                    <tr
-                      className={failedRowIndexes.has(rowIndex) ? 'truth-row-fail' : lastTestResult?.passed ? 'truth-row-pass' : undefined}
+                    <TruthTableRow
+                      failed={failedRowIndexes.has(rowIndex)}
                       key={rowIndex}
-                    >
-                      <td>{rowIndex}</td>
-                      {row.map((cell, columnIndex) => (
-                        <td key={`${rowIndex}-${columnIndex}`}>
-                          <select
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              if (isTruthCellValue(value)) updateCell(rowIndex, columnIndex, value);
-                            }}
-                            value={cell}
-                          >
-                            {cellOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                          </select>
-                        </td>
-                      ))}
-                    </tr>
+                      onCellChange={updateCell}
+                      passed={allRowsPass}
+                      row={row}
+                      rowIndex={rowIndex}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -561,7 +544,7 @@ export const ModuleLab = () => {
             <button disabled={!truthTable} onClick={() => runManualTest(true)} type="button">Correct autonomously</button>
           </div>
 
-          <p className="file-status">{quickStatus}</p>
+          <p className="file-status">{displayStatus}</p>
         </section>
 
         <section className="module-lab-chat panel" aria-labelledby="module-lab-chat-title">
@@ -569,6 +552,11 @@ export const ModuleLab = () => {
             <p className="eyebrow">Correction chat</p>
             <h2 id="module-lab-chat-title">Natural language assistant</h2>
           </div>
+
+          <label className="chat-mode-toggle">
+            <input checked={useWebLlm} onChange={(event) => setUseWebLlm(event.target.checked)} type="checkbox" />
+            <span>Use AI parser for unrecognized messages (slower — loads browser model)</span>
+          </label>
 
           <div className="chat-log" aria-live="polite">
             {messages.map((message) => (
