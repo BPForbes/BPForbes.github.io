@@ -1,9 +1,11 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
+import { buildProcessCatalogSummaries } from '../data/processCatalog';
 import { parseNaturalLanguageCorrection } from './naturalLanguageCorrector';
 import { singleBitFullAdderTruthTable } from './truthTable';
 
 const singleBitSource = readFileSync(new URL('../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');
+const twoBitSource = readFileSync(new URL('../data/processes/two-bit-full-adder.qpucir', import.meta.url), 'utf8');
 
 describe('parseNaturalLanguageCorrection', () => {
   const context = {
@@ -11,6 +13,7 @@ describe('parseNaturalLanguageCorrection', () => {
     truthTable: singleBitFullAdderTruthTable(),
     inputColumns: ['A', 'B', 'Cin'],
     outputColumns: ['Cout', 'Sum'],
+    processCatalog: buildProcessCatalogSummaries(),
   };
 
   it('maps add CNOT from A to Sum into guided gate specs', () => {
@@ -24,10 +27,73 @@ describe('parseNaturalLanguageCorrection', () => {
     expect(intent.guidance?.gates).toEqual([{ gate: 'CCNOT', inputs: ['A', 'B'], output: 'Cout' }]);
   });
 
+  it('parses AST-style qubit bindings', () => {
+    const intent = parseNaturalLanguageCorrection('CNOT -I 0:0 -O Sum:0', context);
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CNOT', inputs: ['0:0'], output: 'Sum:0' }]);
+  });
+
+  it('parses multi-control AST bindings', () => {
+    const intent = parseNaturalLanguageCorrection('CCNOT -I 0:0 1:0 -O Cout:0', context);
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CCNOT', inputs: ['0:0', '1:0'], output: 'Cout:0' }]);
+  });
+
+  it('parses connect wire to output with gate', () => {
+    const intent = parseNaturalLanguageCorrection('connect 0:0 to Sum:0 with CNOT', context);
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CNOT', inputs: ['0:0'], output: 'Sum:0' }]);
+  });
+
+  it('parses gate-on bindings', () => {
+    const intent = parseNaturalLanguageCorrection('CNOT on 0:0 targeting Sum:0', context);
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CNOT', inputs: ['0:0'], output: 'Sum:0' }]);
+  });
+
+  it('opens catalog processes by filename', () => {
+    const intent = parseNaturalLanguageCorrection('open single-bit-full-adder.qpucir', context);
+    expect(intent.loadCatalogProcess).toBe('SingleBitFullAdder');
+  });
+
+  it('opens catalog processes by filename stem', () => {
+    const intent = parseNaturalLanguageCorrection('load single-bit-full-adder', context);
+    expect(intent.loadCatalogProcess).toBe('SingleBitFullAdder');
+  });
+
+  it('asks for clarification when several catalog processes match', () => {
+    const intent = parseNaturalLanguageCorrection('open adder', context);
+    expect(intent.clarification?.options.length).toBeGreaterThan(1);
+    expect(intent.reply).toContain('Do you mean?');
+  });
+
+  it('asks which output to use when a gate omits -O', () => {
+    const intent = parseNaturalLanguageCorrection('add CNOT from A', context);
+    expect(intent.clarification?.options).toEqual([
+      { label: 'CNOT -I A -O Cout', command: 'CNOT -I A -O Cout' },
+      { label: 'CNOT -I A -O Sum', command: 'CNOT -I A -O Sum' },
+    ]);
+  });
+
   it('recognizes autonomous correction requests', () => {
     const intent = parseNaturalLanguageCorrection('fix the circuit automatically', context);
     expect(intent.autonomous).toBe(true);
     expect(intent.runTest).toBe(true);
+  });
+
+  it('asks for clarification when a wire bit address is missing', () => {
+    const twoBitContext = {
+      ...context,
+      source: twoBitSource,
+      inputColumns: ['A0', 'A1', 'B0', 'B1', 'Cin'],
+      outputColumns: ['Cout', 'S1tmp', 'S0tmp'],
+    };
+    const intent = parseNaturalLanguageCorrection('CNOT -I $A0:1 -O S0tmp:0', twoBitContext);
+    expect(intent.clarification?.options.length).toBeGreaterThan(0);
+    expect(intent.reply).toContain('Do you mean?');
+    expect(intent.clarification?.options[0].label).toContain('A0:0');
+  });
+
+  it('resolves explicit wire addresses without clarification', () => {
+    const intent = parseNaturalLanguageCorrection('CNOT -I 1:0 -O Sum:0', context);
+    expect(intent.clarification).toBeUndefined();
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CNOT', inputs: ['1:0'], output: 'Sum:0' }]);
   });
 
   it('loads the full adder truth table', () => {

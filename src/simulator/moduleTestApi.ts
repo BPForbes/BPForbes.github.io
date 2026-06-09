@@ -41,9 +41,6 @@ export {
 
 export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './nlIntentTypes';
 export { parseNaturalLanguageCorrection } from './naturalLanguageCorrector';
-export { parseNaturalLanguageWithModel, sanitizeIntent as sanitizeOllamaIntent } from './modelNaturalLanguageCorrector';
-export { hasWebGpu, parseNaturalLanguageWithWebLlm, sanitizeIntent as sanitizeWebLlmIntent } from './webLlmNaturalLanguageCorrector';
-
 import type { CorrectionGuidance } from './circuitCorrector';
 import { correctCircuit } from './circuitCorrector';
 import type { TruthTable, TruthTableTestResult } from './truthTable';

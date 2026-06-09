@@ -4,11 +4,22 @@ import type { TruthTable, TruthTableTestResult } from './truthTable';
 export type ProcessCatalogSummary = {
   name: string;
   origin: string;
+  fileName?: string;
   inputColumns: string[];
   outputColumns: string[];
   rowCount?: number;
   summary: string;
   description?: string;
+};
+
+export type ClarificationOption = {
+  label: string;
+  command: string;
+};
+
+export type PendingClarification = {
+  prompt: string;
+  options: ClarificationOption[];
 };
 
 export type ModelCorrectionIntent = {
@@ -21,6 +32,7 @@ export type ModelCorrectionIntent = {
   autonomous?: boolean;
   guidance?: CorrectionGuidance;
   truthTable?: TruthTable;
+  clarification?: PendingClarification;
 };
 
 export type NlCorrectionContext = {
@@ -32,6 +44,7 @@ export type NlCorrectionContext = {
   processCatalog?: ProcessCatalogSummary[];
   lastTestResult?: TruthTableTestResult | null;
   libraryProcessNames?: string[];
+  pendingClarification?: PendingClarification | null;
 };
 
 export type NlCorrectionIntent = ModelCorrectionIntent;

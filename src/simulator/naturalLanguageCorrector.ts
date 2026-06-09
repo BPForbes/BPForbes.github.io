@@ -1,3 +1,6 @@
+import { findCatalogCandidates } from '../data/processCatalog';
+import { formatAddressLabel, resolveWireAddress, resolveWireAddressOr } from './addressResolution';
+import { buildClarificationIntent } from './clarification';
 import type { GatePreference, GuidedGateSpec } from './circuitCorrector';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 import { isTruthCellValue, type TruthCellValue, type TruthTable } from './truthTable';
@@ -8,9 +11,11 @@ const GATE_ALIASES: Record<string, GatePreference> = {
   cnot: 'CNOT',
   controllednot: 'CNOT',
   'controlled-not': 'CNOT',
+  'controlled not': 'CNOT',
   ccnot: 'CCNOT',
   toffoli: 'CCNOT',
   x: 'X',
+  paulix: 'X',
   not: 'NOT',
   h: 'H',
   hadamard: 'H',
@@ -21,79 +26,141 @@ const GATE_ALIASES: Record<string, GatePreference> = {
 
 const GATE_NAMES = Object.keys(GATE_ALIASES).join('|');
 const gatePattern = new RegExp(`\\b(${GATE_NAMES})\\b`, 'gi');
-
-const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0].trim();
-
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const WIRE_TOKEN = String.raw`[$\w]+(?::\d+)?|\d+:\d+`;
 
 const toTruthCellValue = (raw: string): TruthCellValue | null => {
   const normalized = raw.endsWith('p') ? raw : `${raw}p`;
   return isTruthCellValue(normalized) ? normalized : null;
 };
 
-const findRegister = (name: string, context: NlCorrectionContext) => {
-  const base = stripRef(name);
-  const candidates = [...context.inputColumns, ...context.outputColumns];
-  const direct = candidates.find((candidate) => candidate.toLowerCase() === base.toLowerCase());
-  if (direct) return direct;
+const findRegister = (name: string, context: NlCorrectionContext) => resolveWireAddressOr(name, context);
 
-  const alias = context.source.match(new RegExp(`SET\\s+(\\d+:\\d+)\\s+\\$${escapeRegex(base)}\\b`, 'i'));
-  if (alias) return alias[1];
+const parseGateName = (raw: string): GatePreference | undefined => (
+  GATE_ALIASES[raw.toLowerCase().replace(/\s+/g, ' ').trim()]
+  ?? GATE_ALIASES[raw.toLowerCase().replace(/\s+/g, '')]
+);
 
-  const wire = base.match(/^(\d+)$/);
-  if (wire) {
-    const wireAlias = context.source.match(new RegExp(`SET\\s+(${escapeRegex(wire[1])}:\\d+)\\s+\\$\\w+`, 'i'));
-    if (wireAlias) return wireAlias[1];
-  }
+const parseTokenList = (raw: string, context: NlCorrectionContext) => (
+  raw
+    .replace(/\s+and\s+/gi, ' ')
+    .replace(/,/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !/^(with|from|inputs?|controls?)$/i.test(token))
+    .map((token) => findRegister(token, context))
+);
 
-  return base;
+const pushGateSpec = (
+  specs: GuidedGateSpec[],
+  gate: GatePreference | undefined,
+  inputs: string[],
+  output: string | undefined,
+) => {
+  if (!gate || inputs.length === 0 || !output) return;
+  specs.push({ gate, inputs, output });
 };
-
-const parseGateName = (raw: string): GatePreference | undefined => GATE_ALIASES[raw.toLowerCase().replace(/\s+/g, '')];
 
 const extractGateSpecs = (message: string, context: NlCorrectionContext): GuidedGateSpec[] => {
   const specs: GuidedGateSpec[] = [];
   const normalized = message.replace(/\s+/g, ' ').trim();
 
-  const commandPattern = new RegExp(
-    `(?:${GATE_NAMES})\\s+-I\\s+([\\w$:,\\s]+?)\\s+-O\\s+([\\w$:]+)`,
+  const astPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+-I\\s+((?:${WIRE_TOKEN})(?:\\s+(?:${WIRE_TOKEN}))*)\\s+-O\\s+(${WIRE_TOKEN})`,
     'gi',
   );
-  let commandMatch = commandPattern.exec(normalized);
-  while (commandMatch) {
-    const gate = parseGateName(commandMatch[0].split(/\s+/)[0]);
-    if (gate) {
-      specs.push({
-        gate,
-        inputs: commandMatch[1].split(/\s+/).filter(Boolean).map((token) => findRegister(token, context)),
-        output: findRegister(commandMatch[2], context),
-      });
-    }
-    commandMatch = commandPattern.exec(normalized);
+  let astMatch = astPattern.exec(normalized);
+  while (astMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(astMatch[1]),
+      parseTokenList(astMatch[2], context),
+      findRegister(astMatch[3], context),
+    );
+    astMatch = astPattern.exec(normalized);
+  }
+  if (specs.length > 0) return specs;
+
+  const bindPattern = new RegExp(
+    `\\b(?:bind|wire|connect)\\s+(${GATE_NAMES})\\s+(?:gate\\s+)?(?:inputs?\\s+)?((?:${WIRE_TOKEN})(?:\\s+(?:${WIRE_TOKEN}))*)\\s+(?:to|into|onto|->)\\s+(${WIRE_TOKEN})`,
+    'gi',
+  );
+  let bindMatch = bindPattern.exec(normalized);
+  while (bindMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(bindMatch[1]),
+      parseTokenList(bindMatch[2], context),
+      findRegister(bindMatch[3], context),
+    );
+    bindMatch = bindPattern.exec(normalized);
+  }
+  if (specs.length > 0) return specs;
+
+  const reverseBindPattern = new RegExp(
+    `\\b(?:connect|wire|bind)\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+to\\s+(${WIRE_TOKEN})\\s+(?:with|using|via)\\s+(${GATE_NAMES})\\b`,
+    'gi',
+  );
+  let reverseMatch = reverseBindPattern.exec(normalized);
+  while (reverseMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(reverseMatch[3]),
+      parseTokenList(reverseMatch[1], context),
+      findRegister(reverseMatch[2], context),
+    );
+    reverseMatch = reverseBindPattern.exec(normalized);
+  }
+  if (specs.length > 0) return specs;
+
+  const gateOnPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+(?:gate\\s+)?on\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+(?:to|into|onto|targeting|->)\\s+(${WIRE_TOKEN})`,
+    'gi',
+  );
+  let onMatch = gateOnPattern.exec(normalized);
+  while (onMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(onMatch[1]),
+      parseTokenList(onMatch[2], context),
+      findRegister(onMatch[3], context),
+    );
+    onMatch = gateOnPattern.exec(normalized);
+  }
+  if (specs.length > 0) return specs;
+
+  const gateFromToPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+from\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+to\\s+(${WIRE_TOKEN})`,
+    'gi',
+  );
+  let fromToMatch = gateFromToPattern.exec(normalized);
+  while (fromToMatch) {
+    pushGateSpec(
+      specs,
+      parseGateName(fromToMatch[1]),
+      parseTokenList(fromToMatch[2], context),
+      findRegister(fromToMatch[3], context),
+    );
+    fromToMatch = gateFromToPattern.exec(normalized);
   }
   if (specs.length > 0) return specs;
 
   const naturalPattern = new RegExp(
-    `(?:add|insert|put|use|apply)\\s+(?:a\\s+)?(${GATE_NAMES})(?:\\s+gate)?(?:\\s+(?:with|from|using))?\\s+(.+?)(?:\\s+(?:to|into|onto|->|output|-O)\\s+([\\w$:]+))?$`,
+    `(?:add|insert|put|use|apply)\\s+(?:a\\s+)?(${GATE_NAMES})(?:\\s+gate)?(?:\\s+(?:with|from|using))?\\s+(.+?)(?:\\s+(?:to|into|onto|->|output|-O)\\s+(${WIRE_TOKEN}))?$`,
     'i',
   );
   const naturalMatch = normalized.match(naturalPattern);
   if (naturalMatch) {
-    const gate = parseGateName(naturalMatch[1]);
-    if (gate) {
-      const inputPart = naturalMatch[2]
-        .replace(/\s+and\s+/gi, ' ')
-        .replace(/,/g, ' ')
-        .trim();
-      const inputs = inputPart
-        .split(/\s+/)
-        .filter((token) => token && !/^(with|from|inputs?)$/i.test(token))
-        .map((token) => findRegister(token, context));
-      const output = naturalMatch[3] ? findRegister(naturalMatch[3], context) : context.outputColumns[0];
-      if (inputs.length > 0 && output) {
-        specs.push({ gate, inputs, output });
-      }
-    }
+    const output = naturalMatch[3]
+      ? findRegister(naturalMatch[3], context)
+      : context.outputColumns.length === 1
+        ? context.outputColumns[0]
+        : undefined;
+    pushGateSpec(
+      specs,
+      parseGateName(naturalMatch[1]),
+      parseTokenList(naturalMatch[2], context),
+      output,
+    );
   }
 
   return specs;
@@ -111,6 +178,177 @@ const extractPreferredGates = (message: string): GatePreference[] => {
     if (gate && !preferred.includes(gate)) preferred.push(gate);
   });
   return preferred;
+};
+
+const parseCatalogOpenTarget = (message: string) => {
+  const match = message.match(
+    /\b(?:load|open|use)\s+(?:the\s+)?(?<target>[\w.-]+(?:\.qpucir)?)\b/i,
+  );
+  return match?.groups?.target ?? null;
+};
+
+type GateBindingDraft = {
+  gate: GatePreference;
+  inputTokens: string[];
+  outputToken?: string;
+};
+
+const extractRawWireTokens = (raw: string) => (
+  raw
+    .replace(/\s+and\s+/gi, ' ')
+    .replace(/,/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !/^(with|from|inputs?|controls?)$/i.test(token))
+);
+
+const extractGateBindingDraft = (message: string): GateBindingDraft | null => {
+  const normalized = message.replace(/\s+/g, ' ').trim();
+
+  const astPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+-I\\s+((?:${WIRE_TOKEN})(?:\\s+(?:${WIRE_TOKEN}))*)\\s+-O\\s+(${WIRE_TOKEN})`,
+    'i',
+  );
+  const astMatch = normalized.match(astPattern);
+  if (astMatch) {
+    const gate = parseGateName(astMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(astMatch[2]),
+      outputToken: astMatch[3],
+    };
+  }
+
+  const bindPattern = new RegExp(
+    `\\b(?:bind|wire|connect)\\s+(${GATE_NAMES})\\s+(?:gate\\s+)?(?:inputs?\\s+)?((?:${WIRE_TOKEN})(?:\\s+(?:${WIRE_TOKEN}))*)\\s+(?:to|into|onto|->)\\s+(${WIRE_TOKEN})`,
+    'i',
+  );
+  const bindMatch = normalized.match(bindPattern);
+  if (bindMatch) {
+    const gate = parseGateName(bindMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(bindMatch[2]),
+      outputToken: bindMatch[3],
+    };
+  }
+
+  const reverseBindPattern = new RegExp(
+    `\\b(?:connect|wire|bind)\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+to\\s+(${WIRE_TOKEN})\\s+(?:with|using|via)\\s+(${GATE_NAMES})\\b`,
+    'i',
+  );
+  const reverseMatch = normalized.match(reverseBindPattern);
+  if (reverseMatch) {
+    const gate = parseGateName(reverseMatch[3]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(reverseMatch[1]),
+      outputToken: reverseMatch[2],
+    };
+  }
+
+  const gateOnPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+(?:gate\\s+)?on\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+(?:to|into|onto|targeting|->)\\s+(${WIRE_TOKEN})`,
+    'i',
+  );
+  const onMatch = normalized.match(gateOnPattern);
+  if (onMatch) {
+    const gate = parseGateName(onMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(onMatch[2]),
+      outputToken: onMatch[3],
+    };
+  }
+
+  const gateFromToPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+from\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+to\\s+(${WIRE_TOKEN})`,
+    'i',
+  );
+  const fromToMatch = normalized.match(gateFromToPattern);
+  if (fromToMatch) {
+    const gate = parseGateName(fromToMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(fromToMatch[2]),
+      outputToken: fromToMatch[3],
+    };
+  }
+
+  const naturalPattern = new RegExp(
+    `(?:add|insert|put|use|apply)\\s+(?:a\\s+)?(${GATE_NAMES})(?:\\s+gate)?(?:\\s+(?:with|from|using))?\\s+(.+?)(?:\\s+(?:to|into|onto|->|output|-O)\\s+(${WIRE_TOKEN}))?$`,
+    'i',
+  );
+  const naturalMatch = normalized.match(naturalPattern);
+  if (naturalMatch) {
+    const gate = parseGateName(naturalMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(naturalMatch[2]),
+      outputToken: naturalMatch[3],
+    };
+  }
+
+  return null;
+};
+
+const buildGateCommandFromDraft = (
+  draft: GateBindingDraft,
+  context: NlCorrectionContext,
+  tokenOverrides: Map<string, string>,
+) => {
+  const inputs = draft.inputTokens.map((token) => (
+    resolveWireAddressOr(tokenOverrides.get(token) ?? token, context)
+  ));
+  if (!draft.outputToken) {
+    return `add ${draft.gate} from ${inputs.join(' ')}`;
+  }
+  const output = resolveWireAddressOr(tokenOverrides.get(draft.outputToken) ?? draft.outputToken, context);
+  return `${draft.gate} -I ${inputs.join(' ')} -O ${output}`;
+};
+
+const detectGateAddressClarification = (message: string, context: NlCorrectionContext) => {
+  const draft = extractGateBindingDraft(message);
+  if (!draft) return null;
+
+  const tokens = [...draft.inputTokens];
+  if (draft.outputToken) tokens.push(draft.outputToken);
+
+  for (const token of tokens) {
+    const resolution = resolveWireAddress(token, context);
+    if (resolution.status !== 'clarify') continue;
+    return buildClarificationIntent(
+      resolution.prompt,
+      resolution.candidates.map((address) => ({
+        label: formatAddressLabel(address, context),
+        command: buildGateCommandFromDraft(draft, context, new Map([[token, address]])),
+      })),
+    );
+  }
+
+  return null;
+};
+
+const detectPartialGateCommand = (message: string, context: NlCorrectionContext) => {
+  if (context.outputColumns.length <= 1) return null;
+  const normalized = message.replace(/\s+/g, ' ').trim();
+  const pattern = new RegExp(
+    `(?:add|insert|put|use|apply)\\s+(?:a\\s+)?(${GATE_NAMES})(?:\\s+gate)?\\s+(?:from|with|using|on)\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)(?:\\s+(?:to|into|onto|->|output|-O)\\s+(${WIRE_TOKEN}))?`,
+    'i',
+  );
+  const match = normalized.match(pattern);
+  if (!match || match[3]) return null;
+  const gate = parseGateName(match[1]);
+  if (!gate) return null;
+  const inputs = parseTokenList(match[2], context);
+  if (inputs.length === 0) return null;
+  return { gate, inputs };
 };
 
 const parseTruthTableRowHint = (message: string, context: NlCorrectionContext): TruthTable | null => {
@@ -169,7 +407,7 @@ export const parseNaturalLanguageCorrection = (
   const text = message.trim();
   if (!text) {
     return {
-      reply: 'Tell me what to change. For example: "add a CNOT from A to Sum", "prefer CCNOT gates", or "fix the circuit automatically".',
+      reply: 'Tell me what to change. For example: "add a CNOT from A to Sum", "CNOT -I 0:0 -O Sum:0", or "open single-bit-full-adder.qpucir".',
     };
   }
 
@@ -182,33 +420,43 @@ export const parseNaturalLanguageCorrection = (
     return {
       reply: [
         'I can translate natural language into circuit corrections. Try:',
+        '• "open single-bit-full-adder.qpucir" or "open SingleBitFullAdder"',
+        '• "CNOT -I 0:0 -O Sum:0" or "connect 0:0 to Sum:0 with CNOT"',
         '• "Test the circuit against the truth table"',
-        '• "Load the full adder truth table"',
         '• "Add a CNOT from A to Sum"',
         '• "Insert CCNOT with inputs A and B into Cout"',
-        '• "Prefer CNOT and CCNOT gates"',
-        '• "When A is 1 and B is 1 and Cin is 0, Sum should be 0 and Cout should be 1"',
         '• "Fix the circuit automatically"',
       ].join('\n'),
     };
   }
 
-  const catalogProcess = context.processCatalog?.find((entry) => {
-    const pattern = new RegExp(`\\b(?:load|open|use)\\s+(?:the\\s+)?${escapeRegex(entry.name)}\\b`, 'i');
-    return pattern.test(text);
-  });
-  if (catalogProcess) {
-    return {
-      reply: `Loaded ${catalogProcess.name} from the process catalog.`,
-      loadCatalogProcess: catalogProcess.name,
-    };
-  }
-
-  if (/(?:load|use).*(?:full[- ]?adder|adder truth)/i.test(lower)) {
+  if (/(?:load|use)\s+(?:the\s+)?(?:full[- ]?adder|adder)\s+truth\s+table/i.test(lower)) {
     return {
       reply: 'Loaded the canonical single-bit full adder truth table.',
       loadFullAdderTable: true,
     };
+  }
+
+  const catalogTarget = parseCatalogOpenTarget(text);
+  if (catalogTarget) {
+    const candidates = findCatalogCandidates(catalogTarget);
+    if (candidates.length === 1) {
+      const entry = candidates[0];
+      const label = entry.fileName ?? entry.name;
+      return {
+        reply: `Loaded ${entry.name} from the process catalog (${label}).`,
+        loadCatalogProcess: entry.name,
+      };
+    }
+    if (candidates.length > 1) {
+      return buildClarificationIntent(
+        `Several catalog processes match "${catalogTarget}".`,
+        candidates.map((entry) => ({
+          label: `${entry.name}${entry.fileName ? ` (${entry.fileName})` : ''} [${entry.origin}]`,
+          command: `open ${entry.name}`,
+        })),
+      );
+    }
   }
 
   if (/(?:infer|create|build).*(?:truth table|table dimensions)/i.test(lower)) {
@@ -250,6 +498,25 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
+  const addressClarification = detectGateAddressClarification(text, context);
+  if (addressClarification) {
+    return addressClarification;
+  }
+
+  const partialGate = detectPartialGateCommand(text, context);
+  if (partialGate && gates.length === 0) {
+    return buildClarificationIntent(
+      `Which output should ${partialGate.gate} drive?`,
+      context.outputColumns.map((column) => {
+        const output = findRegister(column, context);
+        return {
+          label: `${partialGate.gate} -I ${partialGate.inputs.join(' ')} -O ${output}`,
+          command: `${partialGate.gate} -I ${partialGate.inputs.join(' ')} -O ${output}`,
+        };
+      }),
+    );
+  }
+
   if (gates.length > 0) {
     const gateSummary = gates
       .map((spec) => `${spec.gate} -I ${spec.inputs.join(' ')} -O ${spec.output}`)
@@ -283,12 +550,20 @@ export const parseNaturalLanguageCorrection = (
     const gate = parseGateName(mentionedGate);
     if (gate) {
       return {
-        reply: `I recognized a ${gate} gate. Specify inputs and output, e.g. "add ${gate} from A and B to Cout".`,
+        reply: `I recognized a ${gate} gate. Specify bindings, e.g. "${gate} -I 0:0 -O Sum:0" or "connect 0:0 to Sum:0 with ${gate}".`,
       };
     }
   }
 
   return {
-    reply: 'I could not map that request to a correction yet. Try mentioning a gate (CNOT, CCNOT), registers (A, Sum, Cout), or say "fix automatically".',
+    reply: 'I could not map that request to a correction yet. Try mentioning a gate (CNOT, CCNOT), qubit bindings (-I / -O), registers (A, Sum, Cout), or say "open single-bit-full-adder.qpucir".',
   };
 };
+
+export const isRegexFallbackIntent = (intent: ModelCorrectionIntent) => (
+  !intent.clarification && intent.reply.startsWith('I could not map that request')
+);
+
+export const isClarificationIntent = (intent: ModelCorrectionIntent) => (
+  Boolean(intent.clarification?.options.length)
+);

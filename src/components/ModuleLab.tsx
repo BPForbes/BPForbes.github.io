@@ -1,22 +1,34 @@
-import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, memo, useCallback, useMemo, useState } from 'react';
 import {
   buildProcessCatalogSummaries,
   getCatalogEntries,
   getCatalogEntry,
+  resolveCatalogEntry,
   getCatalogLibrarySources,
+  getCatalogVersion,
   registerCatalogProcess,
 } from '../data/processCatalog';
-import { downloadQpucirSource } from '../data/qpucirFile';
-import { parseQpucirPayload } from '../data/qpucirFile';
+import { downloadQpucirSource, parseQpucirPayload } from '../data/qpucirFile';
+import {
+  formatClarificationRetry,
+  resolveClarificationResponse,
+} from '../simulator/clarification';
+import { parseCorrectionIntent } from '../simulator/correctionIntentParser';
+import type { ModelCorrectionIntent, PendingClarification } from '../simulator/nlIntentTypes';
+import {
+  BROWSER_MODEL_OPTIONS,
+  loadLlmSettings,
+  saveLlmSettings,
+  type LlmSettings,
+} from '../simulator/llmConfig';
+import { getCachedBrowserModelId } from '../simulator/llmConfig';
+import { hasWebGpu } from '../simulator/webGpu';
 import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/qpuFormat';
-import { parseNaturalLanguageCorrection } from '../simulator/naturalLanguageCorrector';
-import { parseNaturalLanguageWithWebLlm } from '../simulator/webLlmNaturalLanguageCorrector';
 import {
   CorrectionGuidance,
   createEmptyTruthTable,
   createTruthTableFromColumns,
   formatTestFailureSummary,
-  inferTruthTableDimensions,
   isTruthCellValue,
   probeModuleOutputs,
   resizeTruthTable,
@@ -49,7 +61,7 @@ const generateId = () => {
 };
 
 const welcomeMessage = `Welcome to the Circuit Correction Lab. Pick a cataloged process or upload a .qpucir module, shape the truth table, then chat to test and correct circuits.
-The lab uses a browser language model when WebGPU is available. If the model cannot load, the built-in command parser is used.
+Commands like "test the circuit" or "fix automatically" use the fast built-in parser. For free-form questions, enable AI below — the browser model downloads once and is cached for later visits.
 Try: "open SingleBitFullAdder", "test the circuit", or "fix the circuit automatically".`;
 
 const createInitialTruthTable = () => createTruthTableFromColumns(DEFAULT_INPUTS, DEFAULT_OUTPUTS);
@@ -57,6 +69,41 @@ const createInitialTruthTable = () => createTruthTableFromColumns(DEFAULT_INPUTS
 const nextColumnNames = (prefix: string, count: number, existing: string[] = []) => (
   Array.from({ length: count }, (_, index) => existing[index] ?? `${prefix}${index}`)
 );
+
+type TruthTableRowProps = {
+  rowIndex: number;
+  row: TruthCellValue[];
+  failed: boolean;
+  passed: boolean;
+  onCellChange: (rowIndex: number, columnIndex: number, value: TruthCellValue) => void;
+};
+
+const TruthTableRow = memo(({
+  rowIndex,
+  row,
+  failed,
+  passed,
+  onCellChange,
+}: TruthTableRowProps) => (
+  <tr className={failed ? 'truth-row-fail' : passed ? 'truth-row-pass' : undefined}>
+    <td>{rowIndex}</td>
+    {row.map((cell, columnIndex) => (
+      <td key={`${rowIndex}-${columnIndex}`}>
+        <select
+          onChange={(event) => {
+            const value = event.target.value;
+            if (isTruthCellValue(value)) onCellChange(rowIndex, columnIndex, value);
+          }}
+          value={cell}
+        >
+          {cellOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      </td>
+    ))}
+  </tr>
+));
+
+TruthTableRow.displayName = 'TruthTableRow';
 
 export const ModuleLab = () => {
   const [source, setSource] = useState(() => createBlankProtocol(DEFAULT_INPUTS, DEFAULT_OUTPUTS));
@@ -69,26 +116,29 @@ export const ModuleLab = () => {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
+  const [useLlm, setUseLlm] = useState(false);
+  const [llmSettings, setLlmSettings] = useState<LlmSettings>(() => loadLlmSettings());
+  const [modelReady, setModelReady] = useState(() => (
+    getCachedBrowserModelId() === loadLlmSettings().browserModel
+  ));
+  const [modelLoading, setModelLoading] = useState(false);
   const [pendingGuidance, setPendingGuidance] = useState<CorrectionGuidance>({});
+  const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(null);
+  const [catalogRefresh, setCatalogRefresh] = useState(() => getCatalogVersion());
 
-  const catalogEntries = useMemo(() => getCatalogEntries(), [source, status]);
-  const librarySources = useMemo(() => getCatalogLibrarySources(), [catalogEntries]);
-  const processCatalog = useMemo(() => buildProcessCatalogSummaries(), [catalogEntries]);
+  const catalogEntries = useMemo(() => getCatalogEntries(), [catalogRefresh]);
+  const librarySources = useMemo(() => getCatalogLibrarySources(), [catalogRefresh]);
+  const processCatalog = useMemo(() => buildProcessCatalogSummaries(), [catalogRefresh]);
   const activeProcessName = extractMainProcessName(source);
 
   const dimensions = useMemo(() => {
-    try {
-      return truthTable
-        ? {
-          rowCount: truthTable.rows.length,
-          columnCount: truthTable.inputColumns.length + truthTable.outputColumns.length,
-          inputCount: truthTable.inputColumns.length,
-          outputCount: truthTable.outputColumns.length,
-        }
-        : null;
-    } catch {
-      return null;
-    }
+    if (!truthTable) return null;
+    return {
+      rowCount: truthTable.rows.length,
+      columnCount: truthTable.inputColumns.length + truthTable.outputColumns.length,
+      inputCount: truthTable.inputColumns.length,
+      outputCount: truthTable.outputColumns.length,
+    };
   }, [truthTable]);
 
   const failedRowIndexes = useMemo(
@@ -96,11 +146,20 @@ export const ModuleLab = () => {
     [lastTestResult],
   );
 
-  const pushMessage = (role: ChatMessage['role'], text: string) => {
-    setMessages((current) => [...current, { id: generateId(), role, text }]);
-  };
+  const displayStatus = lastTestResult ? formatTestFailureSummary(lastTestResult) : status;
 
-  const buildNlContext = (table: TruthTable | null = truthTable) => ({
+  const refreshCatalog = useCallback(() => {
+    setCatalogRefresh(getCatalogVersion());
+  }, []);
+
+  const pushMessage = useCallback((role: ChatMessage['role'], text: string) => {
+    setMessages((current) => [...current, { id: generateId(), role, text }]);
+  }, []);
+
+  const buildNlContext = useCallback((
+    table: TruthTable | null = truthTable,
+    clarification: PendingClarification | null = pendingClarification,
+  ) => ({
     source,
     truthTable: table,
     inputColumns: table?.inputColumns ?? [],
@@ -109,9 +168,10 @@ export const ModuleLab = () => {
     processCatalog,
     lastTestResult,
     libraryProcessNames: Object.keys(librarySources),
-  });
+    pendingClarification: clarification,
+  }), [source, truthTable, activeProcessName, processCatalog, lastTestResult, librarySources, pendingClarification]);
 
-  const applySource = (nextSource: string, label: string, resetTable = true) => {
+  const applySource = useCallback((nextSource: string, label: string, resetTable = true) => {
     setSource(nextSource);
     setLastTestResult(null);
     if (resetTable) {
@@ -122,10 +182,10 @@ export const ModuleLab = () => {
       }
     }
     setStatus(label);
-  };
+  }, []);
 
-  const loadCatalogProcess = (name: string, options?: { silent?: boolean }) => {
-    const entry = getCatalogEntry(name);
+  const loadCatalogProcess = useCallback((name: string, options?: { silent?: boolean }) => {
+    const entry = resolveCatalogEntry(name) ?? getCatalogEntry(name);
     if (!entry) {
       setStatus(`Process "${name}" is not in the catalog.`);
       return null;
@@ -136,16 +196,18 @@ export const ModuleLab = () => {
       pushMessage('assistant', `Loaded ${entry.name} from the process catalog. Say "infer truth table" or "test the circuit" to continue.`);
     }
     return entry;
-  };
+  }, [applySource, pushMessage]);
 
-  const updateCell = (rowIndex: number, columnIndex: number, value: TruthCellValue) => {
-    if (!truthTable) return;
-    const nextRows = truthTable.rows.map((row, index) => (
-      index === rowIndex ? row.map((cell, cellIndex) => (cellIndex === columnIndex ? value : cell)) : row
-    ));
-    setTruthTable({ ...truthTable, rows: nextRows });
+  const updateCell = useCallback((rowIndex: number, columnIndex: number, value: TruthCellValue) => {
+    setTruthTable((current) => {
+      if (!current) return current;
+      const nextRows = current.rows.map((row, index) => (
+        index === rowIndex ? row.map((cell, cellIndex) => (cellIndex === columnIndex ? value : cell)) : row
+      ));
+      return { ...current, rows: nextRows };
+    });
     setLastTestResult(null);
-  };
+  }, []);
 
   const updateInputCount = (count: number) => {
     if (!truthTable) return;
@@ -175,8 +237,10 @@ export const ModuleLab = () => {
         name: parsed.name,
         source: parsed.source,
         origin: 'uploaded',
+        fileName: file.name,
         description: `Uploaded from ${file.name}`,
       });
+      refreshCatalog();
       setSelectedCatalogId('');
       applySource(parsed.source, `Loaded ${file.name}.`);
       pushMessage('assistant', `Loaded ${file.name} into the catalog. Say "infer truth table" or "test the circuit" to continue.`);
@@ -189,23 +253,23 @@ export const ModuleLab = () => {
     }
   };
 
-  const inferTable = (inferSource = source) => {
+  const inferTable = useCallback((inferSource = source) => {
     const table = createEmptyTruthTable(inferSource);
     setTruthTable(table);
     setLastTestResult(null);
     setStatus(`Inferred ${table.rows.length} rows × ${table.inputColumns.length + table.outputColumns.length} columns.`);
     return table;
-  };
+  }, [source]);
 
-  const runTestOnly = (table: TruthTable, testSource = source) => {
+  const runTestOnly = useCallback((table: TruthTable, testSource = source) => {
     const testResult = testCircuitAgainstTruthTable(testSource, table, librarySources);
     setLastTestResult(testResult);
     const summary = formatTestFailureSummary(testResult);
     setStatus(summary);
     return { testResult, summary };
-  };
+  }, [source, librarySources]);
 
-  const runCorrection = (
+  const runCorrection = useCallback((
     table: TruthTable,
     guidance: CorrectionGuidance,
     autonomous: boolean,
@@ -228,22 +292,23 @@ export const ModuleLab = () => {
         origin: 'corrected',
         description: `Corrected in Circuit Correction Lab (${autonomous ? 'autonomous' : 'guided'})`,
       });
+      refreshCatalog();
     }
 
     setLastTestResult(response.testResult);
     const summary = formatTestFailureSummary(response.testResult);
     setStatus(summary);
     return { response, summary };
-  };
+  }, [source, librarySources, activeProcessName, refreshCatalog]);
 
-  const handleIntent = async (text: string) => {
-    const context = buildNlContext();
+  const applyParsedIntent = async (intent: ModelCorrectionIntent) => {
+    if (intent.clarification) {
+      setPendingClarification(intent.clarification);
+      pushMessage('assistant', intent.reply);
+      return;
+    }
 
-    const intent = await parseNaturalLanguageWithWebLlm(
-      text,
-      context,
-      (progress) => setStatus(progress),
-    ) ?? parseNaturalLanguageCorrection(text, context);
+    setPendingClarification(null);
 
     let currentSource = source;
     let table = truthTable;
@@ -332,6 +397,55 @@ export const ModuleLab = () => {
     pushMessage('assistant', intent.reply);
   };
 
+  const handleIntent = async (text: string) => {
+    if (pendingClarification) {
+      if (/^cancel$/i.test(text.trim())) {
+        setPendingClarification(null);
+        pushMessage('assistant', 'Cancelled. What would you like to do next?');
+        return;
+      }
+
+      const selected = resolveClarificationResponse(text, pendingClarification);
+      if (selected) {
+        setPendingClarification(null);
+        await handleIntent(selected.command);
+        return;
+      }
+
+      const context = buildNlContext(truthTable, pendingClarification);
+      if (useLlm) {
+        const intent = await parseCorrectionIntent(text, context, {
+          useLlm: true,
+          llmSettings,
+          onProgress: (progress) => setStatus(progress),
+        });
+        if (intent.clarification) {
+          await applyParsedIntent(intent);
+          return;
+        }
+        if (!intent.loadCatalogProcess && !intent.runTest && !intent.inferTable
+          && !intent.probeOutputs && !intent.loadFullAdderTable && !intent.truthTable
+          && !intent.guidance?.gates?.length) {
+          pushMessage('assistant', formatClarificationRetry(pendingClarification));
+          return;
+        }
+        setPendingClarification(null);
+        await applyParsedIntent(intent);
+        return;
+      }
+
+      pushMessage('assistant', formatClarificationRetry(pendingClarification));
+      return;
+    }
+
+    const intent = await parseCorrectionIntent(text, buildNlContext(), {
+      useLlm,
+      llmSettings,
+      onProgress: (progress) => setStatus(progress),
+    });
+    await applyParsedIntent(intent);
+  };
+
   const submitChat = async (event: FormEvent) => {
     event.preventDefault();
     const text = chatInput.trim();
@@ -392,22 +506,42 @@ export const ModuleLab = () => {
     }
   };
 
-  const quickStatus = useMemo(() => {
-    if (lastTestResult) {
-      return formatTestFailureSummary(lastTestResult);
-    }
-    if (!truthTable || !source.trim()) return status;
-    try {
-      const result = testCircuitAgainstTruthTable(source, truthTable, librarySources);
-      return result.passed
-        ? `Circuit matches truth table (${result.totalRows}/${result.totalRows} rows).`
-        : `Mismatch on ${result.failedRows.length} row(s). Run Test circuit to highlight failures.`;
-    } catch {
-      return status;
-    }
-  }, [source, truthTable, status, lastTestResult, librarySources]);
-
   const allColumns = truthTable ? [...truthTable.inputColumns, ...truthTable.outputColumns] : [];
+  const allRowsPass = Boolean(lastTestResult?.passed);
+  const webGpuAvailable = hasWebGpu();
+
+  const updateLlmSettings = (patch: Partial<LlmSettings>) => {
+    setLlmSettings((current) => {
+      const next = { ...current, ...patch };
+      saveLlmSettings(next);
+      return next;
+    });
+    if (patch.browserModel) {
+      setModelReady(getCachedBrowserModelId() === patch.browserModel);
+    }
+  };
+
+  const loadBrowserModel = async () => {
+    if (!webGpuAvailable) {
+      setStatus('WebGPU is not available in this browser. Use Ollama mode or a WebGPU-capable browser.');
+      return;
+    }
+    setModelLoading(true);
+    try {
+      const { preloadBrowserModel } = await import('../simulator/webLlmNaturalLanguageCorrector');
+      const ok = await preloadBrowserModel(llmSettings.browserModel, (progress) => setStatus(progress));
+      setModelReady(ok);
+      setStatus(ok
+        ? `Browser model cached. Future AI messages will not re-download it.`
+        : 'Could not load the browser model.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Model load error: ${message}`);
+      setModelReady(false);
+    } finally {
+      setModelLoading(false);
+    }
+  };
 
   return (
     <div className="module-lab-shell">
@@ -459,17 +593,7 @@ export const ModuleLab = () => {
             <div className="module-tester-actions">
               <button onClick={() => { inferTable(); pushMessage('assistant', 'Inferred truth-table dimensions from PARAMS and RETURNVALS.'); }} type="button">Infer truth table</button>
               <button onClick={() => { setTruthTable(singleBitFullAdderTruthTable()); setLastTestResult(null); pushMessage('assistant', 'Loaded canonical full-adder truth table.'); }} type="button">Full-adder table</button>
-              <button
-                disabled={!truthTable}
-                onClick={() => {
-                  if (!truthTable) return;
-                  setTruthTable(probeModuleOutputs(source, truthTable, librarySources));
-                  setLastTestResult(null);
-                }}
-                type="button"
-              >
-                Probe outputs
-              </button>
+              <button disabled={!truthTable} onClick={() => truthTable && setTruthTable(probeModuleOutputs(source, truthTable, librarySources))} type="button">Probe outputs</button>
               <button disabled={!truthTable} onClick={downloadTruthTable} type="button">Download table</button>
               <button disabled={!source.trim()} onClick={downloadCircuit} type="button">Download .qpucir</button>
             </div>
@@ -531,25 +655,14 @@ export const ModuleLab = () => {
                 </thead>
                 <tbody>
                   {truthTable.rows.map((row, rowIndex) => (
-                    <tr
-                      className={failedRowIndexes.has(rowIndex) ? 'truth-row-fail' : lastTestResult?.passed ? 'truth-row-pass' : undefined}
+                    <TruthTableRow
+                      failed={failedRowIndexes.has(rowIndex)}
                       key={rowIndex}
-                    >
-                      <td>{rowIndex}</td>
-                      {row.map((cell, columnIndex) => (
-                        <td key={`${rowIndex}-${columnIndex}`}>
-                          <select
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              if (isTruthCellValue(value)) updateCell(rowIndex, columnIndex, value);
-                            }}
-                            value={cell}
-                          >
-                            {cellOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                          </select>
-                        </td>
-                      ))}
-                    </tr>
+                      onCellChange={updateCell}
+                      passed={allRowsPass}
+                      row={row}
+                      rowIndex={rowIndex}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -561,7 +674,7 @@ export const ModuleLab = () => {
             <button disabled={!truthTable} onClick={() => runManualTest(true)} type="button">Correct autonomously</button>
           </div>
 
-          <p className="file-status">{quickStatus}</p>
+          <p className="file-status">{displayStatus}</p>
         </section>
 
         <section className="module-lab-chat panel" aria-labelledby="module-lab-chat-title">
@@ -569,6 +682,95 @@ export const ModuleLab = () => {
             <p className="eyebrow">Correction chat</p>
             <h2 id="module-lab-chat-title">Natural language assistant</h2>
           </div>
+
+          <details className="llm-settings">
+            <summary>AI model settings</summary>
+            <fieldset className="llm-mode-fieldset">
+              <legend>Parser backend</legend>
+              <label>
+                <input
+                  checked={llmSettings.mode === 'browser'}
+                  name="llm-mode"
+                  onChange={() => updateLlmSettings({ mode: 'browser' })}
+                  type="radio"
+                />
+                Browser model (downloads once, cached locally)
+              </label>
+              <label>
+                <input
+                  checked={llmSettings.mode === 'ollama'}
+                  name="llm-mode"
+                  onChange={() => updateLlmSettings({ mode: 'ollama' })}
+                  type="radio"
+                />
+                Ollama (external server)
+              </label>
+            </fieldset>
+
+            {llmSettings.mode === 'browser' ? (
+              <>
+                <p className="canvas-tip">
+                  {webGpuAvailable
+                    ? 'The model downloads on first use and stays cached in your browser. Queries after that reuse it — nothing is re-uploaded per message.'
+                    : 'WebGPU is unavailable here. Switch to Ollama or use Chrome/Edge with GPU acceleration.'}
+                </p>
+                <label>
+                  Browser model
+                  <select
+                    onChange={(event) => updateLlmSettings({ browserModel: event.target.value })}
+                    value={llmSettings.browserModel}
+                  >
+                    {BROWSER_MODEL_OPTIONS.map((model) => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                </label>
+                <div className="module-tester-actions">
+                  <button disabled={!webGpuAvailable || modelLoading} onClick={loadBrowserModel} type="button">
+                    {modelLoading ? 'Downloading model…' : modelReady ? 'Model cached' : 'Download & cache model'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="canvas-tip">Run Ollama locally, e.g. <code>ollama pull llama3.2:1b</code>.</p>
+                <label>
+                  API URL
+                  <input
+                    onChange={(event) => updateLlmSettings({ ollamaUrl: event.target.value })}
+                    placeholder="http://localhost:11434/api/generate"
+                    spellCheck={false}
+                    type="url"
+                    value={llmSettings.ollamaUrl}
+                  />
+                </label>
+                <label>
+                  Model name
+                  <input
+                    onChange={(event) => updateLlmSettings({ ollamaModel: event.target.value })}
+                    placeholder="llama3.2:1b"
+                    spellCheck={false}
+                    type="text"
+                    value={llmSettings.ollamaModel}
+                  />
+                </label>
+              </>
+            )}
+          </details>
+
+          <label className="chat-mode-toggle">
+            <input
+              checked={useLlm}
+              onChange={(event) => {
+                setUseLlm(event.target.checked);
+                if (event.target.checked && llmSettings.mode === 'browser' && webGpuAvailable && !modelReady) {
+                  void loadBrowserModel();
+                }
+              }}
+              type="checkbox"
+            />
+            <span>Use AI for unrecognized messages (regex handles common commands instantly)</span>
+          </label>
 
           <div className="chat-log" aria-live="polite">
             {messages.map((message) => (

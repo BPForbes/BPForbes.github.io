@@ -13,6 +13,7 @@ export type ProcessCatalogEntry = {
   name: string;
   source: string;
   origin: ProcessCatalogOrigin;
+  fileName?: string;
   description?: string;
   updatedAt: string;
 };
@@ -20,6 +21,18 @@ export type ProcessCatalogEntry = {
 const STORAGE_KEY = 'qpu-process-catalog-v1';
 
 const catalog = new Map<string, ProcessCatalogEntry>();
+
+let catalogVersion = 0;
+let summariesCache: ProcessCatalogSummary[] | null = null;
+let libraryCache: Record<string, string> | null = null;
+
+const invalidateCatalogCache = () => {
+  catalogVersion += 1;
+  summariesCache = null;
+  libraryCache = null;
+};
+
+export const getCatalogVersion = () => catalogVersion;
 
 const entryIdForName = (name: string) => name.trim().toLowerCase();
 
@@ -69,6 +82,15 @@ const restoreCatalog = () => {
   }
 };
 
+const catalogAliases = (entry: ProcessCatalogEntry): string[] => {
+  const aliases = new Set<string>([entry.name, entry.id]);
+  if (entry.fileName) {
+    aliases.add(entry.fileName);
+    aliases.add(entry.fileName.replace(/\.qpucir$/i, ''));
+  }
+  return Array.from(aliases);
+};
+
 const seedBundledProcesses = () => {
   configuredProcesses.forEach((process) => {
     const name = process.name;
@@ -76,6 +98,7 @@ const seedBundledProcesses = () => {
       id: entryIdForName(name),
       name,
       source: process.source,
+      fileName: process.fileName,
       origin: 'bundled',
       description: `Bundled example (${process.fileName})`,
       updatedAt: process.exportedAt ?? new Date(0).toISOString(),
@@ -90,6 +113,7 @@ export const registerCatalogProcess = (input: {
   name: string;
   source: string;
   origin: ProcessCatalogOrigin;
+  fileName?: string;
   description?: string;
 }) => {
   const name = input.name.trim() || extractMainProcessName(input.source) || 'UntitledCircuit';
@@ -97,11 +121,13 @@ export const registerCatalogProcess = (input: {
     id: entryIdForName(name),
     name,
     source: input.source,
+    fileName: input.fileName?.trim() || undefined,
     origin: input.origin,
     description: input.description,
     updatedAt: new Date().toISOString(),
   };
   catalog.set(entry.id, entry);
+  invalidateCatalogCache();
   persistCatalog();
   return entry;
 };
@@ -114,12 +140,62 @@ export const getCatalogEntry = (name: string): ProcessCatalogEntry | undefined =
   catalog.get(entryIdForName(name))
 );
 
-export const getCatalogLibrarySources = (): Record<string, string> => (
-  Object.fromEntries(getCatalogEntries().map((entry) => [entry.name, entry.source]))
-);
+/** Resolve a catalog entry by process name, .qpucir filename, or stem. */
+export const resolveCatalogEntry = (query: string): ProcessCatalogEntry | undefined => {
+  const normalized = query.trim().replace(/^["']|["']$/g, '');
+  if (!normalized) return undefined;
 
-export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => (
-  getCatalogEntries().map((entry) => {
+  const direct = getCatalogEntry(normalized);
+  if (direct) return direct;
+
+  const lower = normalized.toLowerCase();
+  const withExt = lower.endsWith('.qpucir') ? lower : `${lower}.qpucir`;
+
+  return getCatalogEntries().find((entry) => (
+    catalogAliases(entry).some((alias) => {
+      const aliasLower = alias.toLowerCase();
+      return aliasLower === lower
+        || aliasLower === withExt
+        || aliasLower.replace(/\.qpucir$/i, '') === lower.replace(/\.qpucir$/i, '');
+    })
+  ));
+};
+
+/** Find catalog entries matching a partial name, filename, or alias. */
+export const findCatalogCandidates = (query: string): ProcessCatalogEntry[] => {
+  const normalized = query.trim().replace(/^["']|["']$/g, '');
+  if (!normalized) return [];
+
+  const exact = resolveCatalogEntry(normalized);
+  if (exact) return [exact];
+
+  const lower = normalized.toLowerCase();
+  const withExt = lower.endsWith('.qpucir') ? lower : `${lower}.qpucir`;
+  const stem = lower.replace(/\.qpucir$/i, '');
+
+  return getCatalogEntries().filter((entry) => (
+    catalogAliases(entry).some((alias) => {
+      const aliasLower = alias.toLowerCase();
+      const aliasStem = aliasLower.replace(/\.qpucir$/i, '');
+      return aliasLower.includes(stem)
+        || aliasStem.includes(stem)
+        || stem.includes(aliasStem)
+        || aliasLower === withExt;
+    })
+    || entry.name.toLowerCase().includes(stem)
+    || (entry.description?.toLowerCase().includes(stem) ?? false)
+  ));
+};
+
+export const getCatalogLibrarySources = (): Record<string, string> => {
+  if (libraryCache) return libraryCache;
+  libraryCache = Object.fromEntries(getCatalogEntries().map((entry) => [entry.name, entry.source]));
+  return libraryCache;
+};
+
+export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
+  if (summariesCache) return summariesCache;
+  summariesCache = getCatalogEntries().map((entry) => {
     const columns = readColumns(entry.source);
     let dimensions = { rowCount: 0, columnCount: 0, inputCount: 0, outputCount: 0 };
     try {
@@ -130,16 +206,21 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => (
     return {
       name: entry.name,
       origin: entry.origin,
+      fileName: entry.fileName,
       inputColumns: columns.inputs,
       outputColumns: columns.outputs,
       rowCount: dimensions.rowCount,
       summary: summarizeSource(entry.source),
       description: entry.description,
     };
-  })
-);
+  });
+  return summariesCache;
+};
 
-export const formatCatalogForPrompt = (entries: ProcessCatalogSummary[] = buildProcessCatalogSummaries()) => {
+export const formatCatalogForPrompt = (
+  entries: ProcessCatalogSummary[] = buildProcessCatalogSummaries(),
+  options: { compact?: boolean } = {},
+) => {
   if (entries.length === 0) return '(no cataloged processes)';
   return entries.map((entry) => [
     `- ${entry.name} [${entry.origin}]`,
@@ -147,7 +228,9 @@ export const formatCatalogForPrompt = (entries: ProcessCatalogSummary[] = buildP
     `  outputs: ${entry.outputColumns.join(', ') || '(none)'}`,
     entry.rowCount ? `  truth-table rows: ${entry.rowCount}` : null,
     entry.description ? `  note: ${entry.description}` : null,
-    entry.summary ? `  source preview:\n${entry.summary.split('\n').map((line) => `    ${line}`).join('\n')}` : null,
+    !options.compact && entry.summary
+      ? `  source preview:\n${entry.summary.split('\n').map((line) => `    ${line}`).join('\n')}`
+      : null,
   ].filter(Boolean).join('\n')).join('\n');
 };
 
@@ -166,6 +249,7 @@ export const formatTestFailuresForPrompt = (result: TruthTableTestResult | null 
 /** @internal Test helper */
 export const resetProcessCatalogForTests = () => {
   catalog.clear();
+  invalidateCatalogCache();
   seedBundledProcesses();
   if (typeof sessionStorage !== 'undefined') {
     sessionStorage.removeItem(STORAGE_KEY);
