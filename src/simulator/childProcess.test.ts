@@ -45,17 +45,33 @@ describe('SingleBitFullAdder via TwoBitFullAdder', () => {
 });
 
 describe('rotation parameter parsing', () => {
-  it('accepts pi and -pi text parameters for PHASE-style operations', () => {
+  it('accepts pi, fractional-pi, degree, and rational radian parameters for PHASE-style operations', () => {
     const source = `MAIN-PROCESS PiPhase
 SET Q0:0 0p
 PHASE=pi -I Q0:0 -O Q0:0
 BPHASE=-pi -I Q0:0 -O Q0:0
+PHASE=-11pi/6 -I Q0:0 -O Q0:0
+PHASE=2*pi/3 -I Q0:0 -O Q0:0
+PHASE=7pi/2 -I Q0:0 -O Q0:0
+PHASE=630d -I Q0:0 -O Q0:0
+PHASE=180.5d -I Q0:0 -O Q0:0
+PHASE=45/2d -I Q0:0 -O Q0:0
+PHASE=3/2 -I Q0:0 -O Q0:0
 RETURNVALS Q0`;
     const compiled = compileQpuProtocol(source, protocolLibrary);
     const phaseGates = compiled.gates.filter((gate) => gate.type === 'PHASE');
 
-    expect(phaseGates[0]?.phase).toBeCloseTo(Math.PI, 12);
-    expect(phaseGates[1]?.phase).toBeCloseTo(Math.PI, 12);
+    expect(phaseGates.map((gate) => gate.phase)).toEqual([
+      expect.closeTo(Math.PI, 12),
+      expect.closeTo(Math.PI, 12),
+      expect.closeTo((-11 * Math.PI) / 6, 12),
+      expect.closeTo((2 * Math.PI) / 3, 12),
+      expect.closeTo((7 * Math.PI) / 2, 12),
+      expect.closeTo((630 * Math.PI) / 180, 12),
+      expect.closeTo((180.5 * Math.PI) / 180, 12),
+      expect.closeTo((22.5 * Math.PI) / 180, 12),
+      expect.closeTo(1.5, 12),
+    ]);
   });
 });
 

@@ -91,15 +91,38 @@ export const supportedQpuOperations: QpuOperation[] = [
   'PHASE',
 ];
 
+const rationalPattern = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:\/([+-]?(?:\d+(?:\.\d+)?|\.\d+)))?$/;
+const piPattern = /^([+-])?(?:(\d+)\*?)?pi(?:\/(\d+))?$/;
+
+const parseRationalRotation = (value: string) => {
+  const match = value.match(rationalPattern);
+  if (!match) return undefined;
+  const numerator = Number(match[1]);
+  const denominator = match[2] === undefined ? 1 : Number(match[2]);
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return undefined;
+  return numerator / denominator;
+};
+
 const parseRotationParameter = (value: string, gate: string) => {
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'pi') return Math.PI;
-  if (normalized === '+pi') return Math.PI;
-  if (normalized === '-pi') return -Math.PI;
 
-  const phase = Number(value);
-  if (!Number.isFinite(phase)) throw new Error(`Invalid ${gate} parameter '${value}'`);
-  return phase;
+  if (normalized.endsWith('d')) {
+    const degrees = parseRationalRotation(normalized.slice(0, -1));
+    if (degrees !== undefined) return (degrees * Math.PI) / 180;
+  }
+
+  const piMatch = normalized.match(piPattern);
+  if (piMatch) {
+    const sign = piMatch[1] === '-' ? -1 : 1;
+    const alpha = piMatch[2] === undefined ? 1 : Number(piMatch[2]);
+    const beta = piMatch[3] === undefined ? 1 : Number(piMatch[3]);
+    if (beta !== 0) return sign * (alpha * Math.PI) / beta;
+  }
+
+  const radians = parseRationalRotation(normalized);
+  if (radians !== undefined) return radians;
+
+  throw new Error(`Invalid ${gate} parameter '${value}'`);
 };
 
 const stripCycle = (token: string) => token.replace(/^\$/, '').split(':')[0];
