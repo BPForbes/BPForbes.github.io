@@ -1,7 +1,7 @@
 import { ChangeEvent, useMemo, useState } from 'react';
 import { CircuitCanvas } from './components/CircuitCanvas';
 import { GateBlock } from './components/GateBlock';
-import { ModuleTester } from './components/ModuleTester';
+import { ModuleLab } from './components/ModuleLab';
 import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
@@ -586,7 +586,7 @@ function App() {
           <button className={activeView === 'qpu-docs' ? 'active' : ''} onClick={() => showView('qpu-docs')} type="button">QPU Documentation</button>
         </details>
         <button className={activeView === 'particles' ? 'active' : ''} onClick={() => showView('particles')} type="button">Particle visualization</button>
-        <button className={activeView === 'module-tester' ? 'active' : ''} onClick={() => showView('module-tester')} type="button">Module truth-table tester</button>
+        <button className={activeView === 'module-tester' ? 'active' : ''} onClick={() => showView('module-tester')} type="button">Circuit correction lab</button>
         <details open>
           <summary>File upload and download</summary>
           <button className={activeView === 'files' ? 'active' : ''} onClick={() => showView('files')} type="button">Upload files</button>
@@ -598,17 +598,19 @@ function App() {
 
       {menuOpen && <button aria-label="Close menu overlay" className="menu-backdrop" onClick={() => setMenuOpen(false)} type="button" />}
 
-      <header className="hero">
-        <div>
-          <p className="eyebrow">Static React QPU MVP</p>
-          <h1>Build, compile, run, and watch quantum circuits collapse.</h1>
-          <p>A mobile-first browser playground with draggable gates, a TypeScript QPU AST compiler/parser, and an in-browser state-vector simulator.</p>
-        </div>
-        <div className="hero-card">
-          <span>{orderedGates.length}</span>
-          <small>gates queued</small>
-        </div>
-      </header>
+      {activeView !== 'module-tester' && (
+        <header className="hero">
+          <div>
+            <p className="eyebrow">Static React QPU MVP</p>
+            <h1>Build, compile, run, and watch quantum circuits collapse.</h1>
+            <p>A mobile-first browser playground with draggable gates, a TypeScript QPU AST compiler/parser, and an in-browser state-vector simulator.</p>
+          </div>
+          <div className="hero-card">
+            <span>{orderedGates.length}</span>
+            <small>gates queued</small>
+          </div>
+        </header>
+      )}
 
       {activeView === 'builder' && (
         <>
@@ -855,19 +857,7 @@ function App() {
         </div>
       )}
 
-      {activeView === 'module-tester' && (
-        <ModuleTester
-          initialSource={protocolSource}
-          onApplySource={(source) => {
-            setProtocolSource(source);
-            try {
-              compileProtocolSource(source, 'Corrected module');
-            } catch {
-              // Status is surfaced inside ModuleTester.
-            }
-          }}
-        />
-      )}
+      {activeView === 'module-tester' && <ModuleLab />}
 
       {activeView === 'more' && (
         <section className="panel docs-panel" aria-labelledby="more-title">

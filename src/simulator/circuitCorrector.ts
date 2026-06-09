@@ -44,7 +44,10 @@ const mintermControls = (rowIndex: number, inputCount: number, inputNames: strin
     value: ((rowIndex >> (inputCount - 1 - bit)) & 1) === 1,
   }));
 
-const formatRef = (name: string, cycle = 0) => (name.startsWith('$') ? `${name}:${cycle}` : `$${stripRef(name)}:${cycle}`);
+const formatRef = (name: string, cycle = 0) => {
+  if (/^\d+:\d+$/.test(name)) return name;
+  return name.startsWith('$') ? `${name}:${cycle}` : `$${stripRef(name)}:${cycle}`;
+};
 
 const buildFullAdderSource = (processName: string, inputs: string[], outputs: string[]) => {
   const [a, b, cin] = inputs;

@@ -36,6 +36,9 @@ export {
   synthesizeProtocolFromTruthTable,
 } from './circuitCorrector';
 
+export type { NlCorrectionContext, NlCorrectionIntent } from './naturalLanguageCorrector';
+export { parseNaturalLanguageCorrection } from './naturalLanguageCorrector';
+
 import type { CorrectionGuidance } from './circuitCorrector';
 import { correctCircuit } from './circuitCorrector';
 import type { TruthTable, TruthTableTestResult } from './truthTable';
