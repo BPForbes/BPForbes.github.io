@@ -8,7 +8,7 @@ import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess, QpucirPayload } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, projectStateOntoQubits, runCircuit } from './simulator/engine';
 import { compileQpuProtocol, ProcessParam, ReturnValue, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
-import { extractMainProcessName, qpucirFileNameForSource, serializeCircuitToQpuProtocol } from './simulator/qpuFormat';
+import { extractMainProcessName, qpucirFileNameForSource, serializeCircuitToQpuProtocol, updateProtocolStartStateSet } from './simulator/qpuFormat';
 import { CircuitGate, GateType, MeasurementMap, ParticleStartState, gateTypes } from './simulator/types';
 import { Complex } from './simulator/complex';
 import './styles.css';
@@ -193,6 +193,10 @@ function App() {
     return undefined;
   };
 
+  const syncCanvasProtocol = (nextGates: CircuitGate[], nextQubitCount = simulationQubitCount, nextStartStates = startStates) => {
+    setProtocolSource(serializeCircuitToQpuProtocol(nextGates, nextQubitCount, nextStartStates));
+  };
+
   const resetRuntime = (
     nextSimulationQubitCount = simulationQubitCount,
     reason?: string,
@@ -223,7 +227,7 @@ function App() {
     }
     const nextGates = [...gates, gate];
     setGates(nextGates);
-    setProtocolSource(serializeCircuitToQpuProtocol(nextGates, qubitCount, startStates));
+    syncCanvasProtocol(nextGates);
     setSelectedGate(type);
     resetRuntime();
   };
@@ -231,7 +235,7 @@ function App() {
   const removeGate = (gateId: string) => {
     const nextGates = gates.filter((gate) => gate.id !== gateId).map((gate, step) => ({ ...gate, step }));
     setGates(nextGates);
-    setProtocolSource(serializeCircuitToQpuProtocol(nextGates, qubitCount, startStates));
+    syncCanvasProtocol(nextGates);
     resetRuntime();
   };
 
@@ -266,8 +270,13 @@ function App() {
       (_, index) => (index === qubit ? value : startStates[index] ?? '0p'),
     );
     setStartStates(nextStartStates);
-    setProtocolSource(serializeCircuitToQpuProtocol(gates, simulationQubitCount, nextStartStates));
-    const paramName = controllableParams.find((param) => param.qubitIndex === qubit)?.name ?? `q${qubit}`;
+    const paramName = controllableParams.find((param) => param.qubitIndex === qubit)?.name ?? `Q${qubit}`;
+    setProtocolSource((current) => {
+      const processName = extractMainProcessName(current);
+      return processName && processName !== 'CanvasCircuit'
+        ? updateProtocolStartStateSet(current, paramName, value)
+        : serializeCircuitToQpuProtocol(gates, simulationQubitCount, nextStartStates);
+    });
     resetRuntime(simulationQubitCount, `Set ${paramName} start state to ${value}.`, nextStartStates);
   };
 
@@ -333,7 +342,7 @@ function App() {
     if (nextCount > 2) setSecondControlQubit(1);
     const nextStartStates = [...startStates, '0p' as ParticleStartState];
     setStartStates(nextStartStates);
-    setProtocolSource(serializeCircuitToQpuProtocol(gates, nextCount, nextStartStates));
+    syncCanvasProtocol(gates, nextCount, nextStartStates);
     resetRuntime(nextCount, `Added particle q${nextCount - 1}; reset start states.`, nextStartStates);
   };
 
@@ -356,13 +365,13 @@ function App() {
     setTargetQubit((current) => Math.min(current, nextCount - 1));
     setControlQubit((current) => (current >= nextCount ? 0 : current));
     setSecondControlQubit((current) => (current >= nextCount ? Math.max(0, nextCount - 1) : current));
-    setProtocolSource(serializeCircuitToQpuProtocol(gates.filter((gate) => gate.targets.every((target) => target < nextCount) && gate.controls.every((control) => control < nextCount)), nextCount, nextStartStates));
+    syncCanvasProtocol(gates.filter((gate) => gate.targets.every((target) => target < nextCount) && gate.controls.every((control) => control < nextCount)), nextCount, nextStartStates);
     resetRuntime(nextCount, `Removed last particle; reset start states.`, nextStartStates);
   };
 
   const clearCircuit = () => {
     setGates([]);
-    setProtocolSource(serializeCircuitToQpuProtocol([], qubitCount, startStates));
+    syncCanvasProtocol([], simulationQubitCount, startStates);
     resetRuntime();
   };
 

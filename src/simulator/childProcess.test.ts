@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from './qpuAst';
-import { serializeCircuitToQpuProtocol } from './qpuFormat';
+import { serializeCircuitToQpuProtocol, updateProtocolStartStateSet } from './qpuFormat';
 import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from './engine';
 import { complex, magnitudeSquared } from './complex';
 import type { ParticleStartState } from './types';
@@ -44,6 +44,21 @@ describe('SingleBitFullAdder via TwoBitFullAdder', () => {
   });
 });
 
+describe('rotation parameter parsing', () => {
+  it('accepts pi and -pi text parameters for PHASE-style operations', () => {
+    const source = `MAIN-PROCESS PiPhase
+SET Q0:0 0p
+PHASE=pi -I Q0:0 -O Q0:0
+BPHASE=-pi -I Q0:0 -O Q0:0
+RETURNVALS Q0`;
+    const compiled = compileQpuProtocol(source, protocolLibrary);
+    const phaseGates = compiled.gates.filter((gate) => gate.type === 'PHASE');
+
+    expect(phaseGates[0]?.phase).toBeCloseTo(Math.PI, 12);
+    expect(phaseGates[1]?.phase).toBeCloseTo(Math.PI, 12);
+  });
+});
+
 describe('process parameter exposure', () => {
   it('exposes only PARAMS entries for SingleBitFullAdder', () => {
     const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
@@ -74,6 +89,18 @@ describe('process parameter exposure', () => {
     const zeroedQubits = resetGates.reduce((count, gate) => count + gate.targets.length, 0);
     expect(zeroedQubits).toBeGreaterThan(resetGates.length);
     expect(resetGates.length).toBeLessThan(zeroedQubits);
+  });
+
+  it('updates parameter SET lines without serializing a compiled process as CanvasCircuit', () => {
+    const updated = updateProtocolStartStateSet(protocolLibrary.SingleBitFullAdder, 'A', 'sp');
+
+    expect(updated).toContain('MAIN-PROCESS SingleBitFullAdder');
+    expect(updated).toContain('SET 0:0 sp');
+    expect(updated).not.toContain('MAIN-PROCESS CanvasCircuit');
+
+    const compiled = compileQpuProtocol(updated, protocolLibrary);
+    expect(compiled.logicalQubitCount).toBe(2);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
   });
 
   it('does not inflate qubit count when a compiled circuit is serialized and recompiled', () => {

@@ -91,6 +91,17 @@ export const supportedQpuOperations: QpuOperation[] = [
   'PHASE',
 ];
 
+const parseRotationParameter = (value: string, gate: string) => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'pi') return Math.PI;
+  if (normalized === '+pi') return Math.PI;
+  if (normalized === '-pi') return -Math.PI;
+
+  const phase = Number(value);
+  if (!Number.isFinite(phase)) throw new Error(`Invalid ${gate} parameter '${value}'`);
+  return phase;
+};
+
 const stripCycle = (token: string) => token.replace(/^\$/, '').split(':')[0];
 const isConstant = (token: string) => /^(0p|1p|sp)(?:_dim\d+)?$/i.test(token.replace(/^\$/, ''));
 
@@ -183,8 +194,7 @@ export const parseCommand = (line: string): ParsedCommand => {
   if (normalized.includes('=')) {
     const [gate, value] = normalized.split('=', 2);
     normalized = gate;
-    phase = Number(value);
-    if (!Number.isFinite(phase)) throw new Error(`Invalid ${gate} parameter '${value}'`);
+    phase = parseRotationParameter(value, gate);
     if (reverse && normalized === 'PHASE') phase *= -1;
   }
 

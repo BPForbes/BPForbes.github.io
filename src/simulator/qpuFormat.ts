@@ -19,6 +19,40 @@ export const qpucirFileNameForSource = (source: string, fallbackName = 'CurrentC
   return `${processName}.qpucir`;
 };
 
+const stripProtocolRef = (token: string) => token.replace(/^\$/, '').split(':')[0];
+const isMainProcessLine = (line: string) => /^\s*MAIN-PROCESS\s+/i.test(line);
+const isParamsLine = (line: string) => /^\s*PARAMS:/i.test(line);
+const isSetLine = (line: string) => /^\s*SET\s+/i.test(line);
+
+export const updateProtocolStartStateSet = (source: string, paramName: string, startState: ParticleStartState) => {
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.replace(/\r\n/g, '\n').split('\n');
+  let updated = false;
+
+  const nextLines = lines.map((line) => {
+    if (!isSetLine(line)) return line;
+    const indent = line.match(/^\s*/)?.[0] ?? '';
+    const commentMatch = line.match(/(\s+#.*)$/);
+    const comment = commentMatch?.[1] ?? '';
+    const body = commentMatch ? line.slice(0, -comment.length) : line;
+    const parts = body.trim().split(/\s+/);
+    const [, target, value] = parts;
+    if (!target || !value) return line;
+    if (stripProtocolRef(target) !== paramName && stripProtocolRef(value) !== paramName) return line;
+    updated = true;
+    return `${indent}SET ${target} ${startState}${comment}`;
+  });
+
+  if (!updated) {
+    const mainIndex = nextLines.findIndex(isMainProcessLine);
+    const paramsIndex = nextLines.findIndex(isParamsLine);
+    const insertAt = mainIndex >= 0 ? mainIndex + 1 : paramsIndex >= 0 ? paramsIndex + 1 : 0;
+    nextLines.splice(insertAt, 0, `SET $${paramName} ${startState}`);
+  }
+
+  return nextLines.join(newline);
+};
+
 const canvasParamRef = (qubit: number) => `$Q${qubit}`;
 
 export const serializeCircuitToQpuProtocol = (
