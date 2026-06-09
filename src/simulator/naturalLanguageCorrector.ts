@@ -1,4 +1,5 @@
 import { findCatalogCandidates } from '../data/processCatalog';
+import { formatAddressLabel, resolveWireAddress, resolveWireAddressOr } from './addressResolution';
 import { buildClarificationIntent } from './clarification';
 import type { GatePreference, GuidedGateSpec } from './circuitCorrector';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
@@ -27,45 +28,12 @@ const GATE_NAMES = Object.keys(GATE_ALIASES).join('|');
 const gatePattern = new RegExp(`\\b(${GATE_NAMES})\\b`, 'gi');
 const WIRE_TOKEN = String.raw`[$\w]+(?::\d+)?|\d+:\d+`;
 
-const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0].trim();
-
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 const toTruthCellValue = (raw: string): TruthCellValue | null => {
   const normalized = raw.endsWith('p') ? raw : `${raw}p`;
   return isTruthCellValue(normalized) ? normalized : null;
 };
 
-const tokenExistsInSource = (token: string, source: string) => (
-  new RegExp(`\\b${escapeRegex(token)}\\b`).test(source)
-);
-
-const findRegister = (name: string, context: NlCorrectionContext) => {
-  const raw = name.trim().replace(/^\$/, '');
-  const base = stripRef(raw);
-
-  if (/^[\w$]+:\d+$/.test(raw) && tokenExistsInSource(raw, context.source)) {
-    return raw;
-  }
-
-  const candidates = [...context.inputColumns, ...context.outputColumns];
-  const direct = candidates.find((candidate) => candidate.toLowerCase() === base.toLowerCase());
-  if (direct) return direct;
-
-  const paramAlias = context.source.match(new RegExp(`SET\\s+(\\d+:\\d+)\\s+\\$${escapeRegex(base)}\\b`, 'i'));
-  if (paramAlias) return paramAlias[1];
-
-  const tokenAlias = context.source.match(new RegExp(`\\b(${escapeRegex(base)}:\\d+)\\b`, 'i'));
-  if (tokenAlias) return tokenAlias[1];
-
-  const wire = base.match(/^(\d+)$/);
-  if (wire) {
-    const wireAlias = context.source.match(new RegExp(`SET\\s+(${escapeRegex(wire[1])}:\\d+)\\s+\\$\\w+`, 'i'));
-    if (wireAlias) return wireAlias[1];
-  }
-
-  return raw.includes(':') ? raw : base;
-};
+const findRegister = (name: string, context: NlCorrectionContext) => resolveWireAddressOr(name, context);
 
 const parseGateName = (raw: string): GatePreference | undefined => (
   GATE_ALIASES[raw.toLowerCase().replace(/\s+/g, ' ').trim()]
@@ -217,6 +185,154 @@ const parseCatalogOpenTarget = (message: string) => {
     /\b(?:load|open|use)\s+(?:the\s+)?(?<target>[\w.-]+(?:\.qpucir)?)\b/i,
   );
   return match?.groups?.target ?? null;
+};
+
+type GateBindingDraft = {
+  gate: GatePreference;
+  inputTokens: string[];
+  outputToken?: string;
+};
+
+const extractRawWireTokens = (raw: string) => (
+  raw
+    .replace(/\s+and\s+/gi, ' ')
+    .replace(/,/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !/^(with|from|inputs?|controls?)$/i.test(token))
+);
+
+const extractGateBindingDraft = (message: string): GateBindingDraft | null => {
+  const normalized = message.replace(/\s+/g, ' ').trim();
+
+  const astPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+-I\\s+((?:${WIRE_TOKEN})(?:\\s+(?:${WIRE_TOKEN}))*)\\s+-O\\s+(${WIRE_TOKEN})`,
+    'i',
+  );
+  const astMatch = normalized.match(astPattern);
+  if (astMatch) {
+    const gate = parseGateName(astMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(astMatch[2]),
+      outputToken: astMatch[3],
+    };
+  }
+
+  const bindPattern = new RegExp(
+    `\\b(?:bind|wire|connect)\\s+(${GATE_NAMES})\\s+(?:gate\\s+)?(?:inputs?\\s+)?((?:${WIRE_TOKEN})(?:\\s+(?:${WIRE_TOKEN}))*)\\s+(?:to|into|onto|->)\\s+(${WIRE_TOKEN})`,
+    'i',
+  );
+  const bindMatch = normalized.match(bindPattern);
+  if (bindMatch) {
+    const gate = parseGateName(bindMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(bindMatch[2]),
+      outputToken: bindMatch[3],
+    };
+  }
+
+  const reverseBindPattern = new RegExp(
+    `\\b(?:connect|wire|bind)\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+to\\s+(${WIRE_TOKEN})\\s+(?:with|using|via)\\s+(${GATE_NAMES})\\b`,
+    'i',
+  );
+  const reverseMatch = normalized.match(reverseBindPattern);
+  if (reverseMatch) {
+    const gate = parseGateName(reverseMatch[3]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(reverseMatch[1]),
+      outputToken: reverseMatch[2],
+    };
+  }
+
+  const gateOnPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+(?:gate\\s+)?on\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+(?:to|into|onto|targeting|->)\\s+(${WIRE_TOKEN})`,
+    'i',
+  );
+  const onMatch = normalized.match(gateOnPattern);
+  if (onMatch) {
+    const gate = parseGateName(onMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(onMatch[2]),
+      outputToken: onMatch[3],
+    };
+  }
+
+  const gateFromToPattern = new RegExp(
+    `\\b(${GATE_NAMES})\\s+from\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)\\s+to\\s+(${WIRE_TOKEN})`,
+    'i',
+  );
+  const fromToMatch = normalized.match(gateFromToPattern);
+  if (fromToMatch) {
+    const gate = parseGateName(fromToMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(fromToMatch[2]),
+      outputToken: fromToMatch[3],
+    };
+  }
+
+  const naturalPattern = new RegExp(
+    `(?:add|insert|put|use|apply)\\s+(?:a\\s+)?(${GATE_NAMES})(?:\\s+gate)?(?:\\s+(?:with|from|using))?\\s+(.+?)(?:\\s+(?:to|into|onto|->|output|-O)\\s+(${WIRE_TOKEN}))?$`,
+    'i',
+  );
+  const naturalMatch = normalized.match(naturalPattern);
+  if (naturalMatch) {
+    const gate = parseGateName(naturalMatch[1]);
+    if (!gate) return null;
+    return {
+      gate,
+      inputTokens: extractRawWireTokens(naturalMatch[2]),
+      outputToken: naturalMatch[3],
+    };
+  }
+
+  return null;
+};
+
+const buildGateCommandFromDraft = (
+  draft: GateBindingDraft,
+  context: NlCorrectionContext,
+  tokenOverrides: Map<string, string>,
+) => {
+  const inputs = draft.inputTokens.map((token) => (
+    resolveWireAddressOr(tokenOverrides.get(token) ?? token, context)
+  ));
+  if (!draft.outputToken) {
+    return `add ${draft.gate} from ${inputs.join(' ')}`;
+  }
+  const output = resolveWireAddressOr(tokenOverrides.get(draft.outputToken) ?? draft.outputToken, context);
+  return `${draft.gate} -I ${inputs.join(' ')} -O ${output}`;
+};
+
+const detectGateAddressClarification = (message: string, context: NlCorrectionContext) => {
+  const draft = extractGateBindingDraft(message);
+  if (!draft) return null;
+
+  const tokens = [...draft.inputTokens];
+  if (draft.outputToken) tokens.push(draft.outputToken);
+
+  for (const token of tokens) {
+    const resolution = resolveWireAddress(token, context);
+    if (resolution.status !== 'clarify') continue;
+    return buildClarificationIntent(
+      resolution.prompt,
+      resolution.candidates.map((address) => ({
+        label: formatAddressLabel(address, context),
+        command: buildGateCommandFromDraft(draft, context, new Map([[token, address]])),
+      })),
+    );
+  }
+
+  return null;
 };
 
 const detectPartialGateCommand = (message: string, context: NlCorrectionContext) => {
@@ -380,6 +496,11 @@ export const parseNaturalLanguageCorrection = (
       runTest: true,
       autonomous: false,
     };
+  }
+
+  const addressClarification = detectGateAddressClarification(text, context);
+  if (addressClarification) {
+    return addressClarification;
   }
 
   const partialGate = detectPartialGateCommand(text, context);
