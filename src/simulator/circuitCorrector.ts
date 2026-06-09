@@ -52,30 +52,25 @@ const buildFullAdderSource = (processName: string, inputs: string[], outputs: st
   return `PARAMS: ${inputs.map((name) => `${name}:state`).join(' ')}
 
 MAIN-PROCESS ${processName}
-SET ${formatRef(a)} 0p
-SET ${formatRef(b)} 0p
-SET ${formatRef(cin)} 0p
-
 CREATETOKEN -I ${sum} ${cout}
 
-SET ${formatRef(a, 0)} 0p
-SET ${formatRef(b, 0)} 0p
-SET ${formatRef(cin, 0)} 0p
+SET 0:0 $${a}
+SET 1:0 $${b}
+SET 2:0 $${cin}
 SET ${sum}:0 0p
 SET ${cout}:0 0p
 
-CNOT -I ${formatRef(a, 0)} -O ${sum}:0
-CNOT -I ${formatRef(b, 0)} -O ${sum}:0
-CNOT -I ${formatRef(cin, 0)} -O ${sum}:0
+CNOT -I 0:0 -O ${sum}:0
+CNOT -I 1:0 -O ${sum}:0
+CNOT -I 2:0 -O ${sum}:0
 
-CCNOT -I ${formatRef(a, 0)} ${formatRef(b, 0)} -O ${cout}:0
-CCNOT -I ${formatRef(a, 0)} ${formatRef(cin, 0)} -O ${cout}:0
-CCNOT -I ${formatRef(b, 0)} ${formatRef(cin, 0)} -O ${cout}:0
+CCNOT -I 0:0 1:0 -O ${cout}:0
+CCNOT -I 0:0 2:0 -O ${cout}:0
+CCNOT -I 1:0 2:0 -O ${cout}:0
 
-MEASURE -I ${cout}:0
-MEASURE -I ${sum}:0
-
-RETURNVALS ${cout}:0 ${sum}:0
+MEASURE -I ${cout}
+MEASURE -I ${sum}
+RETURNVALS ${cout} ${sum}
 `;
 };
 

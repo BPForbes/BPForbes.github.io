@@ -111,7 +111,7 @@ describe('process parameter exposure', () => {
     const updated = updateProtocolStartStateSet(protocolLibrary.SingleBitFullAdder, 'A', 'sp');
 
     expect(updated).toContain('MAIN-PROCESS SingleBitFullAdder');
-    expect(updated).toContain('SET $A sp');
+    expect(updated).toContain('SET 0:0 sp');
     expect(updated).not.toContain('MAIN-PROCESS CanvasCircuit');
 
     const compiled = compileQpuProtocol(updated, protocolLibrary);

@@ -6,34 +6,24 @@ MAIN-PROCESS FourBitFullAdder
 DECLARECHILD TwoBitFullAdder
 CREATETOKEN -I C2 C4
 
-SET $A0 0p
-SET $A1 0p
-SET $A2 0p
-SET $A3 0p
-SET $B0 0p
-SET $B1 0p
-SET $B2 0p
-SET $B3 0p
-SET $Cin 0p
-
-SET $A0:0 $A0
-SET $A1:0 $A1
-SET $B0:0 $B0
-SET $B1:0 $B1
-SET $Cin:0 $Cin
+SET A0:0 $A0
+SET A1:0 $A1
+SET B0:0 $B0
+SET B1:0 $B1
+SET Cin:0 $Cin
 RUNCHILD TwoBitFullAdder \
-  -I $A0:0 $A1:0 $B0:0 $B1:0 $Cin:0 \
-  -O C2:0 Sum1:0 Sum0:0
+  -I $A0 $A1 $B0 $B1 $Cin \
+  -O C2:0 Sum1 Sum0
 ACCEPTVALS C2 Sum1 Sum0
 
 INCREASECYCLE
 
-SET $A2:1 $A2
-SET $A3:1 $A3
-SET $B2:1 $B2
-SET $B3:1 $B3
+SET A2:1 $A2
+SET A3:1 $A3
+SET B2:1 $B2
+SET B3:1 $B3
 RUNCHILD TwoBitFullAdder \
-  -I $A2:1 $A3:1 $B2:1 $B3:1 C2:1 \
-  -O C4:1 Sum3:1 Sum2:1
+  -I $A2 $A3 $B2 $B3 C2 \
+  -O C4:1 Sum3 Sum2
 ACCEPTVALS C4 Sum3 Sum2
-RETURNVALS C4:1 Sum3:1 Sum2:1 Sum1:0 Sum0:0
+RETURNVALS C4 Sum3 Sum2 Sum1 Sum0
