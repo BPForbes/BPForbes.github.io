@@ -78,6 +78,51 @@ const nextProtocolParamName = (reserved: Set<string>, index: number) => {
   }
 };
 
+export const updateProtocolReturnValTokens = (source: string, outputNames: string[]) => {
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.replace(/\r\n/g, '\n').split('\n');
+  const returnLine = `RETURNVALS ${outputNames.join(' ')}`.trimEnd();
+  const returnIndex = lines.findIndex((line) => /^\s*RETURNVALS\b/i.test(line));
+
+  if (returnIndex >= 0) {
+    const indent = lines[returnIndex].match(/^\s*/)?.[0] ?? '';
+    lines[returnIndex] = `${indent}${returnLine}`;
+  } else {
+    lines.push(returnLine);
+  }
+
+  return lines.join(newline);
+};
+
+export const createBlankProtocol = (inputNames: string[], outputNames: string[]) => {
+  const inputs = inputNames.length > 0 ? inputNames : ['A', 'B'];
+  const outputs = outputNames.length > 0 ? outputNames : ['Y'];
+  const processName = 'UntitledCircuit';
+  return [
+    `PARAMS: ${inputs.map((name) => `${name}:state`).join(' ')}`,
+    '',
+    `MAIN-PROCESS ${processName}`,
+    `CREATETOKEN -I ${outputs.join(' ')}`,
+    ...outputs.map((name) => `SET ${name}:0 0p`),
+    `RETURNVALS ${outputs.map((name) => `${name}:0`).join(' ')}`,
+  ].join('\n');
+};
+
+export const syncProtocolToTruthTable = (source: string, inputColumns: string[], outputColumns: string[]) => {
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  let next = updateProtocolParameterCount(source, inputColumns.length);
+  const lines = next.replace(/\r\n/g, '\n').split('\n');
+  const paramsBlock = findParamsBlock(lines);
+  if (paramsBlock) {
+    const paramsLine = `PARAMS: ${inputColumns.map((name) => `${name}:state`).join(' ')}`.trimEnd();
+    const indent = lines[paramsBlock.start].match(/^\s*/)?.[0] ?? '';
+    lines.splice(paramsBlock.start, paramsBlock.end - paramsBlock.start + 1, `${indent}${paramsLine}`);
+    next = lines.join(newline);
+  }
+  const outputTokens = outputColumns.map((name) => (name.includes(':') ? name : `${name}:0`));
+  return updateProtocolReturnValTokens(next, outputTokens);
+};
+
 export const updateProtocolParameterCount = (source: string, paramCount: number) => {
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
   const lines = source.replace(/\r\n/g, '\n').split('\n');

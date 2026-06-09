@@ -77,6 +77,51 @@ export const indexToInputRow = (index: number, inputCount: number): TruthCellVal
   return Array.from({ length: inputCount }, (_, bit) => (((index >> (inputCount - 1 - bit)) & 1) === 1 ? '1p' : '0p'));
 };
 
+export const createTruthTableFromColumns = (inputColumns: string[], outputColumns: string[]): TruthTable => {
+  const rowCount = inputColumns.length > 0 ? 2 ** inputColumns.length : 0;
+  const rows = Array.from({ length: rowCount }, (_, rowIndex) => [
+    ...indexToInputRow(rowIndex, inputColumns.length),
+    ...Array.from({ length: outputColumns.length }, () => '0p' as TruthCellValue),
+  ]);
+  return { inputColumns, outputColumns, rows };
+};
+
+export const resizeTruthTable = (
+  table: TruthTable,
+  inputColumns: string[],
+  outputColumns: string[],
+): TruthTable => {
+  const next = createTruthTableFromColumns(inputColumns, outputColumns);
+  next.rows = next.rows.map((row, rowIndex) => {
+    const previous = table.rows[rowIndex];
+    if (!previous) return row;
+    return row.map((cell, columnIndex) => {
+      const previousColumn = columnIndex < table.inputColumns.length
+        ? table.inputColumns[columnIndex]
+        : table.outputColumns[columnIndex - table.inputColumns.length];
+      const nextColumn = columnIndex < inputColumns.length
+        ? inputColumns[columnIndex]
+        : outputColumns[columnIndex - inputColumns.length];
+      if (previousColumn !== nextColumn) return cell;
+      return previous[columnIndex] ?? cell;
+    });
+  });
+  return next;
+};
+
+export const formatTestFailureSummary = (result: TruthTableTestResult) => {
+  if (result.passed) {
+    return `All ${result.totalRows} truth-table rows pass.`;
+  }
+  const details = result.failedRows.slice(0, 8).map((row) => (
+    `Row ${row.rowIndex} (${row.inputs.join(', ')}): expected [${row.expectedOutputs.join(', ')}], got [${row.actualOutputs.join(', ')}]`
+  ));
+  const suffix = result.failedRows.length > 8
+    ? ` …and ${result.failedRows.length - 8} more failing row(s).`
+    : '';
+  return `${result.failedRows.length} row(s) fail (${result.passedRows}/${result.totalRows} pass). ${details.join(' ')}${suffix}`;
+};
+
 export const createEmptyTruthTable = (source: string): TruthTable => {
   const dimensions = inferTruthTableDimensions(source);
   const inputColumns = getProtocolParameterEntries(source)

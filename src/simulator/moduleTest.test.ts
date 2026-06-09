@@ -96,6 +96,25 @@ describe('module test API', () => {
     expect(result.passed).toBe(true);
   });
 
+  it('returns failures without correction when correct=false', () => {
+    const broken = `PARAMS: A:state B:state Cin:state
+
+MAIN-PROCESS BrokenAdder
+CREATETOKEN -I Sum Cout
+SET Sum:0 0p
+SET Cout:0 0p
+RETURNVALS Cout:0 Sum:0`;
+
+    const response = runModuleTest({
+      source: broken,
+      truthTable: singleBitFullAdderTruthTable(),
+      librarySources: protocolLibrary,
+      correct: false,
+    });
+    expect(response.testResult.passed).toBe(false);
+    expect(response.correctedSource).toBeUndefined();
+  });
+
   it('autonomously corrects through runModuleTest', () => {
     const broken = `PARAMS: A:state B:state Cin:state
 

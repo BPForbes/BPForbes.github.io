@@ -5,8 +5,10 @@ import { ModuleLab } from './components/ModuleLab';
 import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
+import { registerCatalogProcess } from './data/processCatalog';
+import { createQpucirPayload, downloadQpucirContents, parseQpucirPayload } from './data/qpucirFile';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
-import type { ConfiguredQpucirProcess, QpucirPayload } from './data/protocolExamples';
+import type { ConfiguredQpucirProcess } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, projectStateOntoQubits, runCircuit } from './simulator/engine';
 import { compileQpuProtocol, ProcessParam, ReturnValue, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
 import { extractMainProcessName, getProtocolParameterEntries, qpucirFileNameForSource, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from './simulator/qpuFormat';
@@ -21,34 +23,6 @@ const palette: GateType[] = [...gateTypes];
 type AppView = 'builder' | 'docs' | 'qpu-docs' | 'files' | 'particles' | 'module-tester' | 'more';
 
 const initialProtocolSource = protocolExamples[0].source;
-
-const createQpucirPayload = (name: string, source: string): QpucirPayload => {
-  const compiled = compileQpuProtocol(source, protocolLibrary);
-  return {
-    format: 'qpucir',
-    version: 1,
-    name,
-    source,
-    compiled: {
-      qubitCount: compiled.qubitCount,
-      gates: compiled.gates,
-      tokenMap: compiled.tokenMap,
-    },
-    exportedAt: new Date().toISOString(),
-  };
-};
-
-const parseQpucirPayload = (contents: string): { name: string; source: string } => {
-  try {
-    const parsed = JSON.parse(contents) as Partial<QpucirPayload>;
-    if (parsed.format === 'qpucir' && typeof parsed.source === 'string') {
-      return { name: parsed.name ?? 'Uploaded QPU circuit', source: parsed.source };
-    }
-  } catch {
-    // Plain-text protocol uploads are accepted as a convenience for hand-authored circuits.
-  }
-  return { name: extractMainProcessName(contents) ?? 'Uploaded QPU circuit', source: contents };
-};
 
 const singleControlGates = new Set<GateType>(['CNOT', 'AND', 'NAND', 'OR', 'XOR']);
 
@@ -486,6 +460,12 @@ function App() {
       setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${registerSummary} with ${paramSummary}.`);
       resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates, result.processParams);
       setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared')).slice(0, 24)]);
+      registerCatalogProcess({
+        name: extractMainProcessName(source) ?? label,
+        source,
+        origin: 'compiled',
+        description: `Compiled in circuit builder (${result.gates.length} gate(s))`,
+      });
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -503,36 +483,35 @@ function App() {
     }
   };
 
-  const downloadQpucirContents = (name: string, fileName: string, contents: string) => {
-    const blob = new Blob([contents], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
+  const downloadNamedQpucirContents = (name: string, fileName: string, contents: string) => {
+    downloadQpucirContents(fileName, contents);
     setFileStatus(`Downloaded ${name} as ${fileName}.`);
   };
 
   const downloadConfiguredProtocol = (process: ConfiguredQpucirProcess) => {
-    downloadQpucirContents(process.name, process.fileName, process.contents);
+    downloadNamedQpucirContents(process.name, process.fileName, process.contents);
   };
 
   const downloadCurrentProtocol = () => {
-    let payload: string;
-    const name = 'Current editor protocol';
+    const name = extractMainProcessName(protocolSource) ?? 'Current editor protocol';
     try {
-      createQpucirPayload(name, protocolSource);
-      payload = protocolSource;
+      const payload = createQpucirPayload(name, protocolSource, protocolLibrary);
+      downloadNamedQpucirContents(name, qpucirFileNameForSource(protocolSource, name), JSON.stringify(payload, null, 2));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setFileStatus(`Download error: ${message}`);
-      return;
     }
+  };
 
-    downloadQpucirContents(name, qpucirFileNameForSource(protocolSource, name), payload);
+  const downloadCompiledAst = () => {
+    const name = extractMainProcessName(protocolSource) ?? 'Compiled AST circuit';
+    try {
+      const payload = createQpucirPayload(name, protocolSource, protocolLibrary);
+      downloadNamedQpucirContents(name, qpucirFileNameForSource(protocolSource, name), JSON.stringify(payload, null, 2));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setCompileSummary(`Download error: ${message}`);
+    }
   };
 
   const uploadProtocol = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -542,6 +521,12 @@ function App() {
     try {
       const contents = await file.text();
       const parsed = parseQpucirPayload(contents);
+      registerCatalogProcess({
+        name: parsed.name,
+        source: parsed.source,
+        origin: 'uploaded',
+        description: `Uploaded from ${file.name}`,
+      });
       setProtocolSource(parsed.source);
       compileProtocolSource(parsed.source, parsed.name);
       setFileStatus(`Uploaded and compiled ${file.name}.`);
@@ -741,6 +726,7 @@ function App() {
             />
             <div className="compiler-footer">
               <button onClick={compileProtocol} type="button">Compile AST to circuit</button>
+              <button onClick={downloadCompiledAst} type="button">Download AST as .qpucir</button>
               <span>{compileSummary}</span>
             </div>
             <details>
