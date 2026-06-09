@@ -1,6 +1,6 @@
 import type { GatePreference, GuidedGateSpec } from './circuitCorrector';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
-import type { TruthCellValue, TruthTable } from './truthTable';
+import { isTruthCellValue, type TruthCellValue, type TruthTable } from './truthTable';
 
 export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './nlIntentTypes';
 
@@ -24,18 +24,25 @@ const gatePattern = new RegExp(`\\b(${GATE_NAMES})\\b`, 'gi');
 
 const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0].trim();
 
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const toTruthCellValue = (raw: string): TruthCellValue | null => {
+  const normalized = raw.endsWith('p') ? raw : `${raw}p`;
+  return isTruthCellValue(normalized) ? normalized : null;
+};
+
 const findRegister = (name: string, context: NlCorrectionContext) => {
   const base = stripRef(name);
   const candidates = [...context.inputColumns, ...context.outputColumns];
   const direct = candidates.find((candidate) => candidate.toLowerCase() === base.toLowerCase());
   if (direct) return direct;
 
-  const alias = context.source.match(new RegExp(`SET\\s+(\\d+:\\d+)\\s+\\$${base}\\b`, 'i'));
+  const alias = context.source.match(new RegExp(`SET\\s+(\\d+:\\d+)\\s+\\$${escapeRegex(base)}\\b`, 'i'));
   if (alias) return alias[1];
 
   const wire = base.match(/^(\d+)$/);
   if (wire) {
-    const wireAlias = context.source.match(new RegExp(`SET\\s+(${wire[1]}:\\d+)\\s+\\$\\w+`, 'i'));
+    const wireAlias = context.source.match(new RegExp(`SET\\s+(${escapeRegex(wire[1])}:\\d+)\\s+\\$\\w+`, 'i'));
     if (wireAlias) return wireAlias[1];
   }
 
@@ -121,7 +128,8 @@ const parseTruthTableRowHint = (message: string, context: NlCorrectionContext): 
   let inputMatch = inputPattern.exec(conditionPart);
   while (inputMatch) {
     const register = findRegister(inputMatch[1], context);
-    assignments.set(register, inputMatch[2].endsWith('p') ? inputMatch[2] as TruthCellValue : `${inputMatch[2]}p` as TruthCellValue);
+    const value = toTruthCellValue(inputMatch[2]);
+    if (value) assignments.set(register, value);
     inputMatch = inputPattern.exec(conditionPart);
   }
 
@@ -133,7 +141,8 @@ const parseTruthTableRowHint = (message: string, context: NlCorrectionContext): 
     let register = outputMatch[1];
     if (/^sum$/i.test(register)) register = context.outputColumns.find((name) => /sum/i.test(name)) ?? register;
     if (/^(cout|carry)$/i.test(register)) register = context.outputColumns.find((name) => /cout|carry/i.test(name)) ?? register;
-    assignments.set(findRegister(register, context), outputMatch[2].endsWith('p') ? outputMatch[2] as TruthCellValue : `${outputMatch[2]}p` as TruthCellValue);
+    const value = toTruthCellValue(outputMatch[2]);
+    if (value) assignments.set(findRegister(register, context), value);
     outputMatch = outputPattern.exec(expectationPart);
   }
 

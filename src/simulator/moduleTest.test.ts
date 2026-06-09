@@ -80,6 +80,22 @@ describe('module test API', () => {
     expect(result.passed).toBe(true);
   });
 
+  it('synthesizes minterms with zero-valued controls', () => {
+    const table = {
+      inputColumns: ['A', 'B'],
+      outputColumns: ['Y'],
+      rows: [
+        ['0p', '0p', '0p'],
+        ['0p', '1p', '1p'],
+        ['1p', '0p', '0p'],
+        ['1p', '1p', '0p'],
+      ],
+    };
+    const synthesized = synthesizeProtocolFromTruthTable(table, 'ZeroControlMinterm');
+    const result = testCircuitAgainstTruthTable(synthesized, table, protocolLibrary);
+    expect(result.passed).toBe(true);
+  });
+
   it('autonomously corrects through runModuleTest', () => {
     const broken = `PARAMS: A:state B:state Cin:state
 

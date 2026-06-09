@@ -102,6 +102,35 @@ const isPairwiseMajorityOutput = (
   });
 };
 
+const appendMintermGate = (
+  lines: string[],
+  inputNames: string[],
+  rowIndex: number,
+  outputRef: string,
+  preferredGates: GatePreference[],
+) => {
+  const controlSpec = mintermControls(rowIndex, inputNames.length, inputNames);
+  const zeroControls = controlSpec.filter((control) => !control.value).map((control) => formatRef(control.name, 0));
+  const oneControls = controlSpec.filter((control) => control.value).map((control) => formatRef(control.name, 0));
+
+  zeroControls.forEach((ref) => {
+    lines.push(`X -I ${ref} -O ${ref}`);
+  });
+
+  const allControls = [...zeroControls, ...oneControls];
+  if (allControls.length === 0) {
+    lines.push(`X -I ${outputRef} -O ${outputRef}`);
+  } else if (allControls.length === 1 && preferredGates.includes('CNOT')) {
+    lines.push(`CNOT -I ${allControls[0]} -O ${outputRef}`);
+  } else {
+    lines.push(`CCNOT -I ${allControls.join(' ')} -O ${outputRef}`);
+  }
+
+  zeroControls.forEach((ref) => {
+    lines.push(`X -I ${ref} -O ${ref}`);
+  });
+};
+
 const synthesizeOutputGates = (
   inputNames: string[],
   outputName: string,
@@ -137,31 +166,7 @@ const synthesizeOutputGates = (
 
   lines.push(`SET ${outputRef} 0p`);
   activeMinterms.forEach((rowIndex) => {
-    const controls = mintermControls(rowIndex, inputNames.length, inputNames)
-      .filter((control) => control.value)
-      .map((control) => formatRef(control.name, 0));
-
-    if (controls.length === 0) {
-      lines.push(`X -I ${outputRef} -O ${outputRef}`);
-      return;
-    }
-
-    if (controls.length === 1 && preferredGates.includes('CNOT')) {
-      lines.push(`CNOT -I ${controls[0]} -O ${outputRef}`);
-      return;
-    }
-
-    if (controls.length === 2 && preferredGates.includes('CCNOT')) {
-      lines.push(`CCNOT -I ${controls[0]} ${controls[1]} -O ${outputRef}`);
-      return;
-    }
-
-    if (controls.length >= 2 && preferredGates.includes('CCNOT')) {
-      lines.push(`CCNOT -I ${controls.join(' ')} -O ${outputRef}`);
-      return;
-    }
-
-    lines.push(`CCNOT -I ${controls.join(' ')} -O ${outputRef}`);
+    appendMintermGate(lines, inputNames, rowIndex, outputRef, preferredGates);
   });
 
   return lines;
@@ -187,7 +192,6 @@ export const synthesizeProtocolFromTruthTable = (
     ));
   });
 
-  const demoSets = table.inputColumns.map((name) => `SET ${formatRef(name)} 0p`);
   const cycleSets = table.inputColumns.map((name) => `SET ${formatRef(name, 0)} 0p`);
   const outputResets = table.outputColumns.map((name) => `SET ${name}:0 0p`);
   const measures = table.outputColumns.map((name) => `MEASURE -I ${name}:0`);
@@ -197,8 +201,6 @@ export const synthesizeProtocolFromTruthTable = (
     `PARAMS: ${table.inputColumns.map((name) => `${name}:state`).join(' ')}`,
     '',
     `MAIN-PROCESS ${processName}`,
-    ...demoSets,
-    '',
     `CREATETOKEN -I ${table.outputColumns.join(' ')}`,
     '',
     ...cycleSets,
@@ -242,6 +244,7 @@ export const correctCircuit = (
   const autonomous = options.autonomous ?? true;
   const steps: CorrectionStep[] = [];
   let current = source;
+  let activeGuidance = { ...guidance };
 
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     const testResult = testCircuitAgainstTruthTable(current, table, librarySources);
@@ -257,12 +260,13 @@ export const correctCircuit = (
       continue;
     }
 
-    if (guidance.gates?.length) {
-      current = insertGuidedGates(current, guidance.gates);
+    if (activeGuidance.gates?.length) {
+      current = insertGuidedGates(current, activeGuidance.gates);
       steps.push({
         kind: 'insert-gate',
-        description: `Inserted guided gate(s): ${guidance.gates.map((gate) => gate.gate).join(', ')}.`,
+        description: `Inserted guided gate(s): ${activeGuidance.gates.map((gate) => gate.gate).join(', ')}.`,
       });
+      activeGuidance = { ...activeGuidance, gates: undefined };
       continue;
     }
 
@@ -273,7 +277,7 @@ export const correctCircuit = (
     const synthesized = synthesizeProtocolFromTruthTable(
       table,
       extractProcessNameFromSource(current),
-      guidance,
+      activeGuidance,
     );
     current = synthesized;
     steps.push({ kind: 'synthesize', description: 'Replaced circuit body with truth-table synthesis.' });

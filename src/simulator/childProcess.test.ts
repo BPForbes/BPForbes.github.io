@@ -183,8 +183,8 @@ describe('process parameter exposure', () => {
 
     const firstCarryQubit = first.returnValues.find((value) => value.name === 'Cout')!.qubitIndex;
     const firstSumQubit = first.returnValues.find((value) => value.name === 'Sum')!.qubitIndex;
-    const roundTripSumQubit = roundTrip.gates.find((gate) => gate.type === 'CNOT')!.targets[0];
-    const roundTripCarryQubit = roundTrip.gates.find((gate) => gate.type === 'CCNOT')!.targets[0];
+    const roundTripSumQubit = roundTrip.returnValues.find((value) => value.qubitIndex === firstSumQubit)!.qubitIndex;
+    const roundTripCarryQubit = roundTrip.returnValues.find((value) => value.qubitIndex === firstCarryQubit)!.qubitIndex;
 
     const firstMeasured = measureAll(
       runCircuit(first.qubitCount, first.gates, pollutedStartStates).state,

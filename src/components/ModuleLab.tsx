@@ -27,6 +27,13 @@ const defaultSource = protocolExamples.find((example) => example.name.includes('
 
 const cellOptions: TruthCellValue[] = ['0p', '1p', 'sp'];
 
+const generateId = () => {
+  if (typeof crypto?.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
 const welcomeMessage = `Welcome to the Circuit Correction Lab. Upload a .qpucir module, infer or load a truth table, then describe fixes in plain language.
 The lab uses a browser language model when WebGPU is available. If the model cannot load, the built-in command parser is used.
 Try: "load the full adder truth table", "add a CNOT from A to Sum", or "fix the circuit automatically".`;
@@ -55,7 +62,7 @@ export const ModuleLab = () => {
   const outputColumns = truthTable?.outputColumns ?? inferredColumns.outputs;
 
   const pushMessage = (role: ChatMessage['role'], text: string) => {
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role, text }]);
+    setMessages((current) => [...current, { id: generateId(), role, text }]);
   };
 
   const updateCell = (rowIndex: number, columnIndex: number, value: TruthCellValue) => {
@@ -230,24 +237,23 @@ export const ModuleLab = () => {
     const link = document.createElement('a');
     link.href = url;
     link.download = 'truth-table.json';
-    document.body.append(link);
+    document.body.appendChild(link);
     link.click();
-    link.remove();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
-  const quickStatus = truthTable
-    ? (() => {
-      try {
-        const result = testCircuitAgainstTruthTable(source, truthTable, protocolLibrary);
-        return result.passed
-          ? `Circuit matches truth table (${result.totalRows}/${result.totalRows} rows).`
-          : `Mismatch on ${result.failedRows.length} row(s).`;
-      } catch {
-        return status;
-      }
-    })()
-    : status;
+  const quickStatus = useMemo(() => {
+    if (!truthTable) return status;
+    try {
+      const result = testCircuitAgainstTruthTable(source, truthTable, protocolLibrary);
+      return result.passed
+        ? `Circuit matches truth table (${result.totalRows}/${result.totalRows} rows).`
+        : `Mismatch on ${result.failedRows.length} row(s).`;
+    } catch {
+      return status;
+    }
+  }, [source, truthTable, status]);
 
   const allColumns = truthTable ? [...truthTable.inputColumns, ...truthTable.outputColumns] : [];
 
