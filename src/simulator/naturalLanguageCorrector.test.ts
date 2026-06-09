@@ -5,6 +5,7 @@ import { parseNaturalLanguageCorrection } from './naturalLanguageCorrector';
 import { singleBitFullAdderTruthTable } from './truthTable';
 
 const singleBitSource = readFileSync(new URL('../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');
+const twoBitSource = readFileSync(new URL('../data/processes/two-bit-full-adder.qpucir', import.meta.url), 'utf8');
 
 describe('parseNaturalLanguageCorrection', () => {
   const context = {
@@ -74,6 +75,25 @@ describe('parseNaturalLanguageCorrection', () => {
     const intent = parseNaturalLanguageCorrection('fix the circuit automatically', context);
     expect(intent.autonomous).toBe(true);
     expect(intent.runTest).toBe(true);
+  });
+
+  it('asks for clarification when a wire bit address is missing', () => {
+    const twoBitContext = {
+      ...context,
+      source: twoBitSource,
+      inputColumns: ['A0', 'A1', 'B0', 'B1', 'Cin'],
+      outputColumns: ['Cout', 'S1tmp', 'S0tmp'],
+    };
+    const intent = parseNaturalLanguageCorrection('CNOT -I $A0:1 -O S0tmp:0', twoBitContext);
+    expect(intent.clarification?.options.length).toBeGreaterThan(0);
+    expect(intent.reply).toContain('Do you mean?');
+    expect(intent.clarification?.options[0].label).toContain('A0:0');
+  });
+
+  it('resolves explicit wire addresses without clarification', () => {
+    const intent = parseNaturalLanguageCorrection('CNOT -I 1:0 -O Sum:0', context);
+    expect(intent.clarification).toBeUndefined();
+    expect(intent.guidance?.gates).toEqual([{ gate: 'CNOT', inputs: ['1:0'], output: 'Sum:0' }]);
   });
 
   it('loads the full adder truth table', () => {
