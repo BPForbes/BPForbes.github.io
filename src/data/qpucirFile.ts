@@ -26,7 +26,10 @@ export const parseQpucirPayload = (contents: string): { name: string; source: st
   try {
     const parsed = JSON.parse(contents) as Partial<QpucirPayload>;
     if (parsed.format === 'qpucir' && typeof parsed.source === 'string') {
-      return { name: parsed.name ?? 'Uploaded QPU circuit', source: parsed.source };
+      const safeName = typeof parsed.name === 'string' && parsed.name.trim()
+        ? parsed.name
+        : 'Uploaded QPU circuit';
+      return { name: safeName, source: parsed.source };
     }
   } catch {
     // Plain-text protocol uploads are accepted as a convenience for hand-authored circuits.

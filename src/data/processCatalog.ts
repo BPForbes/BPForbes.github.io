@@ -46,7 +46,11 @@ const readColumns = (source: string) => {
 const persistCatalog = () => {
   if (typeof sessionStorage === 'undefined') return;
   const entries = Array.from(catalog.values()).filter((entry) => entry.origin !== 'bundled');
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  try {
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  } catch {
+    // Ignore persistence failures; keep in-memory catalog functional.
+  }
 };
 
 const restoreCatalog = () => {

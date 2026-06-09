@@ -5,7 +5,7 @@ import { ModuleLab } from './components/ModuleLab';
 import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
-import { registerCatalogProcess } from './data/processCatalog';
+import { registerCatalogProcess, type ProcessCatalogOrigin } from './data/processCatalog';
 import { downloadQpucirContents, parseQpucirPayload } from './data/qpucirFile';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess } from './data/protocolExamples';
@@ -436,7 +436,11 @@ function App() {
     resetRuntime(example.qubitCount, `Loaded ${example.name}.`, nextStartStates);
   };
 
-  const compileProtocolSource = (source: string, label = 'QPU AST protocol') => {
+  const compileProtocolSource = (
+    source: string,
+    label = 'QPU AST protocol',
+    origin: ProcessCatalogOrigin = 'compiled',
+  ) => {
     try {
       const result = compileQpuProtocol(source, protocolLibrary);
       setProtocolMode('process');
@@ -463,7 +467,7 @@ function App() {
       registerCatalogProcess({
         name: extractMainProcessName(source) ?? label,
         source,
-        origin: 'compiled',
+        origin,
         description: `Compiled in circuit builder (${result.gates.length} gate(s))`,
       });
       return result;
@@ -522,7 +526,7 @@ function App() {
         description: `Uploaded from ${file.name}`,
       });
       setProtocolSource(parsed.source);
-      compileProtocolSource(parsed.source, parsed.name);
+      compileProtocolSource(parsed.source, parsed.name, 'uploaded');
       setFileStatus(`Uploaded and compiled ${file.name}.`);
       setActiveView('builder');
     } catch (error) {

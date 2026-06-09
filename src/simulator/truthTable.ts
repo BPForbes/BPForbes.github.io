@@ -96,14 +96,17 @@ export const resizeTruthTable = (
     const previous = table.rows[rowIndex];
     if (!previous) return row;
     return row.map((cell, columnIndex) => {
-      const previousColumn = columnIndex < table.inputColumns.length
-        ? table.inputColumns[columnIndex]
-        : table.outputColumns[columnIndex - table.inputColumns.length];
       const nextColumn = columnIndex < inputColumns.length
         ? inputColumns[columnIndex]
         : outputColumns[columnIndex - inputColumns.length];
-      if (previousColumn !== nextColumn) return cell;
-      return previous[columnIndex] ?? cell;
+      const previousInputIndex = table.inputColumns.indexOf(nextColumn);
+      const previousOutputIndex = table.outputColumns.indexOf(nextColumn);
+      const previousIndex = previousInputIndex >= 0
+        ? previousInputIndex
+        : previousOutputIndex >= 0
+          ? table.inputColumns.length + previousOutputIndex
+          : -1;
+      return previousIndex >= 0 ? (previous[previousIndex] ?? cell) : cell;
     });
   });
   return next;
