@@ -111,7 +111,7 @@ describe('process parameter exposure', () => {
     const updated = updateProtocolStartStateSet(protocolLibrary.SingleBitFullAdder, 'A', 'sp');
 
     expect(updated).toContain('MAIN-PROCESS SingleBitFullAdder');
-    expect(updated).toContain('SET 0:0 sp');
+    expect(updated).toContain('SET $A sp');
     expect(updated).not.toContain('MAIN-PROCESS CanvasCircuit');
 
     const compiled = compileQpuProtocol(updated, protocolLibrary);
@@ -168,20 +168,23 @@ describe('process parameter exposure', () => {
   it('preserves workspace zeroing when a compiled circuit is serialized and recompiled', () => {
     const source = protocolLibrary.SingleBitFullAdder;
     const first = compileQpuProtocol(source, protocolLibrary);
-    const roundTrip = compileQpuProtocol(serializeCircuitToQpuProtocol(first.gates, first.qubitCount), protocolLibrary);
+    const roundTripSource = serializeCircuitToQpuProtocol(first.gates, first.qubitCount);
+    const roundTrip = compileQpuProtocol(roundTripSource, protocolLibrary);
 
     const pollutedStartStates = Array.from({ length: first.qubitCount }, () => '1p' as ParticleStartState);
     setToken(first.tokenMap, pollutedStartStates, 'A', '1p');
     setToken(first.tokenMap, pollutedStartStates, 'B', '1p');
     setToken(first.tokenMap, pollutedStartStates, 'Cin', '0p');
 
-    const pollutedRoundTrip = [...pollutedStartStates];
+    const pollutedRoundTrip = Array.from({ length: roundTrip.qubitCount }, () => '1p' as ParticleStartState);
     setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q0', '1p');
     setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q1', '1p');
     setToken(roundTrip.tokenMap, pollutedRoundTrip, 'Q2', '0p');
 
-    const carryQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 0));
-    const sumQubit = tokenQubit(first.tokenMap, getReturnValToken(source, 1));
+    const firstCarryQubit = first.returnValues.find((value) => value.name === 'Cout')!.qubitIndex;
+    const firstSumQubit = first.returnValues.find((value) => value.name === 'Sum')!.qubitIndex;
+    const roundTripSumQubit = roundTrip.gates.find((gate) => gate.type === 'CNOT')!.targets[0];
+    const roundTripCarryQubit = roundTrip.gates.find((gate) => gate.type === 'CCNOT')!.targets[0];
 
     const firstMeasured = measureAll(
       runCircuit(first.qubitCount, first.gates, pollutedStartStates).state,
@@ -194,10 +197,10 @@ describe('process parameter exposure', () => {
       {},
     );
 
-    expect(roundTripMeasured.measurements[sumQubit]).toBe(firstMeasured.measurements[sumQubit]);
-    expect(roundTripMeasured.measurements[carryQubit]).toBe(firstMeasured.measurements[carryQubit]);
-    expect(firstMeasured.measurements[sumQubit]).toBe(0);
-    expect(firstMeasured.measurements[carryQubit]).toBe(1);
+    expect(roundTripMeasured.measurements[roundTripSumQubit]).toBe(firstMeasured.measurements[firstSumQubit]);
+    expect(roundTripMeasured.measurements[roundTripCarryQubit]).toBe(firstMeasured.measurements[firstCarryQubit]);
+    expect(firstMeasured.measurements[firstSumQubit]).toBe(0);
+    expect(firstMeasured.measurements[firstCarryQubit]).toBe(1);
   });
 });
 

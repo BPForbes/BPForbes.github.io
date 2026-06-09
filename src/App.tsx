@@ -1,6 +1,7 @@
 import { ChangeEvent, useMemo, useState } from 'react';
 import { CircuitCanvas } from './components/CircuitCanvas';
 import { GateBlock } from './components/GateBlock';
+import { ModuleTester } from './components/ModuleTester';
 import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
@@ -17,7 +18,7 @@ const QUBIT_COUNT = 3;
 const palette: GateType[] = [...gateTypes];
 
 
-type AppView = 'builder' | 'docs' | 'qpu-docs' | 'files' | 'particles' | 'more';
+type AppView = 'builder' | 'docs' | 'qpu-docs' | 'files' | 'particles' | 'module-tester' | 'more';
 
 const initialProtocolSource = protocolExamples[0].source;
 
@@ -585,6 +586,7 @@ function App() {
           <button className={activeView === 'qpu-docs' ? 'active' : ''} onClick={() => showView('qpu-docs')} type="button">QPU Documentation</button>
         </details>
         <button className={activeView === 'particles' ? 'active' : ''} onClick={() => showView('particles')} type="button">Particle visualization</button>
+        <button className={activeView === 'module-tester' ? 'active' : ''} onClick={() => showView('module-tester')} type="button">Module truth-table tester</button>
         <details open>
           <summary>File upload and download</summary>
           <button className={activeView === 'files' ? 'active' : ''} onClick={() => showView('files')} type="button">Upload files</button>
@@ -851,6 +853,20 @@ function App() {
             state={displayState}
           />
         </div>
+      )}
+
+      {activeView === 'module-tester' && (
+        <ModuleTester
+          initialSource={protocolSource}
+          onApplySource={(source) => {
+            setProtocolSource(source);
+            try {
+              compileProtocolSource(source, 'Corrected module');
+            } catch {
+              // Status is surfaced inside ModuleTester.
+            }
+          }}
+        />
       )}
 
       {activeView === 'more' && (
