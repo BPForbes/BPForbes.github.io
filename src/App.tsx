@@ -196,6 +196,10 @@ function App() {
 
   const syncCanvasProtocol = (nextGates: CircuitGate[], nextQubitCount = simulationQubitCount, nextStartStates = startStates) => {
     setProtocolMode('canvas');
+    setProcessParams([]);
+    setReturnValues([]);
+    setTokenMap({});
+    setQubitCount(nextQubitCount);
     setProtocolSource(serializeCircuitToQpuProtocol(nextGates, nextQubitCount, nextStartStates));
   };
 
@@ -283,11 +287,19 @@ function App() {
       (_, index) => (index === qubit ? value : startStates[index] ?? '0p'),
     );
     setStartStates(nextStartStates);
-    const paramName = controllableParams.find((param) => param.qubitIndex === qubit)?.name ?? `Q${qubit}`;
-    setProtocolSource((current) => (protocolMode === 'process'
-      ? updateProtocolStartStateSet(current, paramName, value)
-      : serializeCircuitToQpuProtocol(gates, simulationQubitCount, nextStartStates)));
-    resetRuntime(simulationQubitCount, `Set ${paramName} start state to ${value}.`, nextStartStates);
+    const paramName = controllableParams.find((param) => param.qubitIndex === qubit)?.name;
+    const declaredName = protocolMode === 'process'
+      ? getProtocolParameterEntries(protocolSource)[qubit]?.name
+      : undefined;
+    const resolvedParamName = declaredName ?? paramName ?? `Q${qubit}`;
+    setProtocolSource((current) => {
+      if (protocolMode !== 'process') {
+        return serializeCircuitToQpuProtocol(gates, simulationQubitCount, nextStartStates);
+      }
+      const currentDeclaredName = getProtocolParameterEntries(current)[qubit]?.name;
+      return updateProtocolStartStateSet(current, currentDeclaredName ?? resolvedParamName, value);
+    });
+    resetRuntime(simulationQubitCount, `Set ${resolvedParamName} start state to ${value}.`, nextStartStates);
   };
 
   const resetSite = () => {

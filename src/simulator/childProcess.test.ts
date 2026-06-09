@@ -119,6 +119,26 @@ describe('process parameter exposure', () => {
     expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
   });
 
+  it('updates continued PARAMS blocks as a single logical parameter list', () => {
+    const source = readProcess('four-bit-full-adder.qpucir');
+    const updated = updateProtocolParameterCount(source, 8);
+
+    expect(getProtocolParameterEntries(source).map((param) => param.name)).toEqual([
+      'A0', 'A1', 'A2', 'A3', 'B0', 'B1', 'B2', 'B3', 'Cin', 'Sum0', 'Sum1', 'Sum2', 'Sum3', 'Cout',
+    ]);
+    expect(getProtocolParameterEntries(updated).map((param) => param.name)).toEqual([
+      'A0', 'A1', 'A2', 'A3', 'B0', 'B1', 'B2', 'B3',
+    ]);
+    expect(updated).toContain('MAIN-PROCESS FourBitFullAdder');
+    expect(updated).not.toMatch(/^\s*B0:state/m);
+    expect(updated).not.toMatch(/^\s*Cin:state/m);
+
+    const compiled = compileQpuProtocol(updated, protocolLibrary);
+    expect(compiled.processParams.map((param) => param.name)).toEqual([
+      'A0', 'A1', 'A2', 'A3', 'B0', 'B1', 'B2', 'B3',
+    ]);
+  });
+
   it('updates PARAMS when process particles are added or removed without converting to CanvasCircuit', () => {
     const added = updateProtocolParameterCount(protocolLibrary.SingleBitFullAdder, 4);
     expect(added).toContain('MAIN-PROCESS SingleBitFullAdder');

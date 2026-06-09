@@ -25,7 +25,28 @@ const stripProtocolRef = (token: string) => token.replace(/^\$/, '').split(':')[
 const isMainProcessLine = (line: string) => /^\s*MAIN-PROCESS\s+/i.test(line);
 const isParamsLine = (line: string) => /^\s*PARAMS:/i.test(line);
 const isSetLine = (line: string) => /^\s*SET\s+/i.test(line);
-const paramsLineIndex = (lines: string[]) => lines.findIndex(isParamsLine);
+type ProtocolLineBlock = { start: number; end: number; logicalLine: string };
+
+const findContinuedLineBlock = (lines: string[], start: number): ProtocolLineBlock => {
+  let logicalLine = '';
+  let end = start;
+
+  for (let index = start; index < lines.length; index += 1) {
+    const raw = lines[index];
+    const continued = raw.endsWith('\\');
+    const line = continued ? raw.slice(0, -1).trimEnd() : raw;
+    logicalLine += continued ? `${line} ` : line;
+    end = index;
+    if (!continued) break;
+  }
+
+  return { start, end, logicalLine };
+};
+
+const findParamsBlock = (lines: string[]): ProtocolLineBlock | null => {
+  const start = lines.findIndex(isParamsLine);
+  return start >= 0 ? findContinuedLineBlock(lines, start) : null;
+};
 
 const parseProtocolParamParts = (paramsBody: string): ProtocolParamEntry[] => paramsBody
   .trim()
@@ -37,9 +58,9 @@ const parseProtocolParamParts = (paramsBody: string): ProtocolParamEntry[] => pa
   });
 
 export const getProtocolParameterEntries = (source: string): ProtocolParamEntry[] => {
-  const line = source.replace(/\r\n/g, '\n').split('\n').find(isParamsLine);
-  if (!line) return [];
-  return parseProtocolParamParts(line.slice(line.indexOf(':') + 1));
+  const block = findParamsBlock(source.replace(/\r\n/g, '\n').split('\n'));
+  if (!block) return [];
+  return parseProtocolParamParts(block.logicalLine.slice(block.logicalLine.indexOf(':') + 1));
 };
 
 const reservedProtocolNames = (source: string) => new Set(
@@ -60,9 +81,9 @@ const nextProtocolParamName = (reserved: Set<string>, index: number) => {
 export const updateProtocolParameterCount = (source: string, paramCount: number) => {
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
   const lines = source.replace(/\r\n/g, '\n').split('\n');
-  const lineIndex = paramsLineIndex(lines);
-  const currentParams = lineIndex >= 0
-    ? parseProtocolParamParts(lines[lineIndex].slice(lines[lineIndex].indexOf(':') + 1))
+  const paramsBlock = findParamsBlock(lines);
+  const currentParams = paramsBlock
+    ? parseProtocolParamParts(paramsBlock.logicalLine.slice(paramsBlock.logicalLine.indexOf(':') + 1))
     : [];
   const reservedNames = reservedProtocolNames(source);
   currentParams.forEach((param) => reservedNames.add(param.name));
@@ -73,8 +94,9 @@ export const updateProtocolParameterCount = (source: string, paramCount: number)
   }
 
   const paramsLine = `PARAMS: ${nextParams.map((param) => `${param.name}:${param.type}`).join(' ')}`.trimEnd();
-  if (lineIndex >= 0) {
-    lines[lineIndex] = `${lines[lineIndex].match(/^\s*/)?.[0] ?? ''}${paramsLine}`;
+  if (paramsBlock) {
+    const indent = lines[paramsBlock.start].match(/^\s*/)?.[0] ?? '';
+    lines.splice(paramsBlock.start, paramsBlock.end - paramsBlock.start + 1, `${indent}${paramsLine}`);
   } else {
     lines.unshift(paramsLine, '');
   }
@@ -103,8 +125,8 @@ export const updateProtocolStartStateSet = (source: string, paramName: string, s
 
   if (!updated) {
     const mainIndex = nextLines.findIndex(isMainProcessLine);
-    const paramsIndex = nextLines.findIndex(isParamsLine);
-    const insertAt = mainIndex >= 0 ? mainIndex + 1 : paramsIndex >= 0 ? paramsIndex + 1 : 0;
+    const paramsBlock = findParamsBlock(nextLines);
+    const insertAt = mainIndex >= 0 ? mainIndex + 1 : paramsBlock ? paramsBlock.end + 1 : 0;
     nextLines.splice(insertAt, 0, `SET $${paramName} ${startState}`);
   }
 
