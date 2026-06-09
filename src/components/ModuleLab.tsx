@@ -1,6 +1,7 @@
 import { ChangeEvent, FormEvent, useMemo, useState } from 'react';
 import { protocolExamples, protocolLibrary } from '../data/protocolExamples';
 import { parseNaturalLanguageCorrection } from '../simulator/naturalLanguageCorrector';
+import { parseNaturalLanguageWithWebLlm } from '../simulator/webLlmNaturalLanguageCorrector';
 import {
   CorrectionGuidance,
   createEmptyTruthTable,
@@ -27,7 +28,7 @@ const defaultSource = protocolExamples.find((example) => example.name.includes('
 const cellOptions: TruthCellValue[] = ['0p', '1p', 'sp'];
 
 const welcomeMessage = `Welcome to the Circuit Correction Lab. Upload a .qpucir module, infer or load a truth table, then describe fixes in plain language.
-
+The lab uses a browser language model when WebGPU is available. If the model cannot load, the built-in command parser is used.
 Try: "load the full adder truth table", "add a CNOT from A to Sum", or "fix the circuit automatically".`;
 
 export const ModuleLab = () => {
@@ -38,6 +39,7 @@ export const ModuleLab = () => {
     { id: 'welcome', role: 'assistant', text: welcomeMessage },
   ]);
   const [chatInput, setChatInput] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
   const [pendingGuidance, setPendingGuidance] = useState<CorrectionGuidance>({});
 
   const dimensions = useMemo(() => {
@@ -123,13 +125,19 @@ export const ModuleLab = () => {
     return { response, summary };
   };
 
-  const handleIntent = (text: string) => {
-    const intent = parseNaturalLanguageCorrection(text, {
+  const handleIntent = async (text: string) => {
+    const context = {
       source,
       truthTable,
       inputColumns,
       outputColumns,
-    });
+    };
+
+    const intent = await parseNaturalLanguageWithWebLlm(
+      text,
+      context,
+      (progress) => setStatus(progress),
+    ) ?? parseNaturalLanguageCorrection(text, context);
 
     let table = truthTable;
     let guidance: CorrectionGuidance = {
@@ -186,13 +194,18 @@ export const ModuleLab = () => {
     pushMessage('assistant', intent.reply);
   };
 
-  const submitChat = (event: FormEvent) => {
+  const submitChat = async (event: FormEvent) => {
     event.preventDefault();
     const text = chatInput.trim();
-    if (!text) return;
+    if (!text || chatBusy) return;
     pushMessage('user', text);
     setChatInput('');
-    handleIntent(text);
+    setChatBusy(true);
+    try {
+      await handleIntent(text);
+    } finally {
+      setChatBusy(false);
+    }
   };
 
   const runManualTest = (autonomous: boolean) => {
@@ -353,7 +366,7 @@ export const ModuleLab = () => {
               rows={3}
               value={chatInput}
             />
-            <button type="submit">Send correction</button>
+            <button disabled={chatBusy} type="submit">{chatBusy ? 'Parsing…' : 'Send correction'}</button>
           </form>
         </section>
       </div>

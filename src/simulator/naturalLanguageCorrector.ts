@@ -1,22 +1,8 @@
-import type { CorrectionGuidance, GatePreference, GuidedGateSpec } from './circuitCorrector';
+import type { GatePreference, GuidedGateSpec } from './circuitCorrector';
+import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 import type { TruthCellValue, TruthTable } from './truthTable';
 
-export type NlCorrectionContext = {
-  source: string;
-  truthTable: TruthTable | null;
-  inputColumns: string[];
-  outputColumns: string[];
-};
-
-export type NlCorrectionIntent = {
-  reply: string;
-  guidance?: CorrectionGuidance;
-  autonomous?: boolean;
-  runTest?: boolean;
-  loadFullAdderTable?: boolean;
-  inferTable?: boolean;
-  probeOutputs?: boolean;
-};
+export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './nlIntentTypes';
 
 const GATE_ALIASES: Record<string, GatePreference> = {
   cnot: 'CNOT',
@@ -170,7 +156,7 @@ const parseTruthTableRowHint = (message: string, context: NlCorrectionContext): 
 export const parseNaturalLanguageCorrection = (
   message: string,
   context: NlCorrectionContext,
-): NlCorrectionIntent & { truthTable?: TruthTable } => {
+): ModelCorrectionIntent => {
   const text = message.trim();
   if (!text) {
     return {
