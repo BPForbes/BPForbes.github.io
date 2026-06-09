@@ -184,7 +184,7 @@ export const ModuleLab = () => {
     setStatus(label);
   }, []);
 
-  const loadCatalogProcess = useCallback((name: string) => {
+  const loadCatalogProcess = useCallback((name: string, options?: { silent?: boolean }) => {
     const entry = resolveCatalogEntry(name) ?? getCatalogEntry(name);
     if (!entry) {
       setStatus(`Process "${name}" is not in the catalog.`);
@@ -192,7 +192,9 @@ export const ModuleLab = () => {
     }
     setSelectedCatalogId(entry.id);
     applySource(entry.source, `Loaded catalog process ${entry.name}.`);
-    pushMessage('assistant', `Loaded ${entry.name} from the process catalog. Say "infer truth table" or "test the circuit" to continue.`);
+    if (!options?.silent) {
+      pushMessage('assistant', `Loaded ${entry.name} from the process catalog. Say "infer truth table" or "test the circuit" to continue.`);
+    }
     return entry;
   }, [applySource, pushMessage]);
 
@@ -251,16 +253,16 @@ export const ModuleLab = () => {
     }
   };
 
-  const inferTable = useCallback(() => {
-    const table = createEmptyTruthTable(source);
+  const inferTable = useCallback((inferSource = source) => {
+    const table = createEmptyTruthTable(inferSource);
     setTruthTable(table);
     setLastTestResult(null);
     setStatus(`Inferred ${table.rows.length} rows × ${table.inputColumns.length + table.outputColumns.length} columns.`);
     return table;
   }, [source]);
 
-  const runTestOnly = useCallback((table: TruthTable) => {
-    const testResult = testCircuitAgainstTruthTable(source, table, librarySources);
+  const runTestOnly = useCallback((table: TruthTable, testSource = source) => {
+    const testResult = testCircuitAgainstTruthTable(testSource, table, librarySources);
     setLastTestResult(testResult);
     const summary = formatTestFailureSummary(testResult);
     setStatus(summary);
@@ -271,9 +273,10 @@ export const ModuleLab = () => {
     table: TruthTable,
     guidance: CorrectionGuidance,
     autonomous: boolean,
+    testSource = source,
   ) => {
     const response = runModuleTest({
-      source,
+      source: testSource,
       truthTable: table,
       librarySources,
       guidance,
@@ -307,6 +310,7 @@ export const ModuleLab = () => {
 
     setPendingClarification(null);
 
+    let currentSource = source;
     let table = truthTable;
     let guidance: CorrectionGuidance = {
       ...pendingGuidance,
@@ -319,10 +323,27 @@ export const ModuleLab = () => {
       setPendingGuidance((current) => ({ ...current, preferredGates: intent.guidance?.preferredGates }));
     }
 
+    const hasFollowUpIntent = Boolean(
+      intent.loadFullAdderTable
+      || intent.inferTable
+      || intent.truthTable
+      || intent.probeOutputs
+      || intent.runTest,
+    );
+
     if (intent.loadCatalogProcess) {
-      const entry = loadCatalogProcess(intent.loadCatalogProcess);
+      const entry = loadCatalogProcess(intent.loadCatalogProcess, { silent: hasFollowUpIntent });
       if (!entry) {
         pushMessage('assistant', `${intent.reply}\n\nI could not find "${intent.loadCatalogProcess}" in the catalog.`);
+        return;
+      }
+      currentSource = entry.source;
+      try {
+        table = createEmptyTruthTable(entry.source);
+      } catch {
+        table = createInitialTruthTable();
+      }
+      if (!hasFollowUpIntent) {
         return;
       }
     }
@@ -334,7 +355,7 @@ export const ModuleLab = () => {
     }
 
     if (intent.inferTable) {
-      table = inferTable();
+      table = inferTable(currentSource);
     }
 
     if (intent.truthTable) {
@@ -348,22 +369,22 @@ export const ModuleLab = () => {
         pushMessage('assistant', 'Infer or load a truth table before probing outputs.');
         return;
       }
-      table = probeModuleOutputs(source, table, librarySources);
+      table = probeModuleOutputs(currentSource, table, librarySources);
       setTruthTable(table);
       setLastTestResult(null);
     }
 
     if (intent.runTest) {
       if (!table) {
-        table = inferTable();
+        table = inferTable(currentSource);
       }
       try {
         if (intent.autonomous || intent.guidance?.gates?.length) {
-          const { summary } = runCorrection(table, guidance, intent.autonomous ?? false);
+          const { summary } = runCorrection(table, guidance, intent.autonomous ?? false, currentSource);
           pushMessage('assistant', `${intent.reply}\n\n${summary}`);
           if (intent.autonomous) setPendingGuidance({});
         } else {
-          const { summary } = runTestOnly(table);
+          const { summary } = runTestOnly(table, currentSource);
           pushMessage('assistant', `${intent.reply}\n\n${summary}`);
         }
       } catch (error) {
