@@ -35,7 +35,7 @@ export const parseQpucirPayload = (contents: string): { name: string; source: st
 };
 
 export const downloadQpucirContents = (fileName: string, contents: string) => {
-  const blob = new Blob([contents], { type: 'application/json' });
+  const blob = new Blob([contents], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -48,10 +48,9 @@ export const downloadQpucirContents = (fileName: string, contents: string) => {
 
 export const downloadQpucirSource = (
   source: string,
-  librarySources: Record<string, string> = {},
+  _librarySources: Record<string, string> = {},
   fallbackName = 'CircuitProcess',
 ) => {
   const name = extractMainProcessName(source) ?? fallbackName;
-  const payload = createQpucirPayload(name, source, librarySources);
-  downloadQpucirContents(qpucirFileNameForSource(source, name), JSON.stringify(payload, null, 2));
+  downloadQpucirContents(qpucirFileNameForSource(source, name), source);
 };

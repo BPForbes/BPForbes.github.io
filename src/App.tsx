@@ -6,7 +6,7 @@ import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
 import { registerCatalogProcess } from './data/processCatalog';
-import { createQpucirPayload, downloadQpucirContents, parseQpucirPayload } from './data/qpucirFile';
+import { downloadQpucirContents, parseQpucirPayload } from './data/qpucirFile';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, projectStateOntoQubits, runCircuit } from './simulator/engine';
@@ -489,25 +489,19 @@ function App() {
   };
 
   const downloadConfiguredProtocol = (process: ConfiguredQpucirProcess) => {
-    downloadNamedQpucirContents(process.name, process.fileName, process.contents);
+    downloadNamedQpucirContents(process.name, process.fileName, process.source);
   };
 
   const downloadCurrentProtocol = () => {
     const name = extractMainProcessName(protocolSource) ?? 'Current editor protocol';
-    try {
-      const payload = createQpucirPayload(name, protocolSource, protocolLibrary);
-      downloadNamedQpucirContents(name, qpucirFileNameForSource(protocolSource, name), JSON.stringify(payload, null, 2));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setFileStatus(`Download error: ${message}`);
-    }
+    downloadNamedQpucirContents(name, qpucirFileNameForSource(protocolSource, name), protocolSource);
   };
 
   const downloadCompiledAst = () => {
     const name = extractMainProcessName(protocolSource) ?? 'Compiled AST circuit';
     try {
-      const payload = createQpucirPayload(name, protocolSource, protocolLibrary);
-      downloadNamedQpucirContents(name, qpucirFileNameForSource(protocolSource, name), JSON.stringify(payload, null, 2));
+      compileQpuProtocol(protocolSource, protocolLibrary);
+      downloadNamedQpucirContents(name, qpucirFileNameForSource(protocolSource, name), protocolSource);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setCompileSummary(`Download error: ${message}`);
@@ -808,7 +802,7 @@ function App() {
             </label>
             <div className="download-card">
               <strong>Download files</strong>
-              <span>Bundled AST examples are exported as pre-saved .qpucir payloads.</span>
+              <span>Bundled AST examples download as standard .qpucir protocol text.</span>
               <div className="download-list">
                 {protocolExamples.map((example) => (
                   <button key={example.name} onClick={() => downloadConfiguredProtocol(example)} type="button">
