@@ -1,4 +1,5 @@
-import { resolveCatalogEntry } from '../data/processCatalog';
+import { findCatalogCandidates } from '../data/processCatalog';
+import { buildClarificationIntent } from './clarification';
 import type { GatePreference, GuidedGateSpec } from './circuitCorrector';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 import { isTruthCellValue, type TruthCellValue, type TruthTable } from './truthTable';
@@ -181,11 +182,16 @@ const extractGateSpecs = (message: string, context: NlCorrectionContext): Guided
   );
   const naturalMatch = normalized.match(naturalPattern);
   if (naturalMatch) {
+    const output = naturalMatch[3]
+      ? findRegister(naturalMatch[3], context)
+      : context.outputColumns.length === 1
+        ? context.outputColumns[0]
+        : undefined;
     pushGateSpec(
       specs,
       parseGateName(naturalMatch[1]),
       parseTokenList(naturalMatch[2], context),
-      naturalMatch[3] ? findRegister(naturalMatch[3], context) : context.outputColumns[0],
+      output,
     );
   }
 
@@ -206,12 +212,27 @@ const extractPreferredGates = (message: string): GatePreference[] => {
   return preferred;
 };
 
-const parseCatalogOpenRequest = (message: string) => {
+const parseCatalogOpenTarget = (message: string) => {
   const match = message.match(
     /\b(?:load|open|use)\s+(?:the\s+)?(?<target>[\w.-]+(?:\.qpucir)?)\b/i,
   );
-  if (!match?.groups?.target) return null;
-  return resolveCatalogEntry(match.groups.target);
+  return match?.groups?.target ?? null;
+};
+
+const detectPartialGateCommand = (message: string, context: NlCorrectionContext) => {
+  if (context.outputColumns.length <= 1) return null;
+  const normalized = message.replace(/\s+/g, ' ').trim();
+  const pattern = new RegExp(
+    `(?:add|insert|put|use|apply)\\s+(?:a\\s+)?(${GATE_NAMES})(?:\\s+gate)?\\s+(?:from|with|using|on)\\s+((?:${WIRE_TOKEN})(?:\\s+(?:and\\s+)?(?:${WIRE_TOKEN}))*)(?:\\s+(?:to|into|onto|->|output|-O)\\s+(${WIRE_TOKEN}))?`,
+    'i',
+  );
+  const match = normalized.match(pattern);
+  if (!match || match[3]) return null;
+  const gate = parseGateName(match[1]);
+  if (!gate) return null;
+  const inputs = parseTokenList(match[2], context);
+  if (inputs.length === 0) return null;
+  return { gate, inputs };
 };
 
 const parseTruthTableRowHint = (message: string, context: NlCorrectionContext): TruthTable | null => {
@@ -293,20 +314,33 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
-  const catalogProcess = parseCatalogOpenRequest(text);
-  if (catalogProcess) {
-    const label = catalogProcess.fileName ?? catalogProcess.name;
-    return {
-      reply: `Loaded ${catalogProcess.name} from the process catalog (${label}).`,
-      loadCatalogProcess: catalogProcess.name,
-    };
-  }
-
-  if (/(?:load|use).*(?:full[- ]?adder|adder truth)/i.test(lower)) {
+  if (/(?:load|use)\s+(?:the\s+)?(?:full[- ]?adder|adder)\s+truth\s+table/i.test(lower)) {
     return {
       reply: 'Loaded the canonical single-bit full adder truth table.',
       loadFullAdderTable: true,
     };
+  }
+
+  const catalogTarget = parseCatalogOpenTarget(text);
+  if (catalogTarget) {
+    const candidates = findCatalogCandidates(catalogTarget);
+    if (candidates.length === 1) {
+      const entry = candidates[0];
+      const label = entry.fileName ?? entry.name;
+      return {
+        reply: `Loaded ${entry.name} from the process catalog (${label}).`,
+        loadCatalogProcess: entry.name,
+      };
+    }
+    if (candidates.length > 1) {
+      return buildClarificationIntent(
+        `Several catalog processes match "${catalogTarget}".`,
+        candidates.map((entry) => ({
+          label: `${entry.name}${entry.fileName ? ` (${entry.fileName})` : ''} [${entry.origin}]`,
+          command: `open ${entry.name}`,
+        })),
+      );
+    }
   }
 
   if (/(?:infer|create|build).*(?:truth table|table dimensions)/i.test(lower)) {
@@ -346,6 +380,20 @@ export const parseNaturalLanguageCorrection = (
       runTest: true,
       autonomous: false,
     };
+  }
+
+  const partialGate = detectPartialGateCommand(text, context);
+  if (partialGate && gates.length === 0) {
+    return buildClarificationIntent(
+      `Which output should ${partialGate.gate} drive?`,
+      context.outputColumns.map((column) => {
+        const output = findRegister(column, context);
+        return {
+          label: `${partialGate.gate} -I ${partialGate.inputs.join(' ')} -O ${output}`,
+          command: `${partialGate.gate} -I ${partialGate.inputs.join(' ')} -O ${output}`,
+        };
+      }),
+    );
   }
 
   if (gates.length > 0) {
@@ -392,5 +440,9 @@ export const parseNaturalLanguageCorrection = (
 };
 
 export const isRegexFallbackIntent = (intent: ModelCorrectionIntent) => (
-  intent.reply.startsWith('I could not map that request')
+  !intent.clarification && intent.reply.startsWith('I could not map that request')
+);
+
+export const isClarificationIntent = (intent: ModelCorrectionIntent) => (
+  Boolean(intent.clarification?.options.length)
 );

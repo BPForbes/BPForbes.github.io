@@ -56,6 +56,20 @@ describe('parseNaturalLanguageCorrection', () => {
     expect(intent.loadCatalogProcess).toBe('SingleBitFullAdder');
   });
 
+  it('asks for clarification when several catalog processes match', () => {
+    const intent = parseNaturalLanguageCorrection('open adder', context);
+    expect(intent.clarification?.options.length).toBeGreaterThan(1);
+    expect(intent.reply).toContain('Do you mean?');
+  });
+
+  it('asks which output to use when a gate omits -O', () => {
+    const intent = parseNaturalLanguageCorrection('add CNOT from A', context);
+    expect(intent.clarification?.options).toEqual([
+      { label: 'CNOT -I A -O Cout', command: 'CNOT -I A -O Cout' },
+      { label: 'CNOT -I A -O Sum', command: 'CNOT -I A -O Sum' },
+    ]);
+  });
+
   it('recognizes autonomous correction requests', () => {
     const intent = parseNaturalLanguageCorrection('fix the circuit automatically', context);
     expect(intent.autonomous).toBe(true);

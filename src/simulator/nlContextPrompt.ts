@@ -25,6 +25,10 @@ ${libraryNames}
 Latest truth-table test result:
 ${failures}
 
+${context.pendingClarification
+  ? `Pending clarification for the user — pick one option or interpret their reply:\n${context.pendingClarification.options.map((option, index) => `  ${index + 1}. ${option.label} (command: ${option.command})`).join('\n')}`
+  : 'No pending clarification.'}
+
 Current protocol source preview:
 ${context.source.trim().split('\n').slice(0, 12).map((line) => `  ${line}`).join('\n') || '  (empty protocol)'}
 `.trim();

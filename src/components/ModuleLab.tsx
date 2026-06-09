@@ -9,7 +9,12 @@ import {
   registerCatalogProcess,
 } from '../data/processCatalog';
 import { downloadQpucirSource, parseQpucirPayload } from '../data/qpucirFile';
+import {
+  formatClarificationRetry,
+  resolveClarificationResponse,
+} from '../simulator/clarification';
 import { parseCorrectionIntent } from '../simulator/correctionIntentParser';
+import type { ModelCorrectionIntent, PendingClarification } from '../simulator/nlIntentTypes';
 import {
   BROWSER_MODEL_OPTIONS,
   loadLlmSettings,
@@ -118,6 +123,7 @@ export const ModuleLab = () => {
   ));
   const [modelLoading, setModelLoading] = useState(false);
   const [pendingGuidance, setPendingGuidance] = useState<CorrectionGuidance>({});
+  const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(null);
   const [catalogRefresh, setCatalogRefresh] = useState(() => getCatalogVersion());
 
   const catalogEntries = useMemo(() => getCatalogEntries(), [catalogRefresh]);
@@ -150,7 +156,10 @@ export const ModuleLab = () => {
     setMessages((current) => [...current, { id: generateId(), role, text }]);
   }, []);
 
-  const buildNlContext = useCallback((table: TruthTable | null = truthTable) => ({
+  const buildNlContext = useCallback((
+    table: TruthTable | null = truthTable,
+    clarification: PendingClarification | null = pendingClarification,
+  ) => ({
     source,
     truthTable: table,
     inputColumns: table?.inputColumns ?? [],
@@ -159,7 +168,8 @@ export const ModuleLab = () => {
     processCatalog,
     lastTestResult,
     libraryProcessNames: Object.keys(librarySources),
-  }), [source, truthTable, activeProcessName, processCatalog, lastTestResult, librarySources]);
+    pendingClarification: clarification,
+  }), [source, truthTable, activeProcessName, processCatalog, lastTestResult, librarySources, pendingClarification]);
 
   const applySource = useCallback((nextSource: string, label: string, resetTable = true) => {
     setSource(nextSource);
@@ -288,14 +298,14 @@ export const ModuleLab = () => {
     return { response, summary };
   }, [source, librarySources, activeProcessName, refreshCatalog]);
 
-  const handleIntent = async (text: string) => {
-    const context = buildNlContext();
+  const applyParsedIntent = async (intent: ModelCorrectionIntent) => {
+    if (intent.clarification) {
+      setPendingClarification(intent.clarification);
+      pushMessage('assistant', intent.reply);
+      return;
+    }
 
-    const intent = await parseCorrectionIntent(text, context, {
-      useLlm,
-      llmSettings,
-      onProgress: (progress) => setStatus(progress),
-    });
+    setPendingClarification(null);
 
     let table = truthTable;
     let guidance: CorrectionGuidance = {
@@ -364,6 +374,55 @@ export const ModuleLab = () => {
     }
 
     pushMessage('assistant', intent.reply);
+  };
+
+  const handleIntent = async (text: string) => {
+    if (pendingClarification) {
+      if (/^cancel$/i.test(text.trim())) {
+        setPendingClarification(null);
+        pushMessage('assistant', 'Cancelled. What would you like to do next?');
+        return;
+      }
+
+      const selected = resolveClarificationResponse(text, pendingClarification);
+      if (selected) {
+        setPendingClarification(null);
+        await handleIntent(selected.command);
+        return;
+      }
+
+      const context = buildNlContext(truthTable, pendingClarification);
+      if (useLlm) {
+        const intent = await parseCorrectionIntent(text, context, {
+          useLlm: true,
+          llmSettings,
+          onProgress: (progress) => setStatus(progress),
+        });
+        if (intent.clarification) {
+          await applyParsedIntent(intent);
+          return;
+        }
+        if (!intent.loadCatalogProcess && !intent.runTest && !intent.inferTable
+          && !intent.probeOutputs && !intent.loadFullAdderTable && !intent.truthTable
+          && !intent.guidance?.gates?.length) {
+          pushMessage('assistant', formatClarificationRetry(pendingClarification));
+          return;
+        }
+        setPendingClarification(null);
+        await applyParsedIntent(intent);
+        return;
+      }
+
+      pushMessage('assistant', formatClarificationRetry(pendingClarification));
+      return;
+    }
+
+    const intent = await parseCorrectionIntent(text, buildNlContext(), {
+      useLlm,
+      llmSettings,
+      onProgress: (progress) => setStatus(progress),
+    });
+    await applyParsedIntent(intent);
   };
 
   const submitChat = async (event: FormEvent) => {

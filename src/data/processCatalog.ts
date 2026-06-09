@@ -161,6 +161,32 @@ export const resolveCatalogEntry = (query: string): ProcessCatalogEntry | undefi
   ));
 };
 
+/** Find catalog entries matching a partial name, filename, or alias. */
+export const findCatalogCandidates = (query: string): ProcessCatalogEntry[] => {
+  const normalized = query.trim().replace(/^["']|["']$/g, '');
+  if (!normalized) return [];
+
+  const exact = resolveCatalogEntry(normalized);
+  if (exact) return [exact];
+
+  const lower = normalized.toLowerCase();
+  const withExt = lower.endsWith('.qpucir') ? lower : `${lower}.qpucir`;
+  const stem = lower.replace(/\.qpucir$/i, '');
+
+  return getCatalogEntries().filter((entry) => (
+    catalogAliases(entry).some((alias) => {
+      const aliasLower = alias.toLowerCase();
+      const aliasStem = aliasLower.replace(/\.qpucir$/i, '');
+      return aliasLower.includes(stem)
+        || aliasStem.includes(stem)
+        || stem.includes(aliasStem)
+        || aliasLower === withExt;
+    })
+    || entry.name.toLowerCase().includes(stem)
+    || (entry.description?.toLowerCase().includes(stem) ?? false)
+  ));
+};
+
 export const getCatalogLibrarySources = (): Record<string, string> => {
   if (libraryCache) return libraryCache;
   libraryCache = Object.fromEntries(getCatalogEntries().map((entry) => [entry.name, entry.source]));

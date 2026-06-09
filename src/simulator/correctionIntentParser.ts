@@ -1,6 +1,10 @@
 import type { LlmSettings } from './llmConfig';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
-import { isRegexFallbackIntent, parseNaturalLanguageCorrection } from './naturalLanguageCorrector';
+import {
+  isClarificationIntent,
+  isRegexFallbackIntent,
+  parseNaturalLanguageCorrection,
+} from './naturalLanguageCorrector';
 import { parseNaturalLanguageWithModel } from './modelNaturalLanguageCorrector';
 
 export type CorrectionIntentParseOptions = {
@@ -16,7 +20,7 @@ export const parseCorrectionIntent = async (
   options: CorrectionIntentParseOptions = {},
 ): Promise<ModelCorrectionIntent> => {
   const regexIntent = parseNaturalLanguageCorrection(message, context);
-  if (!options.useLlm || !isRegexFallbackIntent(regexIntent)) {
+  if (isClarificationIntent(regexIntent) || !options.useLlm || !isRegexFallbackIntent(regexIntent)) {
     return regexIntent;
   }
 
