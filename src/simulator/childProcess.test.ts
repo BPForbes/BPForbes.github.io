@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from './qpuAst';
-import { serializeCircuitToQpuProtocol } from './qpuFormat';
+import { getProtocolParameterEntries, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from './qpuFormat';
 import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from './engine';
 import { complex, magnitudeSquared } from './complex';
 import type { ParticleStartState } from './types';
@@ -44,6 +44,37 @@ describe('SingleBitFullAdder via TwoBitFullAdder', () => {
   });
 });
 
+describe('rotation parameter parsing', () => {
+  it('accepts pi, fractional-pi, degree, and rational radian parameters for PHASE-style operations', () => {
+    const source = `MAIN-PROCESS PiPhase
+SET Q0:0 0p
+PHASE=pi -I Q0:0 -O Q0:0
+BPHASE=-pi -I Q0:0 -O Q0:0
+PHASE=-11pi/6 -I Q0:0 -O Q0:0
+PHASE=2*pi/3 -I Q0:0 -O Q0:0
+PHASE=7pi/2 -I Q0:0 -O Q0:0
+PHASE=630d -I Q0:0 -O Q0:0
+PHASE=180.5d -I Q0:0 -O Q0:0
+PHASE=45/2d -I Q0:0 -O Q0:0
+PHASE=3/2 -I Q0:0 -O Q0:0
+RETURNVALS Q0`;
+    const compiled = compileQpuProtocol(source, protocolLibrary);
+    const phaseGates = compiled.gates.filter((gate) => gate.type === 'PHASE');
+
+    expect(phaseGates.map((gate) => gate.phase)).toEqual([
+      expect.closeTo(Math.PI, 12),
+      expect.closeTo(Math.PI, 12),
+      expect.closeTo((-11 * Math.PI) / 6, 12),
+      expect.closeTo((2 * Math.PI) / 3, 12),
+      expect.closeTo((7 * Math.PI) / 2, 12),
+      expect.closeTo((630 * Math.PI) / 180, 12),
+      expect.closeTo((180.5 * Math.PI) / 180, 12),
+      expect.closeTo((22.5 * Math.PI) / 180, 12),
+      expect.closeTo(1.5, 12),
+    ]);
+  });
+});
+
 describe('process parameter exposure', () => {
   it('exposes only PARAMS entries for SingleBitFullAdder', () => {
     const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
@@ -74,6 +105,54 @@ describe('process parameter exposure', () => {
     const zeroedQubits = resetGates.reduce((count, gate) => count + gate.targets.length, 0);
     expect(zeroedQubits).toBeGreaterThan(resetGates.length);
     expect(resetGates.length).toBeLessThan(zeroedQubits);
+  });
+
+  it('updates parameter SET lines without serializing a compiled process as CanvasCircuit', () => {
+    const updated = updateProtocolStartStateSet(protocolLibrary.SingleBitFullAdder, 'A', 'sp');
+
+    expect(updated).toContain('MAIN-PROCESS SingleBitFullAdder');
+    expect(updated).toContain('SET 0:0 sp');
+    expect(updated).not.toContain('MAIN-PROCESS CanvasCircuit');
+
+    const compiled = compileQpuProtocol(updated, protocolLibrary);
+    expect(compiled.logicalQubitCount).toBe(2);
+    expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
+  });
+
+  it('updates continued PARAMS blocks as a single logical parameter list', () => {
+    const source = readProcess('four-bit-full-adder.qpucir');
+    const updated = updateProtocolParameterCount(source, 8);
+
+    expect(getProtocolParameterEntries(source).map((param) => param.name)).toEqual([
+      'A0', 'A1', 'A2', 'A3', 'B0', 'B1', 'B2', 'B3', 'Cin', 'Sum0', 'Sum1', 'Sum2', 'Sum3', 'Cout',
+    ]);
+    expect(getProtocolParameterEntries(updated).map((param) => param.name)).toEqual([
+      'A0', 'A1', 'A2', 'A3', 'B0', 'B1', 'B2', 'B3',
+    ]);
+    expect(updated).toContain('MAIN-PROCESS FourBitFullAdder');
+    expect(updated).not.toMatch(/^\s*B0:state/m);
+    expect(updated).not.toMatch(/^\s*Cin:state/m);
+
+    const compiled = compileQpuProtocol(updated, protocolLibrary);
+    expect(compiled.processParams.map((param) => param.name)).toEqual([
+      'A0', 'A1', 'A2', 'A3', 'B0', 'B1', 'B2', 'B3',
+    ]);
+  });
+
+  it('updates PARAMS when process particles are added or removed without converting to CanvasCircuit', () => {
+    const added = updateProtocolParameterCount(protocolLibrary.SingleBitFullAdder, 4);
+    expect(added).toContain('MAIN-PROCESS SingleBitFullAdder');
+    expect(added).toMatch(/PARAMS:\s+A:state B:state Cin:state Q\d+:state/);
+    expect(added).not.toContain('MAIN-PROCESS CanvasCircuit');
+    expect(getProtocolParameterEntries(added)).toHaveLength(4);
+
+    const compiledWithAddedParam = compileQpuProtocol(added, protocolLibrary);
+    expect(compiledWithAddedParam.processParams.map((param) => param.name)).toHaveLength(4);
+    expect(compiledWithAddedParam.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
+
+    const removed = updateProtocolParameterCount(added, 3);
+    expect(getProtocolParameterEntries(removed).map((param) => param.name)).toEqual(['A', 'B', 'Cin']);
+    expect(removed).toContain('MAIN-PROCESS SingleBitFullAdder');
   });
 
   it('does not inflate qubit count when a compiled circuit is serialized and recompiled', () => {
