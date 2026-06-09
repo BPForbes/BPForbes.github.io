@@ -210,6 +210,9 @@ export const ModuleLab = () => {
     setChatBusy(true);
     try {
       await handleIntent(text);
+    } catch (err) {
+      console.error('handleIntent failed', err);
+      pushMessage('assistant', 'Sorry, something went wrong while processing your message.');
     } finally {
       setChatBusy(false);
     }

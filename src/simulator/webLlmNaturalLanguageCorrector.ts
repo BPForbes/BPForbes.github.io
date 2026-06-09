@@ -1,6 +1,8 @@
 import type { MLCEngine } from '@mlc-ai/web-llm';
-import type { CorrectionGuidance } from './circuitCorrector';
+import type { CorrectionGuidance, GatePreference } from './circuitCorrector';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
+
+const ALLOWED_GATES = new Set<GatePreference>(['CNOT', 'CCNOT', 'X', 'H', 'NOT', 'AND', 'OR', 'XOR']);
 
 export type WebLlmCorrectionIntent = ModelCorrectionIntent;
 
@@ -55,7 +57,10 @@ async function getEngine(onProgress?: (text: string) => void): Promise<MLCEngine
           onProgress?.(progress.text ?? 'Loading browser language model...');
         },
       });
-    })();
+    })().catch((error) => {
+      enginePromise = null;
+      throw error;
+    });
   }
   return enginePromise;
 }
@@ -74,10 +79,10 @@ Allowed schema:
   "runTest": boolean,
   "autonomous": boolean,
   "guidance": {
-    "preferredGates": ["CNOT", "CCNOT"],
+    "preferredGates": ["CNOT", "CCNOT", "X", "H", "NOT", "AND", "OR", "XOR"],
     "gates": [
       {
-        "gate": "CNOT" | "CCNOT",
+        "gate": "CNOT" | "CCNOT" | "X" | "H" | "NOT" | "AND" | "OR" | "XOR",
         "inputs": string[],
         "output": string
       }
@@ -138,10 +143,17 @@ function sanitizeGuidance(raw: unknown): CorrectionGuidance | undefined {
         if (!isAllowedGate(spec.gate)) return null;
         if (!Array.isArray(spec.inputs)) return null;
         if (typeof spec.output !== 'string') return null;
+        const output = spec.output.trim();
+        if (!output) return null;
+        const inputs = spec.inputs
+          .filter((input): input is string => typeof input === 'string')
+          .map((input) => input.trim())
+          .filter((input) => input.length > 0);
+        if (inputs.length === 0) return null;
         return {
           gate: spec.gate,
-          inputs: spec.inputs.filter((input): input is string => typeof input === 'string'),
-          output: spec.output,
+          inputs,
+          output,
         };
       })
       .filter((gate): gate is NonNullable<typeof gate> => gate !== null)
@@ -155,8 +167,8 @@ function sanitizeGuidance(raw: unknown): CorrectionGuidance | undefined {
   };
 }
 
-function isAllowedGate(value: unknown): value is 'CNOT' | 'CCNOT' {
-  return value === 'CNOT' || value === 'CCNOT';
+function isAllowedGate(value: unknown): value is GatePreference {
+  return typeof value === 'string' && ALLOWED_GATES.has(value as GatePreference);
 }
 
 /** @internal Test helper to reset the cached engine between tests. */

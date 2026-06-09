@@ -41,7 +41,7 @@ describe('sanitizeIntent', () => {
       runTest: true,
       autonomous: true,
       guidance: {
-        preferredGates: ['CCNOT'],
+        preferredGates: ['CCNOT', 'X'],
         gates: [{ gate: 'CNOT', inputs: ['A'], output: 'Sum' }],
       },
     });
@@ -52,10 +52,11 @@ describe('parseNaturalLanguageWithWebLlm', () => {
   afterEach(() => {
     resetWebLlmEngineForTests();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('returns null when WebGPU is unavailable', async () => {
-    vi.stubGlobal('navigator', { gpu: undefined });
+    vi.stubGlobal('navigator', {});
     await expect(parseNaturalLanguageWithWebLlm('fix automatically', context)).resolves.toBeNull();
   });
 

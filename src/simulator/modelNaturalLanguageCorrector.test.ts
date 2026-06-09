@@ -37,6 +37,18 @@ describe('sanitizeIntent', () => {
   it('rejects invalid payloads', () => {
     expect(sanitizeIntent(null)).toBeNull();
     expect(sanitizeIntent('text')).toBeNull();
+    expect(sanitizeIntent('false')).toBeNull();
+    expect(sanitizeIntent('0')).toBeNull();
+  });
+
+  it('does not coerce string flags to true', () => {
+    const intent = sanitizeIntent({
+      reply: 'x',
+      runTest: 'false',
+      autonomous: '0',
+    });
+    expect(intent?.runTest).toBe(false);
+    expect(intent?.autonomous).toBe(false);
   });
 });
 

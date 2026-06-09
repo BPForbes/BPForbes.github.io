@@ -5,6 +5,16 @@ const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL ?? 'http://localhost:11434/ap
 const MODEL = import.meta.env.VITE_OLLAMA_MODEL ?? 'llama3.2';
 
 const ALLOWED_GATES = new Set<GatePreference>(['CNOT', 'CCNOT', 'X', 'H', 'NOT', 'AND', 'OR', 'XOR']);
+const OLLAMA_TIMEOUT_MS = 8_000;
+
+function toStrictBoolean(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1';
+  }
+  return false;
+}
 
 const buildPrompt = (message: string, context: NlCorrectionContext): string => `
 You are a strict JSON intent parser for a QPU circuit correction tool.
@@ -84,11 +94,11 @@ export const sanitizeIntent = (raw: unknown): ModelCorrectionIntent | null => {
     reply: typeof record.reply === 'string'
       ? record.reply
       : 'Parsed request with the local language model.',
-    loadFullAdderTable: Boolean(record.loadFullAdderTable),
-    inferTable: Boolean(record.inferTable),
-    probeOutputs: Boolean(record.probeOutputs),
-    runTest: Boolean(record.runTest),
-    autonomous: Boolean(record.autonomous),
+    loadFullAdderTable: toStrictBoolean(record.loadFullAdderTable),
+    inferTable: toStrictBoolean(record.inferTable),
+    probeOutputs: toStrictBoolean(record.probeOutputs),
+    runTest: toStrictBoolean(record.runTest),
+    autonomous: toStrictBoolean(record.autonomous),
     guidance,
   };
 };
@@ -99,16 +109,24 @@ export const parseNaturalLanguageWithModel = async (
 ): Promise<ModelCorrectionIntent | null> => {
   try {
     const prompt = buildPrompt(message, context);
-    const response = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: MODEL,
-        prompt,
-        stream: false,
-        format: 'json',
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(OLLAMA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: MODEL,
+          prompt,
+          stream: false,
+          format: 'json',
+        }),
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) return null;
 
