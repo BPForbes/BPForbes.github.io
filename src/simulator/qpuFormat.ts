@@ -25,6 +25,7 @@ const stripProtocolRef = (token: string) => token.replace(/^\$/, '').split(':')[
 const isMainProcessLine = (line: string) => /^\s*MAIN-PROCESS\s+/i.test(line);
 const isParamsLine = (line: string) => /^\s*PARAMS:/i.test(line);
 const isSetLine = (line: string) => /^\s*SET\s+/i.test(line);
+const isCreateTokenLine = (line: string) => /^\s*CREATETOKEN\b/i.test(line);
 type ProtocolLineBlock = { start: number; end: number; logicalLine: string };
 
 const findContinuedLineBlock = (lines: string[], start: number): ProtocolLineBlock => {
@@ -76,6 +77,98 @@ const nextProtocolParamName = (reserved: Set<string>, index: number) => {
       return candidate;
     }
   }
+};
+
+export const updateProtocolReturnValTokens = (source: string, outputNames: string[]) => {
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.replace(/\r\n/g, '\n').split('\n');
+  const returnLine = `RETURNVALS ${outputNames.join(' ')}`.trimEnd();
+  const returnIndex = lines.findIndex((line) => /^\s*RETURNVALS\b/i.test(line));
+
+  if (returnIndex >= 0) {
+    const block = findContinuedLineBlock(lines, returnIndex);
+    const indent = lines[block.start].match(/^\s*/)?.[0] ?? '';
+    lines.splice(block.start, block.end - block.start + 1, `${indent}${returnLine}`);
+  } else {
+    lines.push(returnLine);
+  }
+
+  return lines.join(newline);
+};
+
+export const createBlankProtocol = (inputNames: string[], outputNames: string[]) => {
+  const inputs = inputNames.length > 0 ? inputNames : ['A', 'B'];
+  const outputs = outputNames.length > 0 ? outputNames : ['Y'];
+  const processName = 'UntitledCircuit';
+  return [
+    `PARAMS: ${inputs.map((name) => `${name}:state`).join(' ')}`,
+    '',
+    `MAIN-PROCESS ${processName}`,
+    `CREATETOKEN -I ${outputs.join(' ')}`,
+    ...outputs.map((name) => `SET ${name}:0 0p`),
+    `RETURNVALS ${outputs.map((name) => `${name}:0`).join(' ')}`,
+  ].join('\n');
+};
+
+const syncProtocolOutputRegisters = (source: string, outputColumns: string[]) => {
+  const outputNames = outputColumns.map((name) => stripProtocolRef(name));
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.replace(/\r\n/g, '\n').split('\n');
+  const createIndex = lines.findIndex(isCreateTokenLine);
+
+  if (createIndex >= 0) {
+    const block = findContinuedLineBlock(lines, createIndex);
+    const match = block.logicalLine.match(/\bCREATETOKEN\b\s+-I\s+(.+)/i);
+    const existingTokens = match
+      ? match[1].trim().split(/\s+/).map(stripProtocolRef).filter(Boolean)
+      : [];
+    const missingTokens = outputNames.filter((name) => !existingTokens.includes(name));
+    if (missingTokens.length > 0) {
+      const indent = lines[block.start].match(/^\s*/)?.[0] ?? '';
+      lines.splice(
+        block.start,
+        block.end - block.start + 1,
+        `${indent}CREATETOKEN -I ${[...existingTokens, ...missingTokens].join(' ')}`,
+      );
+    }
+  } else {
+    const mainIndex = lines.findIndex(isMainProcessLine);
+    const insertAt = mainIndex >= 0 ? mainIndex + 1 : 0;
+    lines.splice(insertAt, 0, `CREATETOKEN -I ${outputNames.join(' ')}`);
+  }
+
+  const existingSets = new Set<string>();
+  lines.forEach((line) => {
+    if (!isSetLine(line)) return;
+    const parts = line.trim().split(/\s+/);
+    const target = parts[1];
+    if (target) existingSets.add(stripProtocolRef(target));
+  });
+
+  const missingSets = outputNames.filter((name) => !existingSets.has(name));
+  if (missingSets.length > 0) {
+    const anchorIndex = lines.findIndex((line) => /^\s*(MEASURE|RETURNVALS)\b/i.test(line));
+    const insertAt = anchorIndex >= 0 ? anchorIndex : lines.length;
+    lines.splice(insertAt, 0, ...missingSets.map((name) => `SET ${name}:0 0p`));
+  }
+
+  return lines.join(newline);
+};
+
+export const syncProtocolToTruthTable = (source: string, inputColumns: string[], outputColumns: string[]) => {
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  let next = updateProtocolParameterCount(source, inputColumns.length);
+  const lines = next.replace(/\r\n/g, '\n').split('\n');
+  const paramsBlock = findParamsBlock(lines);
+  if (paramsBlock) {
+    const paramsLine = `PARAMS: ${inputColumns.map((name) => `${name}:state`).join(' ')}`.trimEnd();
+    const indent = lines[paramsBlock.start].match(/^\s*/)?.[0] ?? '';
+    lines.splice(paramsBlock.start, paramsBlock.end - paramsBlock.start + 1, `${indent}${paramsLine}`);
+    next = lines.join(newline);
+  }
+  next = syncProtocolOutputRegisters(next, outputColumns);
+  const outputTokens = outputColumns.map((name) => (name.includes(':') ? name : `${name}:0`));
+  return updateProtocolReturnValTokens(next, outputTokens);
 };
 
 export const updateProtocolParameterCount = (source: string, paramCount: number) => {

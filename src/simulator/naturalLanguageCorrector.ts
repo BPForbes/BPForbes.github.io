@@ -193,6 +193,17 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
+  const catalogProcess = context.processCatalog?.find((entry) => {
+    const pattern = new RegExp(`\\b(?:load|open|use)\\s+(?:the\\s+)?${escapeRegex(entry.name)}\\b`, 'i');
+    return pattern.test(text);
+  });
+  if (catalogProcess) {
+    return {
+      reply: `Loaded ${catalogProcess.name} from the process catalog.`,
+      loadCatalogProcess: catalogProcess.name,
+    };
+  }
+
   if (/(?:load|use).*(?:full[- ]?adder|adder truth)/i.test(lower)) {
     return {
       reply: 'Loaded the canonical single-bit full adder truth table.',

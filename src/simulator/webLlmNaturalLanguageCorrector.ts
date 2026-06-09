@@ -1,5 +1,6 @@
 import type { MLCEngine } from '@mlc-ai/web-llm';
 import type { CorrectionGuidance, GatePreference } from './circuitCorrector';
+import { buildNlContextSections } from './nlContextPrompt';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 
 const ALLOWED_GATES = new Set<GatePreference>(['CNOT', 'CCNOT', 'X', 'H', 'NOT', 'AND', 'OR', 'XOR']);
@@ -74,6 +75,7 @@ Allowed schema:
 {
   "reply": string,
   "loadFullAdderTable": boolean,
+  "loadCatalogProcess": string,
   "inferTable": boolean,
   "probeOutputs": boolean,
   "runTest": boolean,
@@ -90,11 +92,7 @@ Allowed schema:
   }
 }
 
-Available input registers:
-${context.inputColumns.join(', ') || '(none)'}
-
-Available output registers:
-${context.outputColumns.join(', ') || '(none)'}
+${buildNlContextSections(context)}
 
 Rules:
 - Gate insertion requests populate guidance.gates.
@@ -102,6 +100,7 @@ Rules:
 - Test, check, verify, or validate requests set runTest=true.
 - Automatic repair requests set autonomous=true and runTest=true.
 - Full-adder truth-table requests set loadFullAdderTable=true.
+- Requests to open a cataloged process set loadCatalogProcess to that process name.
 - Truth-table inference requests set inferTable=true.
 - Output probing requests set probeOutputs=true.
 - Unknown requests return a helpful reply and no action flags.
@@ -119,6 +118,9 @@ export function sanitizeIntent(raw: unknown): WebLlmCorrectionIntent | null {
       ? value.reply
       : 'The request was interpreted by the browser language model.',
     loadFullAdderTable: value.loadFullAdderTable === true,
+    loadCatalogProcess: typeof value.loadCatalogProcess === 'string' && value.loadCatalogProcess.trim()
+      ? value.loadCatalogProcess.trim()
+      : undefined,
     inferTable: value.inferTable === true,
     probeOutputs: value.probeOutputs === true,
     runTest: value.runTest === true,

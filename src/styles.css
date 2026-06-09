@@ -180,6 +180,12 @@ button { font: inherit; }
 .truth-table-editor th.input-col { color: #67e8f9; }
 .truth-table-editor th.output-col { color: #facc15; }
 .truth-table-editor select { border: 1px solid rgba(148,163,184,.35); border-radius: .55rem; color: #f8fafc; background: rgba(2,6,23,.72); padding: .35rem .45rem; font-weight: 800; }
+.truth-table-editor tr.truth-row-fail { background: rgba(127, 29, 29, .72); }
+.truth-table-editor tr.truth-row-pass { background: rgba(30, 58, 138, .42); }
+.truth-table-dimensions { display: flex; flex-wrap: wrap; gap: .85rem; margin: .5rem 0 .75rem; }
+.truth-table-dimensions label { display: grid; gap: .25rem; font-size: .84rem; color: #cbd5e1; font-weight: 700; }
+.truth-table-dimensions input { width: 5rem; border: 1px solid rgba(148,163,184,.35); border-radius: .55rem; color: #f8fafc; background: rgba(2,6,23,.72); padding: .35rem .45rem; }
+.module-tester-grid select { margin-top: .45rem; width: 100%; border: 1px solid rgba(148,163,184,.35); border-radius: .55rem; color: #f8fafc; background: rgba(2,6,23,.72); padding: .45rem .55rem; }
 .guided-correction-panel { margin: .75rem 0; color: #cbd5e1; }
 .guided-correction-panel summary { cursor: pointer; font-weight: 900; color: #e0f2fe; }
 .guided-grid { display: grid; gap: .75rem; margin-top: .75rem; }

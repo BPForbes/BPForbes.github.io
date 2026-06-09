@@ -1,4 +1,5 @@
 import type { GatePreference } from './circuitCorrector';
+import { buildNlContextSections } from './nlContextPrompt';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 
 const OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL ?? 'http://localhost:11434/api/generate';
@@ -24,6 +25,7 @@ Allowed JSON shape:
 {
   "reply": string,
   "loadFullAdderTable": boolean,
+  "loadCatalogProcess": string,
   "inferTable": boolean,
   "probeOutputs": boolean,
   "runTest": boolean,
@@ -40,8 +42,7 @@ Allowed JSON shape:
   }
 }
 
-Available input columns: ${context.inputColumns.join(', ') || '(none)'}
-Available output columns: ${context.outputColumns.join(', ') || '(none)'}
+${buildNlContextSections(context)}
 
 Examples:
 - "load the full adder truth table" -> { "reply": "...", "loadFullAdderTable": true }
@@ -95,6 +96,9 @@ export const sanitizeIntent = (raw: unknown): ModelCorrectionIntent | null => {
       ? record.reply
       : 'Parsed request with the local language model.',
     loadFullAdderTable: toStrictBoolean(record.loadFullAdderTable),
+    loadCatalogProcess: typeof record.loadCatalogProcess === 'string' && record.loadCatalogProcess.trim()
+      ? record.loadCatalogProcess.trim()
+      : undefined,
     inferTable: toStrictBoolean(record.inferTable),
     probeOutputs: toStrictBoolean(record.probeOutputs),
     runTest: toStrictBoolean(record.runTest),

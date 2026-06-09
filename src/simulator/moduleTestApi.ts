@@ -16,7 +16,10 @@ export type {
 
 export {
   createEmptyTruthTable,
+  createTruthTableFromColumns,
   extractProcessName,
+  formatTestFailureSummary,
+  resizeTruthTable,
   fillTruthTableFromCircuit,
   indexToInputRow,
   inferTruthTableDimensions,
@@ -58,6 +61,8 @@ export type ModuleTestRequest = {
   librarySources?: Record<string, string>;
   guidance?: CorrectionGuidance;
   autonomous?: boolean;
+  /** When false, only test and report failures without mutating the circuit. */
+  correct?: boolean;
 };
 
 export type ModuleTestResponse = {
@@ -77,7 +82,7 @@ export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse =>
   }
 
   const testResult = testCircuitAgainstTruthTable(request.source, truthTable, request.librarySources);
-  if (testResult.passed) {
+  if (testResult.passed || request.correct === false) {
     return { dimensions, truthTable, testResult };
   }
 
