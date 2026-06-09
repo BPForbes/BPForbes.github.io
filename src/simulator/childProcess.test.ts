@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from './qpuAst';
-import { serializeCircuitToQpuProtocol, updateProtocolStartStateSet } from './qpuFormat';
+import { getProtocolParameterEntries, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from './qpuFormat';
 import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from './engine';
 import { complex, magnitudeSquared } from './complex';
 import type { ParticleStartState } from './types';
@@ -101,6 +101,22 @@ describe('process parameter exposure', () => {
     const compiled = compileQpuProtocol(updated, protocolLibrary);
     expect(compiled.logicalQubitCount).toBe(2);
     expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
+  });
+
+  it('updates PARAMS when process particles are added or removed without converting to CanvasCircuit', () => {
+    const added = updateProtocolParameterCount(protocolLibrary.SingleBitFullAdder, 4);
+    expect(added).toContain('MAIN-PROCESS SingleBitFullAdder');
+    expect(added).toMatch(/PARAMS:\s+A:state B:state Cin:state Q\d+:state/);
+    expect(added).not.toContain('MAIN-PROCESS CanvasCircuit');
+    expect(getProtocolParameterEntries(added)).toHaveLength(4);
+
+    const compiledWithAddedParam = compileQpuProtocol(added, protocolLibrary);
+    expect(compiledWithAddedParam.processParams.map((param) => param.name)).toHaveLength(4);
+    expect(compiledWithAddedParam.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
+
+    const removed = updateProtocolParameterCount(added, 3);
+    expect(getProtocolParameterEntries(removed).map((param) => param.name)).toEqual(['A', 'B', 'Cin']);
+    expect(removed).toContain('MAIN-PROCESS SingleBitFullAdder');
   });
 
   it('does not inflate qubit count when a compiled circuit is serialized and recompiled', () => {

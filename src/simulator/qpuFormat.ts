@@ -1,5 +1,7 @@
 import { CircuitGate, ParticleStartState } from './types';
 
+export type ProtocolParamEntry = { name: string; type: string };
+
 const sanitizeProcessName = (name: string) => {
   const cleaned = name.replace(/[^A-Za-z0-9_]+/g, ' ').trim().replace(/\s+(\w)/g, (_, letter: string) => letter.toUpperCase());
   return cleaned.replace(/^[^A-Za-z_]+/, '') || 'CircuitProcess';
@@ -23,6 +25,62 @@ const stripProtocolRef = (token: string) => token.replace(/^\$/, '').split(':')[
 const isMainProcessLine = (line: string) => /^\s*MAIN-PROCESS\s+/i.test(line);
 const isParamsLine = (line: string) => /^\s*PARAMS:/i.test(line);
 const isSetLine = (line: string) => /^\s*SET\s+/i.test(line);
+const paramsLineIndex = (lines: string[]) => lines.findIndex(isParamsLine);
+
+const parseProtocolParamParts = (paramsBody: string): ProtocolParamEntry[] => paramsBody
+  .trim()
+  .split(/\s+/)
+  .filter((part) => part.includes(':'))
+  .map((part) => {
+    const [name, type] = part.split(':', 2);
+    return { name, type: type || 'state' };
+  });
+
+export const getProtocolParameterEntries = (source: string): ProtocolParamEntry[] => {
+  const line = source.replace(/\r\n/g, '\n').split('\n').find(isParamsLine);
+  if (!line) return [];
+  return parseProtocolParamParts(line.slice(line.indexOf(':') + 1));
+};
+
+const reservedProtocolNames = (source: string) => new Set(
+  Array.from(source.matchAll(/\b[A-Za-z_][A-Za-z0-9_]*\b/g), ([name]) => name)
+    .filter((name) => !['PARAMS', 'MAIN', 'PROCESS', 'state', 'int', 'float'].includes(name)),
+);
+
+const nextProtocolParamName = (reserved: Set<string>, index: number) => {
+  for (let candidateIndex = index; ; candidateIndex += 1) {
+    const candidate = `Q${candidateIndex}`;
+    if (!reserved.has(candidate)) {
+      reserved.add(candidate);
+      return candidate;
+    }
+  }
+};
+
+export const updateProtocolParameterCount = (source: string, paramCount: number) => {
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const lines = source.replace(/\r\n/g, '\n').split('\n');
+  const lineIndex = paramsLineIndex(lines);
+  const currentParams = lineIndex >= 0
+    ? parseProtocolParamParts(lines[lineIndex].slice(lines[lineIndex].indexOf(':') + 1))
+    : [];
+  const reservedNames = reservedProtocolNames(source);
+  currentParams.forEach((param) => reservedNames.add(param.name));
+  const nextParams = currentParams.slice(0, Math.max(0, paramCount));
+
+  while (nextParams.length < paramCount) {
+    nextParams.push({ name: nextProtocolParamName(reservedNames, nextParams.length), type: 'state' });
+  }
+
+  const paramsLine = `PARAMS: ${nextParams.map((param) => `${param.name}:${param.type}`).join(' ')}`.trimEnd();
+  if (lineIndex >= 0) {
+    lines[lineIndex] = `${lines[lineIndex].match(/^\s*/)?.[0] ?? ''}${paramsLine}`;
+  } else {
+    lines.unshift(paramsLine, '');
+  }
+
+  return lines.join(newline);
+};
 
 export const updateProtocolStartStateSet = (source: string, paramName: string, startState: ParticleStartState) => {
   const newline = source.includes('\r\n') ? '\r\n' : '\n';

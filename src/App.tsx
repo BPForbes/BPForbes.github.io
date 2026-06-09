@@ -8,7 +8,7 @@ import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess, QpucirPayload } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, projectStateOntoQubits, runCircuit } from './simulator/engine';
 import { compileQpuProtocol, ProcessParam, ReturnValue, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
-import { extractMainProcessName, qpucirFileNameForSource, serializeCircuitToQpuProtocol, updateProtocolStartStateSet } from './simulator/qpuFormat';
+import { extractMainProcessName, getProtocolParameterEntries, qpucirFileNameForSource, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from './simulator/qpuFormat';
 import { CircuitGate, GateType, MeasurementMap, ParticleStartState, gateTypes } from './simulator/types';
 import { Complex } from './simulator/complex';
 import './styles.css';
@@ -102,6 +102,7 @@ function App() {
   const [activeView, setActiveView] = useState<AppView>('builder');
   const [menuOpen, setMenuOpen] = useState(false);
   const [fileStatus, setFileStatus] = useState('Upload a .qpucir file or download one of the bundled AST circuits.');
+  const [protocolMode, setProtocolMode] = useState<'canvas' | 'process'>('process');
 
   const orderedGates = useMemo(() => gates.slice().sort((a, b) => a.step - b.step), [gates]);
   const renderedGates = useMemo(() => visibleCircuitGates(orderedGates), [orderedGates]);
@@ -194,7 +195,19 @@ function App() {
   };
 
   const syncCanvasProtocol = (nextGates: CircuitGate[], nextQubitCount = simulationQubitCount, nextStartStates = startStates) => {
+    setProtocolMode('canvas');
     setProtocolSource(serializeCircuitToQpuProtocol(nextGates, nextQubitCount, nextStartStates));
+  };
+
+  const processParamsFromProtocolSource = (source: string, previousParams = processParams, firstNewQubit = simulationQubitCount) => {
+    let nextNewQubit = firstNewQubit;
+    return getProtocolParameterEntries(source).map((param) => {
+      const existing = previousParams.find((candidate) => candidate.name === param.name);
+      if (existing) return existing;
+      const created = { name: param.name, type: param.type, qubitIndex: nextNewQubit };
+      nextNewQubit += 1;
+      return created;
+    });
   };
 
   const resetRuntime = (
@@ -271,12 +284,9 @@ function App() {
     );
     setStartStates(nextStartStates);
     const paramName = controllableParams.find((param) => param.qubitIndex === qubit)?.name ?? `Q${qubit}`;
-    setProtocolSource((current) => {
-      const processName = extractMainProcessName(current);
-      return processName && processName !== 'CanvasCircuit'
-        ? updateProtocolStartStateSet(current, paramName, value)
-        : serializeCircuitToQpuProtocol(gates, simulationQubitCount, nextStartStates);
-    });
+    setProtocolSource((current) => (protocolMode === 'process'
+      ? updateProtocolStartStateSet(current, paramName, value)
+      : serializeCircuitToQpuProtocol(gates, simulationQubitCount, nextStartStates)));
     resetRuntime(simulationQubitCount, `Set ${paramName} start state to ${value}.`, nextStartStates);
   };
 
@@ -297,6 +307,7 @@ function App() {
     setProcessParams([]);
     setReturnValues([]);
     setFileStatus('Site reset to the default circuit builder state.');
+    setProtocolMode('process');
     setActiveView('builder');
     setMenuOpen(false);
     resetRuntime(QUBIT_COUNT, undefined, defaultStartStates);
@@ -330,6 +341,33 @@ function App() {
   };
 
   const addParticle = () => {
+    if (protocolMode === 'process') {
+      const currentParamCount = getProtocolParameterEntries(protocolSource).length;
+      const nextSource = updateProtocolParameterCount(protocolSource, currentParamCount + 1);
+      const nextParams = processParamsFromProtocolSource(nextSource);
+      const nextSimulationQubitCount = Math.max(
+        simulationQubitCount,
+        ...nextParams.map((param) => param.qubitIndex + 1),
+      );
+      const nextStartStates = Array.from(
+        { length: nextSimulationQubitCount },
+        (_, index) => startStates[index] ?? '0p' as ParticleStartState,
+      );
+      const addedParam = nextParams[nextParams.length - 1];
+      setProtocolSource(nextSource);
+      setProcessParams(nextParams);
+      setSimulationQubitCount(nextSimulationQubitCount);
+      if (returnValues.length === 0) setQubitCount(Math.max(1, nextParams.length));
+      setStartStates(nextStartStates);
+      resetRuntime(
+        nextSimulationQubitCount,
+        `Added process parameter ${addedParam?.name ?? `Q${currentParamCount}`}; compile AST to bind it into the circuit.`,
+        nextStartStates,
+        nextParams,
+      );
+      return;
+    }
+
     const nextCount = Math.min(qubitCount + 1, 6);
     if (nextCount === qubitCount) {
       setLog((current) => [...current, 'This playground supports up to 6 qubit particles.']);
@@ -347,6 +385,27 @@ function App() {
   };
 
   const removeParticle = () => {
+    if (protocolMode === 'process') {
+      const currentParamCount = getProtocolParameterEntries(protocolSource).length;
+      const nextParamCount = Math.max(0, currentParamCount - 1);
+      if (nextParamCount === currentParamCount) {
+        setLog((current) => [...current, 'This compiled process has no parameter particles to remove.']);
+        return;
+      }
+      const nextSource = updateProtocolParameterCount(protocolSource, nextParamCount);
+      const nextParams = processParamsFromProtocolSource(nextSource);
+      setProtocolSource(nextSource);
+      setProcessParams(nextParams);
+      if (returnValues.length === 0) setQubitCount(Math.max(1, nextParams.length || qubitCount - 1));
+      resetRuntime(
+        simulationQubitCount,
+        `Removed the last process parameter; compile AST to rebuild the circuit inputs.`,
+        startStates,
+        nextParams,
+      );
+      return;
+    }
+
     const nextCount = Math.max(1, qubitCount - 1);
     if (nextCount === qubitCount) {
       setLog((current) => [...current, 'At least one qubit particle is required.']);
@@ -381,6 +440,7 @@ function App() {
     setQubitCount(example.qubitCount);
     setSimulationQubitCount(example.qubitCount);
     setGates(example.gates);
+    setProtocolMode('canvas');
     setProtocolSource(serializeCircuitToQpuProtocol(example.gates, example.qubitCount, nextStartStates, example.name));
     setStartStates(nextStartStates);
     setTokenMap({});
@@ -392,6 +452,7 @@ function App() {
   const compileProtocolSource = (source: string, label = 'QPU AST protocol') => {
     try {
       const result = compileQpuProtocol(source, protocolLibrary);
+      setProtocolMode('process');
       setSimulationQubitCount(result.qubitCount);
       setQubitCount(result.logicalQubitCount);
       const nextStartStates = Array.from({ length: result.qubitCount }, () => '0p' as ParticleStartState);
@@ -653,13 +714,13 @@ function App() {
             </div>
             <div className="compiler-actions">
               {protocolExamples.map((example) => (
-                <button key={example.name} onClick={() => setProtocolSource(example.source)} type="button">{example.name}</button>
+                <button key={example.name} onClick={() => { setProtocolMode('process'); setProtocolSource(example.source); }} type="button">{example.name}</button>
               ))}
             </div>
             <textarea
               aria-label="QPU protocol source"
               value={protocolSource}
-              onChange={(event) => setProtocolSource(event.target.value)}
+              onChange={(event) => { setProtocolMode('process'); setProtocolSource(event.target.value); }}
               spellCheck={false}
             />
             <div className="compiler-footer">
