@@ -403,8 +403,15 @@ const executeProcess = (
     if (command.op === 'SET') {
       const [target, value] = command.args;
       const targetName = scopedName(frame, target, parentFrame);
+      const targetBase = stripCycle(target);
       if (!value) throw new Error(`SET requires a value in '${line}'`);
       if (isConstant(value)) {
+        const declaredParam = frame.process.params.find((param) => param.name === targetBase);
+        if (declaredParam?.type === 'state') {
+          ensureQubit(state, targetName);
+          state.log.push(`SET ${targetBase} default ${value} at cycle ${state.currentCycle} (parametric default; runtime start state).`);
+          continue;
+        }
         const qubit = ensureQubit(state, targetName);
         const normalizedValue = value.replace(/^\$/, '').toLowerCase();
         if (normalizedValue.startsWith('0p')) scheduleCycleZero(state, qubit);

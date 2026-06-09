@@ -149,7 +149,48 @@ button { font: inherit; }
 .site-menu details button { width: 100%; margin-top: .35rem; }
 .docs-panel,
 .files-panel,
+.module-lab-shell,
+.module-tester-panel,
 .standalone-results { grid-column: 1 / -1; }
+.module-lab-shell { display: grid; gap: 1rem; }
+.module-lab-hero h1 { margin: .35rem 0 .65rem; font-size: clamp(1.7rem, 6vw, 3rem); line-height: 1.05; }
+.module-lab-layout { display: grid; gap: 1rem; }
+.module-lab-workspace,
+.module-lab-chat { min-height: 28rem; }
+.chat-log { display: grid; gap: .75rem; max-height: 28rem; overflow: auto; margin-bottom: 1rem; padding-right: .25rem; }
+.chat-bubble { border-radius: 1rem; padding: .85rem 1rem; border: 1px solid rgba(148,163,184,.2); background: rgba(2,6,23,.42); }
+.chat-bubble.user { border-color: rgba(125,211,252,.35); background: rgba(14,116,144,.18); }
+.chat-bubble.assistant { border-color: rgba(250,204,21,.28); background: rgba(113,63,18,.22); }
+.chat-bubble strong { display: block; margin-bottom: .35rem; color: #e0f2fe; font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
+.chat-bubble p { margin: 0; color: #dbeafe; white-space: pre-wrap; line-height: 1.5; }
+.chat-composer { display: grid; gap: .65rem; }
+.chat-composer textarea { width: 100%; min-height: 6.5rem; resize: vertical; border-radius: 1rem; border: 1px solid rgba(148,163,184,.3); background: rgba(2,6,23,.78); color: #dbeafe; padding: .9rem 1rem; font: inherit; line-height: 1.45; }
+.chat-composer button { justify-self: start; border: 1px solid rgba(125,211,252,.28); color: #082f49; background: linear-gradient(135deg, #67e8f9, #38bdf8); border-radius: .85rem; padding: .75rem 1rem; font-weight: 900; cursor: pointer; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; -webkit-clip-path: inset(50%); clip-path: inset(50%); white-space: nowrap; border: 0; }
+.module-tester-grid { display: grid; gap: 1rem; }
+.module-tester-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
+.module-tester-actions button { border: 1px solid rgba(125,211,252,.28); color: #082f49; background: linear-gradient(135deg, #67e8f9, #38bdf8); border-radius: .8rem; padding: .7rem .85rem; font-weight: 900; cursor: pointer; }
+.module-tester-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.module-source-editor { width: 100%; min-height: 14rem; resize: vertical; border-radius: 1rem; border: 1px solid rgba(148,163,184,.3); background: rgba(2,6,23,.78); color: #dbeafe; padding: 1rem; font-family: SFMono-Regular, Consolas, monospace; font-size: .86rem; line-height: 1.45; margin: .75rem 0; }
+.truth-table-editor-wrap { overflow: auto; border: 1px solid rgba(148,163,184,.22); border-radius: .9rem; margin: .75rem 0; }
+.truth-table-editor { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.truth-table-editor th,
+.truth-table-editor td { padding: .45rem .55rem; border-bottom: 1px solid rgba(148,163,184,.12); text-align: left; }
+.truth-table-editor th { position: sticky; top: 0; background: rgba(15,23,42,.98); color: #cbd5e1; }
+.truth-table-editor th.input-col { color: #67e8f9; }
+.truth-table-editor th.output-col { color: #facc15; }
+.truth-table-editor select { border: 1px solid rgba(148,163,184,.35); border-radius: .55rem; color: #f8fafc; background: rgba(2,6,23,.72); padding: .35rem .45rem; font-weight: 800; }
+.guided-correction-panel { margin: .75rem 0; color: #cbd5e1; }
+.guided-correction-panel summary { cursor: pointer; font-weight: 900; color: #e0f2fe; }
+.guided-grid { display: grid; gap: .75rem; margin-top: .75rem; }
+.guided-grid label { display: grid; gap: .35rem; font-size: .86rem; font-weight: 800; }
+.guided-grid input,
+.guided-grid select { border: 1px solid rgba(148,163,184,.35); border-radius: .75rem; color: #f8fafc; background: rgba(2,6,23,.72); padding: .6rem .75rem; font-weight: 800; }
+@media (min-width: 780px) {
+  .module-tester-grid { grid-template-columns: 1fr 1fr; align-items: start; }
+  .guided-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .module-lab-layout { grid-template-columns: minmax(0, 1.2fr) minmax(18rem, .8fr); align-items: start; }
+}
 .docs-grid { display: grid; gap: 1rem; }
 .docs-grid article { border: 1px solid rgba(148,163,184,.18); border-radius: 1rem; padding: 1rem; background: rgba(2,6,23,.36); }
 .docs-grid h3 { margin: 0 0 .65rem; color: #e0f2fe; }

@@ -11,6 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.84",
     "@vitejs/plugin-react": "latest",
     "react": "latest",
     "react-dom": "latest",
