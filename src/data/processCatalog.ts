@@ -3,7 +3,7 @@ import { extractMainProcessName } from '../simulator/qpuFormat';
 import { inferTruthTableDimensions } from '../simulator/truthTable';
 import { getProtocolParameterEntries } from '../simulator/qpuFormat';
 import { getReturnValTokens } from '../simulator/qpuAst';
-import type { TruthTableTestResult } from '../simulator/truthTable';
+import type { TruthTable, TruthTableTestResult } from '../simulator/truthTable';
 import type { ProcessCatalogSummary } from '../simulator/nlIntentTypes';
 
 export type ProcessCatalogOrigin = 'bundled' | 'compiled' | 'uploaded' | 'corrected';
@@ -14,6 +14,8 @@ export type ProcessCatalogEntry = {
   source: string;
   origin: ProcessCatalogOrigin;
   fileName?: string;
+  truthTable?: TruthTable;
+  truthTableFileName?: string;
   description?: string;
   updatedAt: string;
 };
@@ -94,11 +96,14 @@ const catalogAliases = (entry: ProcessCatalogEntry): string[] => {
 const seedBundledProcesses = () => {
   configuredProcesses.forEach((process) => {
     const name = process.name;
+    const truthTable = process.truthTable;
     catalog.set(entryIdForName(name), {
       id: entryIdForName(name),
       name,
       source: process.source,
       fileName: process.fileName,
+      truthTable,
+      truthTableFileName: process.truthTableFileName,
       origin: 'bundled',
       description: `Bundled example (${process.fileName})`,
       updatedAt: process.exportedAt ?? new Date(0).toISOString(),
@@ -114,16 +119,21 @@ export const registerCatalogProcess = (input: {
   source: string;
   origin: ProcessCatalogOrigin;
   fileName?: string;
+  truthTable?: TruthTable;
+  truthTableFileName?: string;
   description?: string;
 }) => {
   const name = input.name.trim() || extractMainProcessName(input.source) || 'UntitledCircuit';
+  const existing = catalog.get(entryIdForName(name));
   const entry: ProcessCatalogEntry = {
     id: entryIdForName(name),
     name,
     source: input.source,
-    fileName: input.fileName?.trim() || undefined,
+    fileName: input.fileName?.trim() || existing?.fileName || undefined,
+    truthTable: input.truthTable ?? existing?.truthTable,
+    truthTableFileName: input.truthTableFileName?.trim() || existing?.truthTableFileName || undefined,
     origin: input.origin,
-    description: input.description,
+    description: input.description ?? existing?.description,
     updatedAt: new Date().toISOString(),
   };
   catalog.set(entry.id, entry);
@@ -131,6 +141,40 @@ export const registerCatalogProcess = (input: {
   persistCatalog();
   return entry;
 };
+
+export const registerCatalogTruthTable = (input: {
+  processName: string;
+  truthTable: TruthTable;
+  truthTableFileName?: string;
+  protocolSource?: string;
+}) => {
+  const name = input.processName.trim();
+  if (!name) throw new Error('Process name is required to register a truth table.');
+
+  const existing = getCatalogEntry(name);
+  const entry: ProcessCatalogEntry = existing ?? {
+    id: entryIdForName(name),
+    name,
+    source: input.protocolSource ?? `MAIN-PROCESS ${name}\nRETURNVALS Y:0`,
+    origin: 'uploaded',
+    updatedAt: new Date().toISOString(),
+  };
+
+  const merged: ProcessCatalogEntry = {
+    ...entry,
+    truthTable: input.truthTable,
+    truthTableFileName: input.truthTableFileName?.trim() || entry.truthTableFileName,
+    updatedAt: new Date().toISOString(),
+  };
+  catalog.set(merged.id, merged);
+  invalidateCatalogCache();
+  persistCatalog();
+  return merged;
+};
+
+export const getCatalogTruthTable = (processName: string): TruthTable | undefined => (
+  getCatalogEntry(processName)?.truthTable
+);
 
 export const getCatalogEntries = (): ProcessCatalogEntry[] => (
   Array.from(catalog.values()).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
@@ -150,14 +194,19 @@ export const resolveCatalogEntry = (query: string): ProcessCatalogEntry | undefi
 
   const lower = normalized.toLowerCase();
   const withExt = lower.endsWith('.qpucir') ? lower : `${lower}.qpucir`;
+  const withQpuio = lower.endsWith('.qpuio') ? lower : `${lower}.qpuio`;
 
   return getCatalogEntries().find((entry) => (
     catalogAliases(entry).some((alias) => {
       const aliasLower = alias.toLowerCase();
       return aliasLower === lower
         || aliasLower === withExt
-        || aliasLower.replace(/\.qpucir$/i, '') === lower.replace(/\.qpucir$/i, '');
+        || aliasLower === withQpuio
+        || aliasLower.replace(/\.qpucir$/i, '') === lower.replace(/\.qpucir$/i, '')
+        || aliasLower.replace(/\.qpuio$/i, '') === lower.replace(/\.qpuio$/i, '');
     })
+    || entry.truthTableFileName?.toLowerCase() === lower
+    || entry.truthTableFileName?.toLowerCase() === withQpuio
   ));
 };
 
@@ -203,13 +252,15 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
     } catch {
       // Non-state protocols may not infer cleanly.
     }
+    const truthTable = entry.truthTable;
     return {
       name: entry.name,
       origin: entry.origin,
       fileName: entry.fileName,
-      inputColumns: columns.inputs,
-      outputColumns: columns.outputs,
-      rowCount: dimensions.rowCount,
+      inputColumns: truthTable?.inputColumns ?? columns.inputs,
+      outputColumns: truthTable?.outputColumns ?? columns.outputs,
+      rowCount: truthTable?.rows.length ?? dimensions.rowCount,
+      hasTruthTable: Boolean(truthTable),
       summary: summarizeSource(entry.source),
       description: entry.description,
     };

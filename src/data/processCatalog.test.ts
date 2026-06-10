@@ -46,4 +46,10 @@ describe('processCatalog', () => {
     expect(resolveCatalogEntry('custom-logic.qpucir')?.name).toBe('MyCircuit');
     expect(resolveCatalogEntry('custom-logic')?.name).toBe('MyCircuit');
   });
+
+  it('stores and retrieves bundled truth tables', () => {
+    const entry = getCatalogEntry('SingleBitFullAdder');
+    expect(entry?.truthTable?.rows).toHaveLength(8);
+    expect(entry?.truthTableFileName).toBe('single-bit-full-adder.qpuio');
+  });
 });

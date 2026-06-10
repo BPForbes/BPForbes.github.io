@@ -3,11 +3,20 @@ import {
   buildProcessCatalogSummaries,
   getCatalogEntries,
   getCatalogEntry,
+  getCatalogTruthTable,
   resolveCatalogEntry,
   getCatalogLibrarySources,
   getCatalogVersion,
   registerCatalogProcess,
+  registerCatalogTruthTable,
 } from '../data/processCatalog';
+import {
+  companionQpuioFileName,
+  downloadQpuioContents,
+  parseQpuioPayload,
+  qpuioFileNameForProcess,
+  serializeQpuioText,
+} from '../data/qpuioFile';
 import { downloadQpucirSource, parseQpucirPayload } from '../data/qpucirFile';
 import {
   formatClarificationRetry,
@@ -171,14 +180,23 @@ export const ModuleLab = () => {
     pendingClarification: clarification,
   }), [source, truthTable, activeProcessName, processCatalog, lastTestResult, librarySources, pendingClarification]);
 
-  const applySource = useCallback((nextSource: string, label: string, resetTable = true) => {
+  const applySource = useCallback((
+    nextSource: string,
+    label: string,
+    options?: { resetTable?: boolean; truthTable?: TruthTable | null },
+  ) => {
+    const resetTable = options?.resetTable ?? true;
     setSource(nextSource);
     setLastTestResult(null);
     if (resetTable) {
-      try {
-        setTruthTable(createEmptyTruthTable(nextSource));
-      } catch {
-        setTruthTable(createInitialTruthTable());
+      if (options?.truthTable) {
+        setTruthTable(options.truthTable);
+      } else {
+        try {
+          setTruthTable(createEmptyTruthTable(nextSource));
+        } catch {
+          setTruthTable(createInitialTruthTable());
+        }
       }
     }
     setStatus(label);
@@ -191,9 +209,15 @@ export const ModuleLab = () => {
       return null;
     }
     setSelectedCatalogId(entry.id);
-    applySource(entry.source, `Loaded catalog process ${entry.name}.`);
+    const catalogTable = entry.truthTable ?? getCatalogTruthTable(entry.name);
+    applySource(entry.source, `Loaded catalog process ${entry.name}.`, {
+      truthTable: catalogTable ?? undefined,
+    });
     if (!options?.silent) {
-      pushMessage('assistant', `Loaded ${entry.name} from the process catalog. Say "infer truth table" or "test the circuit" to continue.`);
+      const tableNote = catalogTable
+        ? ` Loaded bundled truth table (${catalogTable.rows.length} rows).`
+        : ' Say "infer truth table" or "test the circuit" to continue.';
+      pushMessage('assistant', `Loaded ${entry.name} from the process catalog.${tableNote}`);
     }
     return entry;
   }, [applySource, pushMessage]);
@@ -227,23 +251,98 @@ export const ModuleLab = () => {
     setLastTestResult(null);
   };
 
+  const ingestUploadedFiles = async (input: FileList | File[]) => {
+    const fileList = Array.from(input);
+    const qpucirFiles = fileList.filter((file) => /\.qpucir$/i.test(file.name) || (!/\.qpuio$/i.test(file.name) && !file.name.endsWith('.json')));
+    const qpuioFiles = fileList.filter((file) => /\.qpuio$/i.test(file.name));
+    const qpuioByCompanion = new Map(
+      qpuioFiles.map((file) => [companionQpuioFileName(file.name.replace(/\.qpuio$/i, '.qpucir')), file]),
+    );
+
+    if (qpucirFiles.length === 0 && qpuioFiles.length === 1) {
+      const file = qpuioFiles[0];
+      const contents = await file.text();
+      const entry = resolveCatalogEntry(file.name.replace(/\.qpuio$/i, ''));
+      const parsed = parseQpuioPayload(contents, entry?.source);
+      registerCatalogTruthTable({
+        processName: parsed.processName,
+        truthTable: parsed.truthTable,
+        truthTableFileName: file.name,
+        protocolSource: entry?.source,
+      });
+      refreshCatalog();
+      if (entry) {
+        setSelectedCatalogId(entry.id);
+        applySource(entry.source, `Loaded truth table from ${file.name}.`, { truthTable: parsed.truthTable });
+      } else {
+        setTruthTable(parsed.truthTable);
+        setLastTestResult(null);
+        setStatus(`Loaded truth table for ${parsed.processName} from ${file.name}.`);
+      }
+      pushMessage('assistant', `Loaded ${file.name} for ${parsed.processName}. Pair with a matching .qpucir file if the protocol is not already in the catalog.`);
+      return;
+    }
+
+    if (qpucirFiles.length === 0) {
+      throw new Error('Upload at least one .qpucir file, or a standalone .qpuio paired with a cataloged process.');
+    }
+
+    const primary = qpucirFiles[0];
+    const contents = await primary.text();
+    const parsed = parseQpucirPayload(contents);
+    const companion = qpuioByCompanion.get(primary.name)
+      ?? qpuioFiles.find((file) => file.name === companionQpuioFileName(primary.name));
+    let bundledTable: TruthTable | undefined;
+    let truthTableFileName: string | undefined;
+    if (companion) {
+      const qpuioContents = await companion.text();
+      const qpuioParsed = parseQpuioPayload(qpuioContents, parsed.source);
+      if (qpuioParsed.processName !== parsed.name) {
+        throw new Error(
+          `QPUIO process '${qpuioParsed.processName}' does not match .qpucir process '${parsed.name}'.`,
+        );
+      }
+      bundledTable = qpuioParsed.truthTable;
+      truthTableFileName = companion.name;
+    }
+
+    registerCatalogProcess({
+      name: parsed.name,
+      source: parsed.source,
+      origin: 'uploaded',
+      fileName: primary.name,
+      truthTable: bundledTable,
+      truthTableFileName,
+      description: `Uploaded from ${primary.name}${companion ? ` + ${companion.name}` : ''}`,
+    });
+    refreshCatalog();
+    setSelectedCatalogId('');
+    applySource(parsed.source, `Loaded ${primary.name}.`, { truthTable: bundledTable });
+    const tableNote = bundledTable
+      ? ` Truth table loaded from ${truthTableFileName}.`
+      : ' Say "infer truth table" or upload a companion .qpuio to continue.';
+    pushMessage('assistant', `Loaded ${primary.name} into the catalog.${tableNote}`);
+  };
+
   const uploadQpucir = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    try {
+      await ingestUploadedFiles(files);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Upload error: ${message}`);
+      pushMessage('assistant', `Upload failed: ${message}`);
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const uploadQpuio = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const contents = await file.text();
-      const parsed = parseQpucirPayload(contents);
-      registerCatalogProcess({
-        name: parsed.name,
-        source: parsed.source,
-        origin: 'uploaded',
-        fileName: file.name,
-        description: `Uploaded from ${file.name}`,
-      });
-      refreshCatalog();
-      setSelectedCatalogId('');
-      applySource(parsed.source, `Loaded ${file.name}.`);
-      pushMessage('assistant', `Loaded ${file.name} into the catalog. Say "infer truth table" or "test the circuit" to continue.`);
+      await ingestUploadedFiles([file]);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(`Upload error: ${message}`);
@@ -282,6 +381,21 @@ export const ModuleLab = () => {
       guidance,
       autonomous,
       correct: true,
+      propagateToChildren: true,
+      processName: extractMainProcessName(testSource) ?? activeProcessName ?? undefined,
+      getTruthTable: getCatalogTruthTable,
+    });
+
+    const nextLibrary = response.librarySources ?? librarySources;
+    response.childCorrections?.forEach((child) => {
+      if (!child.corrected) return;
+      registerCatalogProcess({
+        name: child.processName,
+        source: child.source,
+        origin: 'corrected',
+        truthTable: getCatalogTruthTable(child.processName),
+        description: `Child process corrected for compatibility (${autonomous ? 'autonomous' : 'guided'})`,
+      });
     });
 
     if (response.correctedSource) {
@@ -290,13 +404,20 @@ export const ModuleLab = () => {
         name: extractMainProcessName(response.correctedSource) ?? `${activeProcessName ?? 'Circuit'}Corrected`,
         source: response.correctedSource,
         origin: 'corrected',
+        truthTable: table,
         description: `Corrected in Circuit Correction Lab (${autonomous ? 'autonomous' : 'guided'})`,
       });
+      refreshCatalog();
+    } else if (response.childCorrections?.some((child) => child.corrected)) {
       refreshCatalog();
     }
 
     setLastTestResult(response.testResult);
-    const summary = formatTestFailureSummary(response.testResult);
+    let summary = formatTestFailureSummary(response.testResult);
+    const correctedChildren = response.childCorrections?.filter((child) => child.corrected) ?? [];
+    if (correctedChildren.length > 0) {
+      summary += ` Also corrected child process(es): ${correctedChildren.map((child) => child.processName).join(', ')}.`;
+    }
     setStatus(summary);
     return { response, summary };
   }, [source, librarySources, activeProcessName, refreshCatalog]);
@@ -496,6 +617,15 @@ export const ModuleLab = () => {
     URL.revokeObjectURL(url);
   };
 
+  const downloadQpuioTable = () => {
+    if (!truthTable || !activeProcessName) return;
+    downloadQpuioContents(
+      qpuioFileNameForProcess(activeProcessName),
+      serializeQpuioText(activeProcessName, truthTable),
+    );
+    setStatus(`Downloaded ${qpuioFileNameForProcess(activeProcessName)}.`);
+  };
+
   const downloadCircuit = () => {
     try {
       downloadQpucirSource(source, librarySources, activeProcessName ?? 'CorrectedCircuit');
@@ -549,7 +679,7 @@ export const ModuleLab = () => {
         <div>
           <p className="eyebrow">Circuit correction lab</p>
           <h1>Test modules and fix circuits with natural language.</h1>
-          <p>Choose a cataloged process or upload a .qpucir file, define the expected truth table, and chat with the correction assistant to translate human instructions into gate-level fixes.</p>
+          <p>Choose a cataloged process or upload a .qpucir file (optionally with a companion .qpuio truth table), define the expected truth table, and chat with the correction assistant to translate human instructions into gate-level fixes.</p>
         </div>
       </header>
 
@@ -563,8 +693,14 @@ export const ModuleLab = () => {
           <div className="module-tester-grid">
             <label className="upload-card">
               <strong>Upload .qpucir</strong>
-              <span>Plain protocol text or qpucir JSON envelope.</span>
-              <input accept=".qpucir,.txt,.qpu,application/json,text/plain" onChange={uploadQpucir} type="file" />
+              <span>Protocol file; select a matching .qpuio in the same dialog to load its truth table.</span>
+              <input accept=".qpucir,.qpuio,.txt,.qpu,application/json,text/plain" multiple onChange={uploadQpucir} type="file" />
+            </label>
+
+            <label className="upload-card">
+              <strong>Upload .qpuio</strong>
+              <span>Truth-table metadata for a cataloged or paired process.</span>
+              <input accept=".qpuio,text/plain" onChange={uploadQpuio} type="file" />
             </label>
 
             <label className="upload-card">
@@ -594,7 +730,8 @@ export const ModuleLab = () => {
               <button onClick={() => { inferTable(); pushMessage('assistant', 'Inferred truth-table dimensions from PARAMS and RETURNVALS.'); }} type="button">Infer truth table</button>
               <button onClick={() => { setTruthTable(singleBitFullAdderTruthTable()); setLastTestResult(null); pushMessage('assistant', 'Loaded canonical full-adder truth table.'); }} type="button">Full-adder table</button>
               <button disabled={!truthTable} onClick={() => truthTable && setTruthTable(probeModuleOutputs(source, truthTable, librarySources))} type="button">Probe outputs</button>
-              <button disabled={!truthTable} onClick={downloadTruthTable} type="button">Download table</button>
+              <button disabled={!truthTable} onClick={downloadTruthTable} type="button">Download JSON</button>
+              <button disabled={!truthTable || !activeProcessName} onClick={downloadQpuioTable} type="button">Download .qpuio</button>
               <button disabled={!source.trim()} onClick={downloadCircuit} type="button">Download .qpucir</button>
             </div>
           </div>
