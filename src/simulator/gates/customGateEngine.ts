@@ -117,7 +117,7 @@ const buildQubitRemap = (
   qubitCount: number,
 ): { remap: Map<number, number>; expandedQubitCount: number } => {
   const remap = new Map<number, number>();
-  const used = new Set<number>([...gate.controls, ...gate.targets]);
+  const used = new Set<number>(gate.controls);
 
   compiled.processParams.forEach((param, index) => {
     const mapped = gate.controls[index];
@@ -131,11 +131,13 @@ const buildQubitRemap = (
     if (mapped === undefined) {
       throw new Error(`Custom gate needs output wire for '${value.name}' (index ${index}).`);
     }
-    if (used.has(mapped)) {
+    const inputIndex = compiled.processParams.findIndex((param) => param.name === value.name);
+    const inputWire = inputIndex >= 0 ? gate.controls[inputIndex] : undefined;
+    if (used.has(mapped) && mapped !== inputWire) {
       throw new Error(`Custom gate output '${value.name}' must map to a distinct wire (q${mapped} already used).`);
     }
     remap.set(value.qubitIndex, mapped);
-    used.add(mapped);
+    if (!used.has(mapped)) used.add(mapped);
   });
 
   let nextAncilla = Math.max(qubitCount - 1, ...used) + 1;

@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createInitialState } from '../engine';
+import type { CircuitGate } from '../types';
 import {
+  applyCustomGateProcess,
   getCustomGateRecord,
   listCustomGateRecords,
   registerCustomGate,
@@ -51,6 +54,17 @@ describe('customGateEngine', () => {
     expect(record.source).toBe(validSource);
     expect(getCustomGateRecord('MyGate')?.source).toBe(validSource);
     expect(listCustomGateRecords()).toHaveLength(1);
+  });
+
+  it('executes custom gates with RETURNVALS mapped onto gate targets', () => {
+    const record = registerCustomGate({
+      id: 'Macro',
+      source: 'PARAMS: Q0:1\nMAIN-PROCESS Macro\nH -I Q0:0 -O Q0:0\nRETURNVALS Q0',
+    });
+    const gate: CircuitGate = { id: 'macro-0', type: 'Macro', step: 0, targets: [0], controls: [0] };
+    const result = applyCustomGateProcess(createInitialState(1), 1, gate, {}, record);
+    expect(result.log.some((entry) => /executing/i.test(entry))).toBe(true);
+    expect(result.state.some((amplitude) => Math.abs(amplitude.re) > 1e-6 || Math.abs(amplitude.im) > 1e-6)).toBe(true);
   });
 
   it('re-registers the same custom id by replacing the stored record', () => {

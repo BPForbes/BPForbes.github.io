@@ -19,7 +19,7 @@ import { isProtectedQpuioProcess, warnProtectedTruthTable } from './data/protect
 import { downloadQpucirContents, downloadQpucirTxtSource, parseQpucirPayload } from './data/qpucirFile';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess } from './data/protocolExamples';
-import { applyGate, createInitialState, measureAll, measureQubit, projectStateOntoQubits, runCircuit } from './simulator/engine';
+import { createInitialState, measureAll, measureQubit, projectStateOntoQubits, resolveStateQubitCount, runCircuit, stepCircuitGate } from './simulator/engine';
 import { compileQpuProtocol, ProcessParam, ReturnValue, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
 import { extractMainProcessName, getProtocolParameterEntries, qpucirFileNameForSource, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from './simulator/qpuFormat';
 import { controlsForGateType, getGateDefinition, paletteGateIds } from './simulator/gates/registry';
@@ -64,6 +64,7 @@ const newGate = (
 function App() {
   const [qubitCount, setQubitCount] = useState(QUBIT_COUNT);
   const [simulationQubitCount, setSimulationQubitCount] = useState(QUBIT_COUNT);
+  const [runtimeQubitCount, setRuntimeQubitCount] = useState(QUBIT_COUNT);
   const [gates, setGates] = useState<CircuitGate[]>([]);
   const [startStates, setStartStates] = useState<ParticleStartState[]>(() => Array.from({ length: QUBIT_COUNT }, () => '0p'));
   const [state, setState] = useState<Complex[]>(() => createInitialState(QUBIT_COUNT));
@@ -233,6 +234,7 @@ function App() {
       ? activeControllable.map((param) => param.qubitIndex)
       : undefined;
     setState(createInitialState(nextSimulationQubitCount, nextStartStates, activeParamIndices));
+    setRuntimeQubitCount(nextSimulationQubitCount);
     setMeasurements({});
     const initDesc = activeControllable.length
       ? activeControllable.map((param) => `${param.name}=${nextStartStates[param.qubitIndex] ?? '0p'}`).join(' ')
@@ -276,6 +278,7 @@ function App() {
       { librarySources: protocolLibrary, trackParticles: true },
     );
     setState(result.state);
+    setRuntimeQubitCount(resolveStateQubitCount(result.state, simulationQubitCount));
     setMeasurements(result.measurements);
     setParticleSnapshots(result.particles ?? []);
     setParticleTransitions(result.transitions ?? []);
@@ -286,10 +289,12 @@ function App() {
   const step = () => {
     const gate = orderedGates[cursor];
     if (!gate) return;
-    const result = applyGate(state, simulationQubitCount, gate, measurements, {
+    const workingQubitCount = resolveStateQubitCount(state, runtimeQubitCount);
+    const { result, qubitCount: nextQubitCount } = stepCircuitGate(state, workingQubitCount, gate, measurements, {
       librarySources: protocolLibrary,
       trackParticles: true,
     });
+    setRuntimeQubitCount(nextQubitCount);
     setState(result.state);
     setMeasurements(result.measurements);
     setParticleSnapshots(result.particles ?? []);

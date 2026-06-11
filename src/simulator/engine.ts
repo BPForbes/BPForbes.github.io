@@ -68,6 +68,14 @@ export const createInitialState = (
   return state;
 };
 
+export const resolveStateQubitCount = (state: Complex[], qubitCount: number): number => {
+  const vectorWidth = Math.round(Math.log2(state.length));
+  if (Number.isFinite(vectorWidth) && vectorWidth > 0 && vectorWidth > qubitCount) {
+    return vectorWidth;
+  }
+  return qubitCount;
+};
+
 const ensureStateWidth = (state: Complex[], qubitCount: number, gate: CircuitGate) => {
   const touched = [...gate.targets, ...gate.controls];
   if (touched.length === 0) return { state, qubitCount };
@@ -109,16 +117,31 @@ export const applyGate = (
   const beforeState = state;
   const beforeMeasurements = measurements;
   const result = applyRegisteredGate(state, qubitCount, gate, measurements, librarySources);
-  const particles = snapshotAllParticles(result.state, qubitCount, result.measurements);
+  const effectiveQubitCount = resolveStateQubitCount(result.state, qubitCount);
+  const particles = snapshotAllParticles(result.state, effectiveQubitCount, result.measurements);
   const transition = buildOperationTransition(
     gate,
     beforeState,
     result.state,
-    qubitCount,
+    effectiveQubitCount,
     beforeMeasurements,
     result.measurements,
   );
   return { ...result, particles, transitions: [transition] };
+};
+
+export const stepCircuitGate = (
+  state: Complex[],
+  qubitCount: number,
+  gate: CircuitGate,
+  measurements: MeasurementMap,
+  librarySourcesOrOptions: Record<string, string> | ApplyGateOptions = {},
+): { result: ExecutionResult; qubitCount: number } => {
+  let workingQubitCount = resolveStateQubitCount(state, qubitCount);
+  const sized = ensureStateWidth(state, workingQubitCount, gate);
+  workingQubitCount = sized.qubitCount;
+  const result = applyGate(sized.state, workingQubitCount, gate, measurements, librarySourcesOrOptions);
+  return { result, qubitCount: resolveStateQubitCount(result.state, workingQubitCount) };
 };
 
 export type RunCircuitOptions = {
