@@ -1,6 +1,7 @@
 import { configuredProcesses } from './protocolExamples';
 import {
   enforceProtectedTruthTable,
+  getProtectedQpuioFileName,
   getProtectedTruthTable,
   isProtectedQpuioProcess,
 } from './protectedQpuio';
@@ -71,6 +72,12 @@ const protocolSignatureMatches = (leftSource: string, rightSource: string) => {
   return left.inputs.join() === right.inputs.join() && left.outputs.join() === right.outputs.join();
 };
 
+const canonicalProtectedTruthTableFileName = (processName: string, fallback?: string) => (
+  isProtectedQpuioProcess(processName)
+    ? getProtectedQpuioFileName(processName) ?? fallback
+    : fallback
+);
+
 const persistCatalog = () => {
   if (typeof sessionStorage === 'undefined') return;
   const entries = Array.from(catalog.values()).filter((entry) => entry.origin !== 'bundled');
@@ -93,6 +100,7 @@ const restoreCatalog = () => {
         catalog.set(entryIdForName(entry.name), {
           ...entry,
           truthTable: enforced?.truthTable ?? entry.truthTable,
+          truthTableFileName: canonicalProtectedTruthTableFileName(entry.name, entry.truthTableFileName),
           truthTableProtected: isProtectedQpuioProcess(entry.name),
         });
       }
@@ -153,9 +161,10 @@ export const registerCatalogProcess = (input: {
     source: input.source,
     fileName: input.fileName?.trim() || existing?.fileName || undefined,
     truthTable: protectedTable?.truthTable ?? input.truthTable ?? inheritedTable,
-    truthTableFileName: isProtectedQpuioProcess(name)
-      ? existing?.truthTableFileName ?? configuredProcesses.find((process) => process.name === name)?.truthTableFileName
-      : input.truthTableFileName?.trim() || existing?.truthTableFileName || undefined,
+    truthTableFileName: canonicalProtectedTruthTableFileName(
+      name,
+      input.truthTableFileName?.trim() || existing?.truthTableFileName || undefined,
+    ),
     truthTableProtected: isProtectedQpuioProcess(name),
     origin: input.origin,
     description: input.description ?? existing?.description,
@@ -189,9 +198,10 @@ export const registerCatalogTruthTable = (input: {
   const merged: ProcessCatalogEntry = {
     ...entry,
     truthTable: protectedTable?.truthTable ?? input.truthTable,
-    truthTableFileName: isProtectedQpuioProcess(name)
-      ? entry.truthTableFileName ?? configuredProcesses.find((process) => process.name === name)?.truthTableFileName
-      : input.truthTableFileName?.trim() || entry.truthTableFileName,
+    truthTableFileName: canonicalProtectedTruthTableFileName(
+      name,
+      input.truthTableFileName?.trim() || entry.truthTableFileName,
+    ),
     truthTableProtected: isProtectedQpuioProcess(name),
     updatedAt: new Date().toISOString(),
   };

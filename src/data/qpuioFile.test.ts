@@ -64,6 +64,13 @@ RETURNVALS Y`);
     expect(() => parseQpuioPayload(JSON.stringify(payload), protocol)).toThrow(/processName/i);
   });
 
+  it('rejects JSON qpuio envelopes with non-string column names', () => {
+    const table = singleBitFullAdderTruthTable();
+    const payload = createQpuioPayload('SingleBitFullAdder', table);
+    payload.inputColumns = [0 as unknown as string];
+    expect(() => parseQpuioPayload(JSON.stringify(payload), protocol)).toThrow(/inputColumns\[0\] must be a string/i);
+  });
+
   it('rejects JSON qpuio envelopes with invalid row cells', () => {
     const table = singleBitFullAdderTruthTable();
     const payload = createQpuioPayload('SingleBitFullAdder', table);

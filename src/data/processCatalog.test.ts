@@ -95,6 +95,15 @@ describe('processCatalog', () => {
     expect(result.skipped).toBe(true);
   });
 
+  it('restores canonical qpuio filename for protected processes', () => {
+    const result = registerCatalogTruthTable({
+      processName: 'SingleBitFullAdder',
+      truthTable: structuredClone(getCatalogEntry('SingleBitFullAdder')!.truthTable!),
+      truthTableFileName: 'hacked.qpuio',
+    });
+    expect(result.entry.truthTableFileName).toBe('single-bit-full-adder.qpuio');
+  });
+
   it('reverts protected truth-table registration to canonical metadata', () => {
     const edited = structuredClone(getCatalogEntry('SingleBitFullAdder')!.truthTable!);
     edited.rows[0] = ['1p', '1p', '1p', '1p', '1p'];

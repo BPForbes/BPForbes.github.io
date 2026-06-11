@@ -323,14 +323,8 @@ export const ModuleLab = () => {
       }
       const entry = registration.entry;
       const resolvedTable = entry.truthTable ?? parsed.truthTable;
-      if (entry.source) {
-        setSelectedCatalogId(entry.id);
-        applySource(entry.source, `Loaded truth table from ${file.name}.`, { truthTable: resolvedTable });
-      } else {
-        commitTruthTable(parsed.processName, resolvedTable);
-        setLastTestResult(null);
-        setStatus(`Loaded truth table for ${parsed.processName} from ${file.name}.`);
-      }
+      setSelectedCatalogId(entry.id);
+      applySource(entry.source, `Loaded truth table from ${file.name}.`, { truthTable: resolvedTable });
       pushMessage('assistant', registration.reverted
         ? `Ignored edits from ${file.name}; ${parsed.processName} uses the protected bundled truth table.`
         : `Loaded ${file.name} for ${parsed.processName}. Pair with a matching .qpucir file if the protocol is not already in the catalog.`);

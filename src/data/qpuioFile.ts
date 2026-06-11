@@ -161,7 +161,10 @@ const parseColumnNames = (columns: unknown, label: string): string[] => {
     throw new Error(`JSON QPUIO envelope must include ${label} as an array.`);
   }
   return columns.map((column, index) => {
-    const name = String(column).trim();
+    if (typeof column !== 'string') {
+      throw new Error(`${label}[${index}] must be a string.`);
+    }
+    const name = column.trim();
     if (!name) {
       throw new Error(`${label}[${index}] must be a non-empty string.`);
     }

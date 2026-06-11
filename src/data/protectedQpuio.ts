@@ -42,6 +42,10 @@ export const protectedQpuioFileNames = () => configuredProcesses
   .filter((process) => isProtectedQpuioProcess(process.name) && process.truthTableFileName)
   .map((process) => process.truthTableFileName as string);
 
+export const getProtectedQpuioFileName = (processName: string): string | undefined => (
+  configuredProcesses.find((process) => process.name === processName)?.truthTableFileName
+);
+
 const formatProtectedWarning = (processName: string, reason: string) => (
   `The truth table for ${processName} is protected site metadata and cannot be edited.\n\n${reason}\n\nThe table has been restored to its default state.`
 );
