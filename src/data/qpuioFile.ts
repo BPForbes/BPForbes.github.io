@@ -23,11 +23,14 @@ const MAIN_PROCESS_PATTERN = /^MAIN-PROCESS:\s*(\S+)/i;
 const INPUTS_PATTERN = /^INPUTS:\s*(.*)$/i;
 const OUTPUTS_PATTERN = /^OUTPUTS:\s*(.+)$/i;
 
+const stripInlineComment = (line: string) => line.replace(/\s+#.*$/, '').trim();
+
 const splitDataLine = (line: string): string[] => {
-  if (line.includes(',')) {
-    return line.split(',').map((cell) => cell.trim());
+  const data = stripInlineComment(line);
+  if (data.includes(',')) {
+    return data.split(',').map((cell) => cell.trim());
   }
-  return line.trim().split(/\s+/).filter(Boolean);
+  return data.split(/\s+/).filter(Boolean);
 };
 
 const splitColumnNames = (line: string): string[] => {
