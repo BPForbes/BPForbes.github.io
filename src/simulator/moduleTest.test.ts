@@ -7,6 +7,7 @@ import {
   singleBitFullAdderTruthTable,
   testCircuitAgainstTruthTable,
   truthTablesEqual,
+  validateTruthTable,
 } from './truthTable';
 
 const readProcess = (fileName: string) => readFileSync(new URL(`../data/processes/${fileName}`, import.meta.url), 'utf8');
@@ -59,6 +60,50 @@ RETURNVALS Cout:0 Sum:0`;
     const correction = correctCircuit(broken, singleBitFullAdderTruthTable(), protocolLibrary);
     expect(correction.testResult.passed).toBe(true);
     expect(correction.steps.some((step) => step.kind === 'replace')).toBe(true);
+  });
+});
+
+const rsNorLatchStepSource = `PARAMS: S:state R:state Qprev:state QbarPrev:state
+
+MAIN-PROCESS RsNorLatchStep
+CREATETOKEN -I Q Qbar
+
+SET Q:0 0p
+OR  -I $R QbarPrev:0 -O Q:0
+NOT -I Q:0        -O Q:0
+
+SET Qbar:0 0p
+OR  -I $S Qprev:0 -O Qbar:0
+NOT -I Qbar:0     -O Qbar:0
+
+MEASURE -I Q
+MEASURE -I Qbar
+RETURNVALS Q Qbar`;
+
+const rsNorLatchStepTable = {
+  inputColumns: ['S', 'R', 'Qprev', 'QbarPrev'],
+  outputColumns: ['Q', 'Qbar'],
+  rows: [
+    ['0p', '0p', '1p', '0p', '1p', '0p'],
+    ['0p', '0p', '0p', '1p', '0p', '1p'],
+    ['0p', '1p', '1p', '0p', '0p', '1p'],
+    ['0p', '1p', '0p', '1p', '0p', '1p'],
+    ['1p', '0p', '0p', '1p', '1p', '0p'],
+    ['1p', '0p', '1p', '0p', '1p', '0p'],
+    ['1p', '1p', '1p', '0p', '0p', '0p'],
+    ['1p', '1p', '0p', '1p', '0p', '0p'],
+  ],
+};
+
+describe('partial truth tables', () => {
+  it('accepts fewer rows than the full combinatorial PARAMS expansion', () => {
+    expect(validateTruthTable(rsNorLatchStepTable, rsNorLatchStepSource)).toEqual([]);
+  });
+
+  it('runs tests only across listed partial rows', () => {
+    const result = testCircuitAgainstTruthTable(rsNorLatchStepSource, rsNorLatchStepTable);
+    expect(result.totalRows).toBe(8);
+    expect(result.dimensions.rowCount).toBe(16);
   });
 });
 

@@ -171,13 +171,15 @@ export const validateTruthTable = (table: TruthTable, source?: string): string[]
 
   if (table.outputColumns.length === 0) errors.push('Truth table requires at least one output column.');
 
-  const expectedRows = expected?.rowCount ?? (
+  const maxRows = expected?.rowCount ?? (
     table.inputColumns.length > 0
       ? 2 ** table.inputColumns.length
       : (table.outputColumns.length > 0 ? 1 : 0)
   );
-  if (table.rows.length !== expectedRows) {
-    errors.push(`Truth table has ${table.rows.length} row(s); expected ${expectedRows}.`);
+  if (table.rows.length === 0) {
+    errors.push('Truth table requires at least one row.');
+  } else if (table.rows.length > maxRows) {
+    errors.push(`Truth table has ${table.rows.length} row(s); expected at most ${maxRows}.`);
   }
 
   table.rows.forEach((row, rowIndex) => {
