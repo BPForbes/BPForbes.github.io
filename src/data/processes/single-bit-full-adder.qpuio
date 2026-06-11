@@ -1,4 +1,4 @@
-MAIN-PROCES: SingleBitFullAdder
+MAIN-PROCESS: SingleBitFullAdder
 #  A   B   Cin  Cout  Sum
 0  0p  0p  0p   0p    0p
 1  0p  0p  1p   0p    1p

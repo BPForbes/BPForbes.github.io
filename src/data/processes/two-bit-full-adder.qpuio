@@ -1,4 +1,4 @@
-MAIN-PROCES: TwoBitFullAdder
+MAIN-PROCESS: TwoBitFullAdder
 INPUTS: A0  A1  B0  B1  Cin
 OUTPUTS: Cout  S1tmp  S0tmp
 #  A0  A1  B0  B1  Cin  Cout  S1tmp  S0tmp

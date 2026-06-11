@@ -1,4 +1,4 @@
-MAIN-PROCES: PhaseDemo
+MAIN-PROCESS: PhaseDemo
 OUTPUTS: Q0
 #  Q0
 0  sp

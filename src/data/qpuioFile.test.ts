@@ -15,8 +15,17 @@ describe('qpuioFile', () => {
     expect(truthTablesEqual(parsed.truthTable, singleBitFullAdderTruthTable())).toBe(true);
   });
 
+  it('rejects the MAIN-PROCES typo in qpuio headers', () => {
+    const typo = `MAIN-PROCES: DemoGate
+OUTPUTS: Y
+#,Y
+0,0p`;
+
+    expect(() => parseQpuioPayload(typo)).toThrow(/MAIN-PROCESS:/i);
+  });
+
   it('parses csv-style qpuio rows', () => {
-    const csv = `MAIN-PROCES: DemoGate
+    const csv = `MAIN-PROCESS: DemoGate
 #,A,B,Y
 0,0p,0p,0p
 1,0p,1p,1p

@@ -17,7 +17,7 @@ export type ParsedQpuio = {
   truthTable: TruthTable;
 };
 
-const MAIN_PROCESS_PATTERN = /^MAIN-PROCES(?:S)?:\s*(\S+)/i;
+const MAIN_PROCESS_PATTERN = /^MAIN-PROCESS:\s*(\S+)/i;
 
 const INPUTS_PATTERN = /^INPUTS:\s*(.*)$/i;
 const OUTPUTS_PATTERN = /^OUTPUTS:\s*(.+)$/i;
@@ -96,7 +96,7 @@ const parseTextQpuio = (contents: string, protocolSource?: string): ParsedQpuio 
   });
 
   if (!processName) {
-    throw new Error('QPUIO file must include a MAIN-PROCES(S): <ProcessName> header.');
+    throw new Error('QPUIO file must include a MAIN-PROCESS: <ProcessName> header.');
   }
   if (headerIndex < 0) {
     throw new Error('QPUIO file must include a column header row starting with #.');
@@ -262,7 +262,7 @@ export const serializeQpuioText = (
     return cells.join(sep);
   });
 
-  const headerLines: string[] = [`MAIN-PROCES: ${processName}`];
+  const headerLines: string[] = [`MAIN-PROCESS: ${processName}`];
   if (truthTable.inputColumns.length > 0) {
     headerLines.push(`INPUTS: ${truthTable.inputColumns.join(sep)}`);
   }

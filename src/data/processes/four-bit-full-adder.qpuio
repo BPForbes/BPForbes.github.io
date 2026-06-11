@@ -1,4 +1,4 @@
-MAIN-PROCES: FourBitFullAdder
+MAIN-PROCESS: FourBitFullAdder
 INPUTS: A0  A1  A2  A3  B0  B1  B2  B3  Cin
 OUTPUTS: C4  Sum3  Sum2  Sum1  Sum0
 #  A0  A1  A2  A3  B0  B1  B2  B3  Cin  C4  Sum3  Sum2  Sum1  Sum0

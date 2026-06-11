@@ -12,7 +12,7 @@ These rules apply to coding agents, review bots, and the Circuit Correction Lab 
 ## QPU protocol conventions
 
 - `.qpucir` files hold protocol source (`PARAMS`, `MAIN-PROCESS`, gates, `RUNCHILD`, `RETURNVALS`).
-- `.qpuio` files hold truth-table metadata paired with a process name (`MAIN-PROCES:` header).
+- `.qpuio` files hold truth-table metadata paired with a process name (`MAIN-PROCESS:` header).
 - Child-process corrections must remain compatible with descendant truth tables in the catalog.
 
 ## Correction Lab LLM behavior
