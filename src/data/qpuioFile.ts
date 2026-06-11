@@ -2,6 +2,9 @@ import { getProtocolParameterEntries } from '../simulator/qpuFormat';
 import { getReturnValTokens } from '../simulator/qpuAst';
 import type { TruthCellValue, TruthTable } from '../simulator/truthTable';
 import { isTruthCellValue, parseTruthTableJson } from '../simulator/truthTable';
+import { qpuioTxtFileNameForProcess } from './qpuFileNames';
+
+export { companionQpuioFileName } from './qpuFileNames';
 
 export type QpuioPayload = {
   format: 'qpuio';
@@ -271,13 +274,7 @@ export const serializeQpuioText = (
   return [...headerLines, header, ...dataRows, ''].join('\n');
 };
 
-export const qpuioFileNameForProcess = (processName: string) => `${processName}.qpuio`;
-
-export const companionQpuioFileName = (qpucirFileName: string) => (
-  /\.qpucir$/i.test(qpucirFileName)
-    ? qpucirFileName.replace(/\.qpucir$/i, '.qpuio')
-    : `${qpucirFileName}.qpuio`
-);
+export const qpuioFileNameForProcess = (processName: string) => qpuioTxtFileNameForProcess(processName);
 
 export const downloadQpuioContents = (fileName: string, contents: string) => {
   const blob = new Blob([contents], { type: 'text/plain' });

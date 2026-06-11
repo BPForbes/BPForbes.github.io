@@ -1,3 +1,4 @@
+import { qpucirTxtFileNameForProcess } from '../data/qpuFileNames';
 import { CircuitGate, ParticleStartState } from './types';
 
 export type ProtocolParamEntry = { name: string; type: string };
@@ -18,7 +19,7 @@ export const extractMainProcessName = (source: string): string | null => {
 
 export const qpucirFileNameForSource = (source: string, fallbackName = 'CurrentCircuit') => {
   const processName = sanitizeProcessName(extractMainProcessName(source) ?? fallbackName);
-  return `${processName}.qpucir`;
+  return qpucirTxtFileNameForProcess(processName);
 };
 
 const stripProtocolRef = (token: string) => token.replace(/^\$/, '').split(':')[0];

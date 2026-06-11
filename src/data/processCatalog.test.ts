@@ -83,7 +83,7 @@ describe('processCatalog', () => {
     expect(result.qpucirUpdated).toBe(true);
     expect(result.qpuioUpdated).toBe(true);
     expect(resolveCatalogEntry('MyCircuit')?.truthTable?.rows).toHaveLength(4);
-    expect(resolveCatalogEntry('MyCircuit')?.truthTableFileName).toBe('MyCircuit.qpuio');
+    expect(resolveCatalogEntry('MyCircuit')?.truthTableFileName).toBe('MyCircuit-qpuio.txt');
   });
 
   it('skips persistence for bundled processes', () => {
