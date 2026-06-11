@@ -5,6 +5,13 @@ import { gateIoArity } from './types';
 import { padStateVector } from './operations';
 import { preconfiguredGateMap } from './preconfigured';
 
+const assertCustomGateIdAvailable = (trimmedId: string) => {
+  const conflict = Object.keys(preconfiguredGateMap).find((id) => id.toLowerCase() === trimmedId.toLowerCase());
+  if (conflict) {
+    throw new Error(`Custom gate id '${trimmedId}' conflicts with preconfigured gate '${conflict}'.`);
+  }
+};
+
 export type CustomGateRecord = {
   id: string;
   label: string;
@@ -78,6 +85,7 @@ export const registerCustomGate = ({
   if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(trimmedId)) {
     throw new Error('Custom gate id must start with a letter and use only letters, digits, or underscores.');
   }
+  assertCustomGateIdAvailable(trimmedId);
 
   const compiled = compileQpuProtocol(source, librarySources);
   const usedColors = new Set([
@@ -119,8 +127,13 @@ const buildQubitRemap = (
   });
 
   compiled.returnValues.forEach((value, index) => {
-    const mapped = gate.targets[index] ?? gate.targets[0];
-    if (mapped === undefined) throw new Error(`Custom gate needs output wire for '${value.name}'.`);
+    const mapped = gate.targets[index];
+    if (mapped === undefined) {
+      throw new Error(`Custom gate needs output wire for '${value.name}' (index ${index}).`);
+    }
+    if (used.has(mapped)) {
+      throw new Error(`Custom gate output '${value.name}' must map to a distinct wire (q${mapped} already used).`);
+    }
     remap.set(value.qubitIndex, mapped);
     used.add(mapped);
   });

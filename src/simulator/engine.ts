@@ -37,6 +37,15 @@ export const projectStateOntoQubits = (
   return probabilities.map((probability) => (probability > 0 ? { re: Math.sqrt(probability), im: 0 } : ZERO));
 };
 
+const resolveParamQubitIndices = (
+  qubitCount: number,
+  startStates: ParticleStartState[],
+  paramQubitIndices?: number[],
+): number[] => {
+  if (Array.isArray(paramQubitIndices)) return paramQubitIndices;
+  return Array.from({ length: Math.min(qubitCount, startStates.length) }, (_, qubit) => qubit);
+};
+
 export const createInitialState = (
   qubitCount: number,
   startStates: ParticleStartState[] = [],
@@ -45,7 +54,7 @@ export const createInitialState = (
   let state = Array.from({ length: 2 ** qubitCount }, () => ZERO);
   state[0] = ONE;
 
-  const indices = paramQubitIndices ?? Array.from({ length: Math.min(qubitCount, startStates.length) }, (_, qubit) => qubit);
+  const indices = resolveParamQubitIndices(qubitCount, startStates, paramQubitIndices);
   const invalid = indices.filter((qubit) => qubit < 0 || qubit >= qubitCount);
   if (invalid.length > 0) {
     throw new RangeError(`Invalid qubit indices: ${invalid.join(', ')} (qubitCount=${qubitCount})`);
@@ -135,8 +144,8 @@ export const runCircuit = (
 ): ExecutionResult => {
   const options = normalizeRunCircuitOptions(librarySourcesOrOptions);
   const librarySources = options.librarySources ?? {};
-  const initSummary = paramQubitIndices?.length
-    ? paramQubitIndices.map((qubit) => startStates[qubit] ?? '0p').join(' ')
+  const initSummary = Array.isArray(paramQubitIndices)
+    ? paramQubitIndices.map((qubit) => startStates[qubit] ?? '0p').join(' ') || '(no mapped params)'
     : Array.from({ length: qubitCount }, (_, index) => startStates[index] ?? '0p').join(' ');
 
   let workingQubitCount = qubitCount;

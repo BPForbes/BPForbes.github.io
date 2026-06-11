@@ -11,15 +11,16 @@ import { extractMainProcessName } from '../simulator/qpuFormat';
 type CustomGatePanelProps = {
   protocolSource: string;
   onRegistryChange: () => void;
+  registryVersion: number;
 };
 
-export function CustomGatePanel({ protocolSource, onRegistryChange }: CustomGatePanelProps) {
+export function CustomGatePanel({ protocolSource, onRegistryChange, registryVersion }: CustomGatePanelProps) {
   const [gateId, setGateId] = useState('');
   const [selectedCatalog, setSelectedCatalog] = useState('');
   const [customColor, setCustomColor] = useState('');
   const [status, setStatus] = useState('Turn a compiled QPU process into a reusable palette macro.');
   const catalog = useMemo(() => buildProcessCatalogSummaries(), []);
-  const customGates = useMemo(() => listCustomGateRecords(), [status]);
+  const customGates = useMemo(() => listCustomGateRecords(), [registryVersion, status]);
 
   const sourceForRegistration = () => {
     if (selectedCatalog) {

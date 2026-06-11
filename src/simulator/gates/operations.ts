@@ -150,7 +150,8 @@ export const measureQubit = (
     (sum, amplitude, index) => sum + (hasBit(index, qubit, qubitCount) ? magnitudeSquared(amplitude) : 0),
     0,
   );
-  const value: 0 | 1 = random < probabilityOne ? 1 : 0;
+  const sample = Math.min(Math.max(random, 0), 1 - Number.EPSILON);
+  const value: 0 | 1 = sample < probabilityOne ? 1 : 0;
   const keptProbability = value === 1 ? probabilityOne : 1 - probabilityOne;
   const normalizer = keptProbability > 0 ? 1 / Math.sqrt(keptProbability) : 0;
 
@@ -163,9 +164,10 @@ export const measureQubit = (
 
 export const padStateVector = (state: Complex[], fromCount: number, toCount: number): Complex[] => {
   if (toCount <= fromCount) return state;
+  const shift = toCount - fromCount;
   const next = Array.from({ length: 2 ** toCount }, () => ZERO);
   state.forEach((amplitude, index) => {
-    next[index] = amplitude;
+    next[index << shift] = amplitude;
   });
   return next;
 };

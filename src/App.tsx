@@ -161,30 +161,40 @@ function App() {
     return mapped;
   }, [measurements, returnValues, controllableParams, processParams.length]);
 
-  const chooseDistinctQubit = (avoid: number[]) => {
-    const option = Array.from({ length: qubitCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));
-    return option ?? 0;
-  };
+  const chooseDistinctQubit = (avoid: number[], wireCount = simulationQubitCount): number | undefined =>
+    Array.from({ length: wireCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));
 
   const workbenchControlsForGate = (type: GateType, target: number) => {
     const definition = getGateDefinition(type);
     if (!definition || definition.controlKind === 'none' || definition.controlKind === 'swap') return undefined;
     if (definition.controlKind === 'single' || definition.controlKind === 'parametric') {
-      if (qubitCount < 2) return undefined;
       const inputCount = definition.controlKind === 'parametric'
         ? Math.max(1, definition.astInputCount)
         : 1;
+      if (simulationQubitCount - 1 < inputCount) return undefined;
       const controls: number[] = [];
       for (let index = 0; index < inputCount; index += 1) {
         const preferred = index === 0 ? controlQubit : secondControlQubit;
-        controls.push(preferred === target ? chooseDistinctQubit([target, ...controls]) : preferred);
+        let candidate = preferred === target || controls.includes(preferred)
+          ? chooseDistinctQubit([target, ...controls])
+          : preferred;
+        if (candidate === undefined || candidate === target || controls.includes(candidate)) {
+          return undefined;
+        }
+        controls.push(candidate);
       }
       return controls;
     }
     if (definition.controlKind === 'double') {
-      if (qubitCount < 3) return undefined;
-      const first = controlQubit === target ? chooseDistinctQubit([target, secondControlQubit]) : controlQubit;
-      const second = secondControlQubit === target || secondControlQubit === first ? chooseDistinctQubit([target, first]) : secondControlQubit;
+      if (simulationQubitCount < 3) return undefined;
+      const first = controlQubit === target
+        ? chooseDistinctQubit([target, secondControlQubit])
+        : controlQubit;
+      if (first === undefined || first === target) return undefined;
+      const second = secondControlQubit === target || secondControlQubit === first
+        ? chooseDistinctQubit([target, first])
+        : secondControlQubit;
+      if (second === undefined || second === target || second === first) return undefined;
       return [first, second];
     }
     return undefined;
@@ -238,7 +248,7 @@ function App() {
     const swapPartner = getGateDefinition(type)?.controlKind === 'swap'
       ? (secondControlQubit === target ? chooseDistinctQubit([target]) : secondControlQubit)
       : undefined;
-    const gate = newGate(type, step, target, qubitCount, controls, swapPartner, phaseRadians);
+    const gate = newGate(type, step, target, simulationQubitCount, controls, swapPartner, phaseRadians);
     if (!gate) {
       setLog((current) => [...current, `${type} requires more qubits than are available in this circuit.`]);
       return;
@@ -679,6 +689,7 @@ function App() {
           <CustomGatePanel
             onRegistryChange={() => setCustomGateRegistryVersion((version) => version + 1)}
             protocolSource={protocolSource}
+            registryVersion={customGateRegistryVersion}
           />
 
           <CircuitCanvas

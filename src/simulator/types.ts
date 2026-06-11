@@ -40,6 +40,7 @@ export const preconfiguredGateTypes = [
   'SWAP',
   'PHASE',
   'MEASURE',
+  'RESET',
   'NOT',
   'AND',
   'NAND',

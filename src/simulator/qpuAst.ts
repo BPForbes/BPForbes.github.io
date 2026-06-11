@@ -510,6 +510,17 @@ const executeProcess = (
           .slice(0, 2)
           .map((input) => resolveInputQubit(state, frame, input, parentFrame));
         if (swapQubits.length < 2) throw new Error('SWAP requires two input qubits.');
+        if (command.outputs.length > 0) {
+          if (command.outputs.length !== command.inputs.length) {
+            throw new Error('SWAP outputs must match inputs.');
+          }
+          const swapOutputs = command.outputs.map((output) => resolveInputQubit(state, frame, output, parentFrame));
+          swapQubits.forEach((inputQubit, index) => {
+            if (swapOutputs[index] !== inputQubit) {
+              throw new Error('SWAP outputs must match inputs.');
+            }
+          });
+        }
         emitGate(state, 'SWAP', swapQubits, [], line);
         continue;
       }

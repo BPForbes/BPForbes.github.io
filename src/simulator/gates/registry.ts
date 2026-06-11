@@ -67,10 +67,12 @@ export const controlsForGateType = (
   }
 
   if (definition.controlKind === 'single' || definition.controlKind === 'parametric') {
-    if (candidates.length < 1) return null;
-    const inputCount = getCustomGateRecord(type)?.inputParamNames.length ?? 1;
+    const inputCount = definition.controlKind === 'parametric'
+      ? (getCustomGateRecord(type)?.inputParamNames.length ?? 1)
+      : 1;
+    if (candidates.length < inputCount) return null;
     return {
-      controls: candidates.slice(0, Math.max(1, inputCount)),
+      controls: candidates.slice(0, inputCount),
       targets: [target],
     };
   }
