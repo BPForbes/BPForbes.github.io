@@ -1,4 +1,5 @@
-import { CircuitGate, GateType, isGateType } from '../simulator/types';
+import { isKnownGateType } from '../simulator/gates/registry';
+import { CircuitGate, GateType } from '../simulator/types';
 import { GateBlock } from './GateBlock';
 
 type CircuitCanvasProps = {
@@ -20,7 +21,7 @@ export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, qub
   const handleDrop = (event: React.DragEvent, qubit: number) => {
     event.preventDefault();
     const droppedGate = event.dataTransfer.getData('text/plain');
-    if (isGateType(droppedGate)) onDropGate(droppedGate, qubit);
+    if (isKnownGateType(droppedGate)) onDropGate(droppedGate, qubit);
   };
 
   const placeSelectedGate = (qubit: number) => {

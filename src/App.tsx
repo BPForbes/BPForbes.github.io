@@ -1,6 +1,7 @@
 import { ChangeEvent, useMemo, useState } from 'react';
 import { CircuitCanvas } from './components/CircuitCanvas';
-import { GateBlock } from './components/GateBlock';
+import { CustomGatePanel } from './components/CustomGatePanel';
+import { GatePalette } from './components/GatePalette';
 import { ModuleLab } from './components/ModuleLab';
 import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
@@ -21,27 +22,16 @@ import type { ConfiguredQpucirProcess } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, projectStateOntoQubits, runCircuit } from './simulator/engine';
 import { compileQpuProtocol, ProcessParam, ReturnValue, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
 import { extractMainProcessName, getProtocolParameterEntries, qpucirFileNameForSource, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from './simulator/qpuFormat';
-import { CircuitGate, GateType, MeasurementMap, ParticleStartState, gateTypes } from './simulator/types';
+import { controlsForGateType, getGateDefinition, paletteGateIds } from './simulator/gates/registry';
+import { CircuitGate, GateType, MeasurementMap, ParticleStartState } from './simulator/types';
 import { Complex } from './simulator/complex';
 import './styles.css';
 
 const QUBIT_COUNT = 3;
-const palette: GateType[] = [...gateTypes];
-
 
 type AppView = 'builder' | 'docs' | 'qpu-docs' | 'files' | 'particles' | 'module-tester' | 'more';
 
 const initialProtocolSource = protocolExamples[0].source;
-
-const singleControlGates = new Set<GateType>(['CNOT', 'AND', 'NAND', 'OR', 'XOR']);
-
-const controlsForGate = (type: GateType, target: number, qubitCount: number): number[] | null => {
-  const candidates = Array.from({ length: qubitCount }, (_, qubit) => qubit).filter((qubit) => qubit !== target);
-
-  if (singleControlGates.has(type)) return candidates.length >= 1 ? [candidates[0]] : null;
-  if (type === 'CCNOT') return candidates.length >= 2 ? candidates.slice(0, 2) : null;
-  return [];
-};
 
 const newGate = (
   type: GateType,
@@ -49,18 +39,24 @@ const newGate = (
   target: number,
   qubitCount: number,
   overrideControls?: number[],
+  swapPartner?: number,
   phase = Math.PI / 2,
 ): CircuitGate | null => {
-  const controls = overrideControls ?? controlsForGate(type, target, qubitCount);
-  if (controls === null) return null;
+  const placement = controlsForGateType(type, target, qubitCount, swapPartner);
+  if (!placement) return null;
+
+  const definition = getGateDefinition(type);
+  const controls = overrideControls ?? placement.controls;
+  const targets = placement.targets;
 
   return {
     id: `${type}-${step}-${target}-${crypto.randomUUID()}`,
     type,
     step,
-    targets: [target],
+    targets,
     controls,
-    phase: type === 'PHASE' ? phase : undefined,
+    phase: definition?.supportsPhase ? phase : undefined,
+    customGateId: definition?.category === 'custom' ? type : undefined,
   };
 };
 
@@ -87,6 +83,9 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [fileStatus, setFileStatus] = useState('Upload a .qpucir file (or -qpucir.txt on restrictive file pickers), or download one of the bundled AST circuits.');
   const [protocolMode, setProtocolMode] = useState<'canvas' | 'process'>('process');
+  const [customGateRegistryVersion, setCustomGateRegistryVersion] = useState(0);
+  const palette = useMemo(() => paletteGateIds(), [customGateRegistryVersion]);
+  const selectedGateDefinition = selectedGate ? getGateDefinition(selectedGate) : undefined;
 
   const orderedGates = useMemo(() => gates.slice().sort((a, b) => a.step - b.step), [gates]);
   const renderedGates = useMemo(() => visibleCircuitGates(orderedGates), [orderedGates]);
@@ -165,11 +164,21 @@ function App() {
   };
 
   const workbenchControlsForGate = (type: GateType, target: number) => {
-    if (singleControlGates.has(type)) {
+    const definition = getGateDefinition(type);
+    if (!definition || definition.controlKind === 'none' || definition.controlKind === 'swap') return undefined;
+    if (definition.controlKind === 'single' || definition.controlKind === 'parametric') {
       if (qubitCount < 2) return undefined;
-      return [controlQubit === target ? chooseDistinctQubit([target]) : controlQubit];
+      const inputCount = definition.controlKind === 'parametric'
+        ? Math.max(1, definition.astInputCount)
+        : 1;
+      const controls: number[] = [];
+      for (let index = 0; index < inputCount; index += 1) {
+        const preferred = index === 0 ? controlQubit : secondControlQubit;
+        controls.push(preferred === target ? chooseDistinctQubit([target, ...controls]) : preferred);
+      }
+      return controls;
     }
-    if (type === 'CCNOT') {
+    if (definition.controlKind === 'double') {
       if (qubitCount < 3) return undefined;
       const first = controlQubit === target ? chooseDistinctQubit([target, secondControlQubit]) : controlQubit;
       const second = secondControlQubit === target || secondControlQubit === first ? chooseDistinctQubit([target, first]) : secondControlQubit;
@@ -221,7 +230,10 @@ function App() {
 
   const addGate = (type: GateType, target: number, controls?: number[]) => {
     const step = gates.length === 0 ? 0 : Math.max(...gates.map((gate) => gate.step)) + 1;
-    const gate = newGate(type, step, target, qubitCount, controls, phaseRadians);
+    const swapPartner = getGateDefinition(type)?.controlKind === 'swap'
+      ? (secondControlQubit === target ? chooseDistinctQubit([target]) : secondControlQubit)
+      : undefined;
+    const gate = newGate(type, step, target, qubitCount, controls, swapPartner, phaseRadians);
     if (!gate) {
       setLog((current) => [...current, `${type} requires more qubits than are available in this circuit.`]);
       return;
@@ -246,6 +258,7 @@ function App() {
       orderedGates,
       startStates,
       paramQubitIndices.length ? paramQubitIndices : undefined,
+      protocolLibrary,
     );
     setState(result.state);
     setMeasurements(result.measurements);
@@ -648,19 +661,13 @@ function App() {
               <p className="eyebrow">Gate palette</p>
               <h2 id="palette-title">Pick up a block</h2>
             </div>
-            <div className="palette">
-              {palette.map((gate) => (
-                <GateBlock
-                  draggable
-                  key={gate}
-                  onClick={() => setSelectedGate(gate)}
-                  onDragStart={setSelectedGate}
-                  selected={selectedGate === gate}
-                  type={gate}
-                />
-              ))}
-            </div>
+            <GatePalette onSelectGate={setSelectedGate} selectedGate={selectedGate} />
           </section>
+
+          <CustomGatePanel
+            onRegistryChange={() => setCustomGateRegistryVersion((version) => version + 1)}
+            protocolSource={protocolSource}
+          />
 
           <CircuitCanvas
             activeStep={cursor - 1}
@@ -702,10 +709,12 @@ function App() {
                   {Array.from({ length: qubitCount }, (_, qubit) => <option disabled={qubit === selectedTarget || qubit === controlQubit} key={qubit} value={qubit}>q{qubit}</option>)}
                 </select>
               </label>
-              <label className="phase-control">
-                Phase angle: {phaseDegrees}°
-                <input min="0" max="360" step="15" type="range" value={phaseDegrees} onChange={(event) => setPhaseDegrees(Number(event.target.value))} />
-              </label>
+              {selectedGateDefinition?.supportsPhase ? (
+                <label className="phase-control">
+                  Phase angle: {phaseDegrees}°
+                  <input min="0" max="360" step="15" type="range" value={phaseDegrees} onChange={(event) => setPhaseDegrees(Number(event.target.value))} />
+                </label>
+              ) : null}
             </div>
             <div className="workbench-actions">
               <button onClick={addGateFromWorkbench} type="button">Add gate to target</button>
@@ -803,7 +812,7 @@ function App() {
               <h3>QPU AST compile requirements</h3>
               <p>A protocol can begin with <code>PARAMS:</code>, should name its entry point with <code>MAIN-PROCESS</code>, and compiles commands with explicit <code>-I</code> inputs and <code>-O</code> outputs where required.</p>
               <ul>
-                <li>Primitive gates include X, H, CNOT, CCNOT, and PHASE.</li>
+                <li>Primitive gates include X, Y, Z, H, S, T, CNOT, CCNOT, CZ, CY, SWAP, and PHASE.</li>
                 <li>Derived Boolean gates include NOT, AND, NAND, OR, and XOR.</li>
                 <li>Child protocols can be declared, run, and accepted through DECLARECHILD, RUNCHILD, and ACCEPTVALS.</li>
                 <li>Constants <code>0p</code>, <code>1p</code>, and <code>sp</code> initialize zero, one, and superposition registers.</li>

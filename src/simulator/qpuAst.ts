@@ -1,3 +1,4 @@
+import { astDerivedGateIds, astGateInputCounts, astPrimitiveGateIds } from './gates/metadata';
 import { CircuitGate, GateType, QpuOperation } from './types';
 
 export type ParsedCommand = {
@@ -45,20 +46,9 @@ export type CompileResult = {
 
 const NUMERIC_PARAM_TYPES = ['int', 'float'] as const;
 
-const primitiveGates = new Set(['X', 'H', 'CNOT', 'CCNOT', 'PHASE']);
-const derivedGates = new Set(['NOT', 'AND', 'NAND', 'OR', 'XOR']);
-const gateInputCounts: Partial<Record<QpuOperation, number>> = {
-  X: 1,
-  H: 1,
-  PHASE: 1,
-  CNOT: 1,
-  CCNOT: 2,
-  NOT: 1,
-  AND: 2,
-  NAND: 2,
-  OR: 2,
-  XOR: 2,
-};
+const primitiveGates = new Set(astPrimitiveGateIds());
+const derivedGates = new Set(astDerivedGateIds());
+const gateInputCounts: Partial<Record<QpuOperation, number>> = astGateInputCounts() as Partial<Record<QpuOperation, number>>;
 
 export const supportedQpuOperations: QpuOperation[] = [
   'INCREASECYCLE',
@@ -85,9 +75,16 @@ export const supportedQpuOperations: QpuOperation[] = [
   'CREATETOKEN',
   'DELETETOKEN',
   'X',
+  'Y',
+  'Z',
   'H',
+  'S',
+  'T',
   'CNOT',
   'CCNOT',
+  'CZ',
+  'CY',
+  'SWAP',
   'PHASE',
 ];
 
@@ -509,6 +506,14 @@ const executeProcess = (
 
     if (primitiveGates.has(command.op)) {
       flushCycleZeros(state, `prepare workspace before gate at cycle ${state.currentCycle}`);
+      if (command.op === 'SWAP') {
+        const swapQubits = command.inputs
+          .slice(0, 2)
+          .map((input) => resolveInputQubit(state, frame, input, parentFrame));
+        if (swapQubits.length < 2) throw new Error('SWAP requires two input qubits.');
+        emitGate(state, 'SWAP', swapQubits, [], line);
+        continue;
+      }
       const targetToken = command.outputs[0] ?? command.inputs[0];
       const target = resolveInputQubit(state, frame, targetToken, parentFrame);
       const controls = command.inputs
