@@ -4,7 +4,8 @@ import {
   getProtectedTruthTable,
   isProtectedQpuioProcess,
 } from './protectedQpuio';
-import { extractMainProcessName } from '../simulator/qpuFormat';
+import { qpuioFileNameForProcess } from './qpuioFile';
+import { extractMainProcessName, qpucirFileNameForSource } from '../simulator/qpuFormat';
 import { inferTruthTableDimensions } from '../simulator/truthTable';
 import { getProtocolParameterEntries } from '../simulator/qpuFormat';
 import { getReturnValTokens } from '../simulator/qpuAst';
@@ -329,6 +330,87 @@ export const formatTestFailuresForPrompt = (result: TruthTableTestResult | null 
     ? `\n...and ${result.failedRows.length - 12} more failing row(s).`
     : '';
   return `${result.failedRows.length} of ${result.totalRows} row(s) fail:\n${lines.join('\n')}${suffix}`;
+};
+
+export type PersistCatalogArtifactsInput = {
+  processName: string;
+  source: string;
+  truthTable?: TruthTable;
+  origin?: ProcessCatalogOrigin;
+  description?: string;
+  updateQpuio?: boolean;
+  updateQpucir?: boolean;
+};
+
+export type PersistCatalogArtifactsResult = {
+  entry: ProcessCatalogEntry;
+  qpuioUpdated: boolean;
+  qpucirUpdated: boolean;
+  qpuioReverted: boolean;
+  skipped: boolean;
+  message: string;
+};
+
+export const persistCatalogArtifacts = (input: PersistCatalogArtifactsInput): PersistCatalogArtifactsResult => {
+  const name = input.processName.trim() || extractMainProcessName(input.source) || 'UntitledCircuit';
+  const existing = getCatalogEntry(name);
+  const updateQpuio = input.updateQpuio ?? true;
+  const updateQpucir = input.updateQpucir ?? true;
+
+  if (existing?.origin === 'bundled') {
+    return {
+      entry: existing,
+      qpuioUpdated: false,
+      qpucirUpdated: false,
+      qpuioReverted: false,
+      skipped: true,
+      message: `Skipped catalog persistence for bundled process ${name}.`,
+    };
+  }
+
+  const nextSource = updateQpucir ? input.source : (existing?.source ?? input.source);
+  let nextTable = updateQpuio ? input.truthTable ?? existing?.truthTable : existing?.truthTable;
+  let qpuioReverted = false;
+
+  if (updateQpuio && nextTable && isProtectedQpuioProcess(name)) {
+    const enforced = enforceProtectedTruthTable(name, nextTable);
+    nextTable = enforced?.truthTable ?? nextTable;
+    qpuioReverted = enforced?.reverted ?? false;
+  }
+
+  const entry = registerCatalogProcess({
+    name,
+    source: nextSource,
+    origin: input.origin ?? existing?.origin ?? 'compiled',
+    fileName: updateQpucir
+      ? existing?.fileName ?? qpucirFileNameForSource(nextSource, name)
+      : existing?.fileName,
+    truthTable: updateQpuio ? nextTable : undefined,
+    truthTableFileName: updateQpuio
+      ? existing?.truthTableFileName ?? qpuioFileNameForProcess(name)
+      : existing?.truthTableFileName,
+    description: input.description ?? existing?.description,
+  });
+
+  const updatedParts = [
+    updateQpucir && entry.fileName ? entry.fileName : null,
+    updateQpuio && entry.truthTableFileName ? entry.truthTableFileName : null,
+  ].filter(Boolean);
+
+  const message = qpuioReverted
+    ? `Catalog persistence for ${name} kept the protected default truth table.`
+    : updatedParts.length > 0
+      ? `Saved ${name} catalog metadata (${updatedParts.join(' + ')}).`
+      : `No catalog metadata changed for ${name}.`;
+
+  return {
+    entry,
+    qpuioUpdated: updateQpuio && Boolean(entry.truthTable) && !qpuioReverted,
+    qpucirUpdated: updateQpucir,
+    qpuioReverted,
+    skipped: false,
+    message,
+  };
 };
 
 /** @internal Test helper */

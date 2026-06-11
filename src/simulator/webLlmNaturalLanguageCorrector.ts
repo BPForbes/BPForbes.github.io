@@ -93,6 +93,8 @@ Allowed schema:
   "probeOutputs": boolean,
   "runTest": boolean,
   "autonomous": boolean,
+  "updateQpuio": boolean,
+  "updateQpucir": boolean,
   "guidance": {
     "preferredGates": ["CNOT", "CCNOT", "X", "H", "NOT", "AND", "OR", "XOR"],
     "gates": [{ "gate": string, "inputs": string[], "output": string }]
@@ -107,6 +109,7 @@ Rules:
 - Automatic repair requests set autonomous=true and runTest=true.
 - Catalog open requests set loadCatalogProcess to the process name.
 - Gate insertion requests populate guidance.gates.
+- "update qpuio" -> updateQpuio=true; "update qpucir" -> updateQpucir=true; both -> set both true.
 `.trim();
 }
 

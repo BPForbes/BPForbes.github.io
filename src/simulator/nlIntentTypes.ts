@@ -32,6 +32,8 @@ export type ModelCorrectionIntent = {
   probeOutputs?: boolean;
   runTest?: boolean;
   autonomous?: boolean;
+  updateQpuio?: boolean;
+  updateQpucir?: boolean;
   guidance?: CorrectionGuidance;
   truthTable?: TruthTable;
   clarification?: PendingClarification;

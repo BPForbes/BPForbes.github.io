@@ -30,6 +30,8 @@ Allowed JSON shape:
   "probeOutputs": boolean,
   "runTest": boolean,
   "autonomous": boolean,
+  "updateQpuio": boolean,
+  "updateQpucir": boolean,
   "guidance": {
     "preferredGates": string[],
     "gates": [
@@ -51,6 +53,9 @@ Examples:
 - "load the full adder truth table" -> { "reply": "...", "loadFullAdderTable": true }
 - "add a CNOT from A to Sum" -> { "reply": "...", "runTest": true, "guidance": { "gates": [{ "gate": "CNOT", "inputs": ["A"], "output": "Sum" }] } }
 - "fix the circuit automatically" -> { "reply": "...", "runTest": true, "autonomous": true }
+- "update qpuio" -> { "reply": "...", "updateQpuio": true }
+- "update qpucir" -> { "reply": "...", "updateQpucir": true }
+- "update both qpucir and qpuio" -> { "reply": "...", "updateQpuio": true, "updateQpucir": true }
 
 User message:
 ${message}
@@ -94,20 +99,29 @@ export const sanitizeIntent = (raw: unknown): ModelCorrectionIntent | null => {
     }
   }
 
-  return {
+  const intent: ModelCorrectionIntent = {
     reply: typeof record.reply === 'string'
       ? record.reply
       : 'Parsed request with the local language model.',
     loadFullAdderTable: toStrictBoolean(record.loadFullAdderTable),
-    loadCatalogProcess: typeof record.loadCatalogProcess === 'string' && record.loadCatalogProcess.trim()
-      ? record.loadCatalogProcess.trim()
-      : undefined,
     inferTable: toStrictBoolean(record.inferTable),
     probeOutputs: toStrictBoolean(record.probeOutputs),
     runTest: toStrictBoolean(record.runTest),
     autonomous: toStrictBoolean(record.autonomous),
     guidance,
   };
+
+  if (typeof record.loadCatalogProcess === 'string' && record.loadCatalogProcess.trim()) {
+    intent.loadCatalogProcess = record.loadCatalogProcess.trim();
+  }
+  if (toStrictBoolean(record.updateQpuio)) {
+    intent.updateQpuio = true;
+  }
+  if (toStrictBoolean(record.updateQpucir)) {
+    intent.updateQpucir = true;
+  }
+
+  return intent;
 };
 
 export const parseNaturalLanguageWithModel = async (

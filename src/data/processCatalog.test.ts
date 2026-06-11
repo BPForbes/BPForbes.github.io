@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   getCatalogEntries,
   getCatalogEntry,
+  persistCatalogArtifacts,
   registerCatalogProcess,
   registerCatalogTruthTable,
   resetProcessCatalogForTests,
   resolveCatalogEntry,
 } from './processCatalog';
+import { singleBitFullAdderTruthTable } from '../simulator/truthTable';
 
 describe('processCatalog', () => {
   afterEach(() => {
@@ -53,6 +55,44 @@ describe('processCatalog', () => {
     expect(getCatalogEntry('TwoBitFullAdder')?.truthTable?.rows).toHaveLength(32);
     expect(getCatalogEntry('FourBitFullAdder')?.truthTable?.rows).toHaveLength(512);
     expect(getCatalogEntry('PhaseDemo')?.truthTable?.rows).toHaveLength(1);
+  });
+
+  it('persists custom qpucir and qpuio metadata after workflow sync', () => {
+    registerCatalogProcess({
+      name: 'MyCircuit',
+      source: 'PARAMS: A:state B:state\n\nMAIN-PROCESS MyCircuit\nRETURNVALS Y:0',
+      origin: 'uploaded',
+      fileName: 'custom.qpucir',
+    });
+
+    const table = {
+      inputColumns: ['A', 'B'],
+      outputColumns: ['Y'],
+      rows: [['0p', '0p', '0p'], ['0p', '1p', '1p'], ['1p', '0p', '1p'], ['1p', '1p', '0p']] as const,
+    };
+
+    const result = persistCatalogArtifacts({
+      processName: 'MyCircuit',
+      source: 'PARAMS: A:state B:state\n\nMAIN-PROCESS MyCircuit\nRETURNVALS Y:0',
+      truthTable: table,
+      updateQpuio: true,
+      updateQpucir: true,
+    });
+
+    expect(result.skipped).toBe(false);
+    expect(result.qpucirUpdated).toBe(true);
+    expect(result.qpuioUpdated).toBe(true);
+    expect(resolveCatalogEntry('MyCircuit')?.truthTable?.rows).toHaveLength(4);
+    expect(resolveCatalogEntry('MyCircuit')?.truthTableFileName).toBe('MyCircuit.qpuio');
+  });
+
+  it('skips persistence for bundled processes', () => {
+    const result = persistCatalogArtifacts({
+      processName: 'SingleBitFullAdder',
+      source: 'MAIN-PROCESS SingleBitFullAdder\nRETURNVALS Cout Sum',
+      truthTable: singleBitFullAdderTruthTable(),
+    });
+    expect(result.skipped).toBe(true);
   });
 
   it('reverts protected truth-table registration to canonical metadata', () => {

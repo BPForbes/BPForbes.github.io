@@ -8,9 +8,11 @@ import {
   getCatalogLibrarySources,
   getCatalogVersion,
   isCatalogTruthTableProtected,
+  persistCatalogArtifacts,
   registerCatalogProcess,
   registerCatalogTruthTable,
 } from '../data/processCatalog';
+import type { ProcessCatalogOrigin } from '../data/processCatalog';
 import {
   enforceProtectedTruthTable,
   isProtectedQpuioProcess,
@@ -408,6 +410,33 @@ export const ModuleLab = () => {
     }
   };
 
+  const persistActiveArtifacts = useCallback((
+    workflowSource: string,
+    table: TruthTable,
+    options?: {
+      updateQpuio?: boolean;
+      updateQpucir?: boolean;
+      origin?: ProcessCatalogOrigin;
+      description?: string;
+    },
+  ) => {
+    const processName = extractMainProcessName(workflowSource);
+    if (!processName) return null;
+    const result = persistCatalogArtifacts({
+      processName,
+      source: workflowSource,
+      truthTable: table,
+      updateQpuio: options?.updateQpuio,
+      updateQpucir: options?.updateQpucir,
+      origin: options?.origin,
+      description: options?.description,
+    });
+    if (!result.skipped) {
+      refreshCatalog();
+    }
+    return result;
+  }, [refreshCatalog]);
+
   const inferTable = useCallback((inferSource = source) => {
     const processName = extractMainProcessName(inferSource);
     if (isProtectedQpuioProcess(processName)) {
@@ -427,10 +456,14 @@ export const ModuleLab = () => {
   const runTestOnly = useCallback((table: TruthTable, testSource = source) => {
     const testResult = testCircuitAgainstTruthTable(testSource, table, librarySources);
     setLastTestResult(testResult);
-    const summary = formatTestFailureSummary(testResult);
+    const persist = persistActiveArtifacts(testSource, table);
+    let summary = formatTestFailureSummary(testResult);
+    if (persist && !persist.skipped) {
+      summary += ` ${persist.message}`;
+    }
     setStatus(summary);
-    return { testResult, summary };
-  }, [source, librarySources]);
+    return { testResult, summary, persist };
+  }, [source, librarySources, persistActiveArtifacts]);
 
   const runCorrection = useCallback((
     table: TruthTable,
@@ -462,17 +495,19 @@ export const ModuleLab = () => {
       });
     });
 
+    const finalSource = response.correctedSource ?? testSource;
     if (response.correctedSource) {
       setSource(response.correctedSource);
-      registerCatalogProcess({
-        name: extractMainProcessName(response.correctedSource) ?? `${activeProcessName ?? 'Circuit'}Corrected`,
-        source: response.correctedSource,
-        origin: 'corrected',
-        truthTable: table,
-        description: `Corrected in Circuit Correction Lab (${autonomous ? 'autonomous' : 'guided'})`,
-      });
-      refreshCatalog();
-    } else if (response.childCorrections?.some((child) => child.corrected)) {
+    }
+
+    const persist = persistActiveArtifacts(finalSource, table, {
+      origin: response.correctedSource ? 'corrected' : undefined,
+      description: response.correctedSource
+        ? `Corrected in Circuit Correction Lab (${autonomous ? 'autonomous' : 'guided'})`
+        : undefined,
+    });
+
+    if (response.childCorrections?.some((child) => child.corrected)) {
       refreshCatalog();
     }
 
@@ -482,9 +517,12 @@ export const ModuleLab = () => {
     if (correctedChildren.length > 0) {
       summary += ` Also corrected child process(es): ${correctedChildren.map((child) => child.processName).join(', ')}.`;
     }
+    if (persist && !persist.skipped) {
+      summary += ` ${persist.message}`;
+    }
     setStatus(summary);
-    return { response, summary };
-  }, [source, librarySources, activeProcessName, refreshCatalog]);
+    return { response, summary, persist };
+  }, [source, librarySources, activeProcessName, refreshCatalog, persistActiveArtifacts]);
 
   const applyParsedIntent = async (intent: ModelCorrectionIntent) => {
     if (intent.clarification) {
@@ -513,7 +551,9 @@ export const ModuleLab = () => {
       || intent.inferTable
       || intent.truthTable
       || intent.probeOutputs
-      || intent.runTest,
+      || intent.runTest
+      || intent.updateQpuio
+      || intent.updateQpucir,
     );
 
     if (intent.loadCatalogProcess) {
@@ -575,6 +615,27 @@ export const ModuleLab = () => {
       setLastTestResult(null);
     }
 
+    if (intent.updateQpuio || intent.updateQpucir) {
+      if (!table) {
+        pushMessage('assistant', 'Infer or load a truth table before saving catalog metadata.');
+        return;
+      }
+      const persist = persistCatalogArtifacts({
+        processName: extractMainProcessName(currentSource) ?? activeProcessName ?? 'UntitledCircuit',
+        source: currentSource,
+        truthTable: table,
+        updateQpuio: intent.updateQpuio,
+        updateQpucir: intent.updateQpucir,
+      });
+      if (!persist.skipped) {
+        refreshCatalog();
+      }
+      if (!intent.runTest) {
+        pushMessage('assistant', `${intent.reply}\n\n${persist.message}`);
+        return;
+      }
+    }
+
     if (intent.runTest) {
       if (!table) {
         table = inferTable(currentSource);
@@ -626,6 +687,7 @@ export const ModuleLab = () => {
         }
         if (!intent.loadCatalogProcess && !intent.runTest && !intent.inferTable
           && !intent.probeOutputs && !intent.loadFullAdderTable && !intent.truthTable
+          && !intent.updateQpuio && !intent.updateQpucir
           && !intent.guidance?.gates?.length) {
           pushMessage('assistant', formatClarificationRetry(pendingClarification));
           return;
