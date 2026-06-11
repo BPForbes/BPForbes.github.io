@@ -253,22 +253,22 @@ export const serializeQpuioText = (
   truthTable: TruthTable,
   style: 'space' | 'csv' = 'space',
 ): string => {
+  const sep = style === 'csv' ? ',' : '  ';
   const columns = ['#', ...truthTable.inputColumns, ...truthTable.outputColumns];
-  const header = style === 'csv'
-    ? columns.join(',')
-    : columns.join('  ');
+  const header = columns.join(sep);
 
   const dataRows = truthTable.rows.map((row, index) => {
     const cells = [String(index), ...row];
-    return style === 'csv' ? cells.join(',') : cells.join('  ');
+    return cells.join(sep);
   });
 
-  return [
-    `MAIN-PROCES: ${processName}`,
-    header,
-    ...dataRows,
-    '',
-  ].join('\n');
+  const headerLines: string[] = [`MAIN-PROCES: ${processName}`];
+  if (truthTable.inputColumns.length > 0) {
+    headerLines.push(`INPUTS: ${truthTable.inputColumns.join(sep)}`);
+  }
+  headerLines.push(`OUTPUTS: ${truthTable.outputColumns.join(sep)}`);
+
+  return [...headerLines, header, ...dataRows, ''].join('\n');
 };
 
 export const qpuioFileNameForProcess = (processName: string) => `${processName}.qpuio`;
@@ -288,5 +288,5 @@ export const downloadQpuioContents = (fileName: string, contents: string) => {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 };
