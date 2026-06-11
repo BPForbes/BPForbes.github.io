@@ -298,9 +298,14 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
       // Non-state protocols may not infer cleanly.
     }
     const truthTable = entry.truthTable;
-    const tableDimensions = truthTable
-      ? describeTruthTableDimensions(entry.source, truthTable)
-      : dimensions;
+    let tableDimensions = dimensions;
+    if (truthTable) {
+      try {
+        tableDimensions = describeTruthTableDimensions(entry.source, truthTable);
+      } catch {
+        // Fall back when protocol source cannot be parsed for dimension inference.
+      }
+    }
     return {
       name: entry.name,
       origin: entry.origin,

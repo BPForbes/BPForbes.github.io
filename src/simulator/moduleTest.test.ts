@@ -103,6 +103,25 @@ describe('partial truth tables', () => {
     expect(validateTruthTable(rsNorLatchStepTable, rsNorLatchStepSource)).toEqual([]);
   });
 
+  it('rejects zero listed rows', () => {
+    const empty = { ...rsNorLatchStepTable, rows: [] };
+    expect(validateTruthTable(empty, rsNorLatchStepSource)).toContain(
+      'Truth table requires at least one row.',
+    );
+  });
+
+  it('rejects more listed rows than the combinatorial maximum', () => {
+    const overMax = {
+      ...rsNorLatchStepTable,
+      rows: Array.from({ length: 17 }, (_, index) => (
+        rsNorLatchStepTable.rows[index % rsNorLatchStepTable.rows.length]
+      )),
+    };
+    expect(validateTruthTable(overMax, rsNorLatchStepSource)).toContain(
+      'Truth table has 17 row(s); expected at most 16.',
+    );
+  });
+
   it('describes partial dimensions with listed and combinatorial row counts', () => {
     const dimensions = describeTruthTableDimensions(rsNorLatchStepSource, rsNorLatchStepTable);
     expect(dimensions).toMatchObject({
