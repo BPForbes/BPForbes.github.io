@@ -442,6 +442,7 @@ function App() {
     source: string,
     label = 'QPU AST protocol',
     origin: ProcessCatalogOrigin = 'compiled',
+    options?: { fileName?: string; skipCatalogRegister?: boolean },
   ) => {
     try {
       const result = compileQpuProtocol(source, protocolLibrary);
@@ -466,13 +467,15 @@ function App() {
       setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${registerSummary} with ${paramSummary}.`);
       resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates, result.processParams);
       setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared')).slice(0, 24)]);
-      registerCatalogProcess({
-        name: extractMainProcessName(source) ?? label,
-        source,
-        origin,
-        fileName: qpucirFileNameForSource(source, label),
-        description: `Compiled in circuit builder (${result.gates.length} gate(s))`,
-      });
+      if (!options?.skipCatalogRegister) {
+        registerCatalogProcess({
+          name: extractMainProcessName(source) ?? label,
+          source,
+          origin,
+          fileName: options?.fileName ?? qpucirFileNameForSource(source, label),
+          description: `Compiled in circuit builder (${result.gates.length} gate(s))`,
+        });
+      }
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -556,7 +559,10 @@ function App() {
         description: `Uploaded from ${qpucirFile.name}${companion ? ` + ${companion.name}` : ''}`,
       });
       setProtocolSource(parsed.source);
-      compileProtocolSource(parsed.source, parsed.name, 'uploaded');
+      compileProtocolSource(parsed.source, parsed.name, 'uploaded', {
+        fileName: qpucirFile.name,
+        skipCatalogRegister: true,
+      });
       setFileStatus(
         `Uploaded and compiled ${qpucirFile.name}${companion ? ` with truth table from ${companion.name}` : ''}.`,
       );

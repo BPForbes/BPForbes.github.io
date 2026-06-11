@@ -56,7 +56,7 @@ export const fourBitFullAdderTruthTable = (): TruthTable => {
 };
 
 export const phaseDemoTruthTable = (): TruthTable => ({
-  inputColumns: ['Init'],
+  inputColumns: [],
   outputColumns: ['Q0'],
-  rows: [['0p', 'sp']],
+  rows: [['sp']],
 });

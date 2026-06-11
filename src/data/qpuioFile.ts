@@ -19,7 +19,7 @@ export type ParsedQpuio = {
 
 const MAIN_PROCESS_PATTERN = /^MAIN-PROCES(?:S)?:\s*(\S+)/i;
 
-const INPUTS_PATTERN = /^INPUTS:\s*(.+)$/i;
+const INPUTS_PATTERN = /^INPUTS:\s*(.*)$/i;
 const OUTPUTS_PATTERN = /^OUTPUTS:\s*(.+)$/i;
 
 const splitDataLine = (line: string): string[] => {
@@ -39,8 +39,12 @@ const resolveColumnGroups = (
   columnNames: string[],
   options: { protocolSource?: string; declaredInputs?: string[]; declaredOutputs?: string[] },
 ): { inputColumns: string[]; outputColumns: string[] } => {
-  if (options.declaredInputs?.length && options.declaredOutputs?.length) {
-    return { inputColumns: options.declaredInputs, outputColumns: options.declaredOutputs };
+  if (options.declaredOutputs?.length !== undefined && options.declaredOutputs.length > 0) {
+    const inputColumns = options.declaredInputs ?? [];
+    const outputColumns = options.declaredOutputs;
+    if (inputColumns.length + outputColumns.length === columnNames.length) {
+      return { inputColumns, outputColumns };
+    }
   }
 
   if (options.protocolSource) {
@@ -99,7 +103,10 @@ const parseTextQpuio = (contents: string, protocolSource?: string): ParsedQpuio 
   }
 
   const columnNames = splitColumnNames(lines[headerIndex]);
-  if (columnNames.length < 2) {
+  if (columnNames.length < 1) {
+    throw new Error('QPUIO truth table requires at least one output column.');
+  }
+  if (columnNames.length < 2 && !declaredOutputs?.length) {
     throw new Error('QPUIO truth table requires at least one input and one output column.');
   }
 
@@ -149,6 +156,48 @@ const parseTextQpuio = (contents: string, protocolSource?: string): ParsedQpuio 
   };
 };
 
+const parseColumnNames = (columns: unknown, label: string): string[] => {
+  if (!Array.isArray(columns)) {
+    throw new Error(`JSON QPUIO envelope must include ${label} as an array.`);
+  }
+  return columns.map((column, index) => {
+    const name = String(column).trim();
+    if (!name) {
+      throw new Error(`${label}[${index}] must be a non-empty string.`);
+    }
+    return name;
+  });
+};
+
+const parseJsonRows = (
+  rows: unknown,
+  inputColumns: string[],
+  outputColumns: string[],
+): TruthCellValue[][] => {
+  if (!Array.isArray(rows)) {
+    throw new Error('JSON QPUIO envelope must include rows as an array.');
+  }
+  const expectedWidth = inputColumns.length + outputColumns.length;
+  return rows.map((row, rowIndex) => {
+    if (!Array.isArray(row)) {
+      throw new Error(`Row ${rowIndex} must be an array.`);
+    }
+    if (row.length !== expectedWidth) {
+      throw new Error(`Row ${rowIndex} has ${row.length} cell(s); expected ${expectedWidth}.`);
+    }
+    return row.map((cell, columnIndex) => {
+      const value = String(cell).trim();
+      if (!isTruthCellValue(value)) {
+        const column = columnIndex < inputColumns.length
+          ? inputColumns[columnIndex]
+          : outputColumns[columnIndex - inputColumns.length];
+        throw new Error(`Row ${rowIndex}, column '${column}' has invalid value '${value}'. Use 0p, 1p, or sp.`);
+      }
+      return value;
+    });
+  });
+};
+
 const parseJsonQpuio = (parsed: Partial<QpuioPayload>): ParsedQpuio => {
   if (parsed.format !== 'qpuio' || parsed.version !== 1) {
     throw new Error('JSON QPUIO envelope must set format to "qpuio" and version to 1.');
@@ -156,22 +205,30 @@ const parseJsonQpuio = (parsed: Partial<QpuioPayload>): ParsedQpuio => {
   if (!parsed.processName?.trim()) {
     throw new Error('JSON QPUIO envelope must include processName.');
   }
-  const truthTable = parseTruthTableJson(JSON.stringify({
-    inputColumns: parsed.inputColumns,
-    outputColumns: parsed.outputColumns,
-    rows: parsed.rows,
-  }));
+  const inputColumns = parsed.inputColumns === undefined
+    ? []
+    : parseColumnNames(parsed.inputColumns, 'inputColumns');
+  const outputColumns = parseColumnNames(parsed.outputColumns, 'outputColumns');
+  if (outputColumns.length === 0) {
+    throw new Error('Truth table requires at least one output column.');
+  }
+  const rows = parseJsonRows(parsed.rows, inputColumns, outputColumns);
+  const truthTable = parseTruthTableJson(JSON.stringify({ inputColumns, outputColumns, rows }));
   return { processName: parsed.processName.trim(), truthTable };
 };
 
 export const parseQpuioPayload = (contents: string, protocolSource?: string): ParsedQpuio => {
-  try {
-    const parsed = JSON.parse(contents) as Partial<QpuioPayload>;
+  const trimmed = contents.trim();
+  if (trimmed.startsWith('{')) {
+    let parsed: Partial<QpuioPayload>;
+    try {
+      parsed = JSON.parse(contents) as Partial<QpuioPayload>;
+    } catch (error) {
+      throw error instanceof Error ? error : new Error(String(error));
+    }
     if (parsed.format === 'qpuio') {
       return parseJsonQpuio(parsed);
     }
-  } catch {
-    // Plain-text QPUIO uploads are the primary interchange format.
   }
   return parseTextQpuio(contents, protocolSource);
 };
@@ -214,7 +271,9 @@ export const serializeQpuioText = (
 export const qpuioFileNameForProcess = (processName: string) => `${processName}.qpuio`;
 
 export const companionQpuioFileName = (qpucirFileName: string) => (
-  qpucirFileName.replace(/\.qpucir$/i, '.qpuio')
+  /\.qpucir$/i.test(qpucirFileName)
+    ? qpucirFileName.replace(/\.qpucir$/i, '.qpuio')
+    : `${qpucirFileName}.qpuio`
 );
 
 export const downloadQpuioContents = (fileName: string, contents: string) => {

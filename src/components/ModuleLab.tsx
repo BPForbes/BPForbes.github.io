@@ -302,20 +302,26 @@ export const ModuleLab = () => {
     if (qpucirFiles.length === 0 && qpuioFiles.length === 1) {
       const file = qpuioFiles[0];
       const contents = await file.text();
-      const entry = resolveCatalogEntry(file.name.replace(/\.qpuio$/i, ''));
-      const parsed = parseQpuioPayload(contents, entry?.source);
+      const fileStemEntry = resolveCatalogEntry(file.name.replace(/\.qpuio$/i, ''));
+      const parsed = parseQpuioPayload(contents, fileStemEntry?.source);
+      if (fileStemEntry && fileStemEntry.name !== parsed.processName) {
+        throw new Error(
+          `QPUIO process '${parsed.processName}' does not match catalog entry '${fileStemEntry.name}' for ${file.name}.`,
+        );
+      }
       const registration = registerCatalogTruthTable({
         processName: parsed.processName,
         truthTable: parsed.truthTable,
         truthTableFileName: file.name,
-        protocolSource: entry?.source,
+        protocolSource: fileStemEntry?.source ?? getCatalogEntry(parsed.processName)?.source,
       });
       refreshCatalog();
       if (registration.reverted) {
         warnProtectedTruthTable(parsed.processName, `Uploaded ${file.name} cannot replace protected site metadata.`);
       }
-      const resolvedTable = registration.entry.truthTable ?? parsed.truthTable;
-      if (entry) {
+      const entry = registration.entry;
+      const resolvedTable = entry.truthTable ?? parsed.truthTable;
+      if (entry.source) {
         setSelectedCatalogId(entry.id);
         applySource(entry.source, `Loaded truth table from ${file.name}.`, { truthTable: resolvedTable });
       } else {
@@ -812,6 +818,8 @@ export const ModuleLab = () => {
                     return;
                   }
                   setTruthTable(probeModuleOutputs(source, truthTable, librarySources));
+                  setLastTestResult(null);
+                  setStatus('Probed outputs from the current circuit. Run test to validate the table.');
                 }}
                 type="button"
               >

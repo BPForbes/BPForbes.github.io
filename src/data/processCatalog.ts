@@ -64,6 +64,12 @@ const readColumns = (source: string) => {
   }
 };
 
+const protocolSignatureMatches = (leftSource: string, rightSource: string) => {
+  const left = readColumns(leftSource);
+  const right = readColumns(rightSource);
+  return left.inputs.join() === right.inputs.join() && left.outputs.join() === right.outputs.join();
+};
+
 const persistCatalog = () => {
   if (typeof sessionStorage === 'undefined') return;
   const entries = Array.from(catalog.values()).filter((entry) => entry.origin !== 'bundled');
@@ -82,7 +88,12 @@ const restoreCatalog = () => {
     const entries = JSON.parse(raw) as ProcessCatalogEntry[];
     entries.forEach((entry) => {
       if (entry?.name && entry?.source) {
-        catalog.set(entryIdForName(entry.name), entry);
+        const enforced = enforceProtectedTruthTable(entry.name, entry.truthTable);
+        catalog.set(entryIdForName(entry.name), {
+          ...entry,
+          truthTable: enforced?.truthTable ?? entry.truthTable,
+          truthTableProtected: isProtectedQpuioProcess(entry.name),
+        });
       }
     });
   } catch {
@@ -132,13 +143,15 @@ export const registerCatalogProcess = (input: {
 }) => {
   const name = input.name.trim() || extractMainProcessName(input.source) || 'UntitledCircuit';
   const existing = catalog.get(entryIdForName(name));
-  const protectedTable = enforceProtectedTruthTable(name, input.truthTable ?? existing?.truthTable);
+  const signatureMatches = existing ? protocolSignatureMatches(existing.source, input.source) : false;
+  const inheritedTable = signatureMatches ? existing?.truthTable : undefined;
+  const protectedTable = enforceProtectedTruthTable(name, input.truthTable ?? inheritedTable);
   const entry: ProcessCatalogEntry = {
     id: entryIdForName(name),
     name,
     source: input.source,
     fileName: input.fileName?.trim() || existing?.fileName || undefined,
-    truthTable: protectedTable?.truthTable ?? input.truthTable ?? existing?.truthTable,
+    truthTable: protectedTable?.truthTable ?? input.truthTable ?? inheritedTable,
     truthTableFileName: isProtectedQpuioProcess(name)
       ? existing?.truthTableFileName ?? configuredProcesses.find((process) => process.name === name)?.truthTableFileName
       : input.truthTableFileName?.trim() || existing?.truthTableFileName || undefined,

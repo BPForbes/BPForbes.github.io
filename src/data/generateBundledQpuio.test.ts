@@ -1,5 +1,5 @@
-import { writeFileSync } from 'fs';
-import { describe, it } from 'vitest';
+import { readFileSync } from 'fs';
+import { describe, expect, it } from 'vitest';
 import {
   fourBitFullAdderTruthTable,
   phaseDemoTruthTable,
@@ -7,15 +7,17 @@ import {
 } from './bundledTruthTables';
 import { serializeQpuioText } from './qpuioFile';
 
-const writeProcess = (fileName: string, contents: string) => writeFileSync(new URL(`./processes/${fileName}`, import.meta.url), contents);
+const readFixture = (fileName: string) => readFileSync(new URL(`./processes/${fileName}`, import.meta.url), 'utf8');
+
+const phaseDemoQpuioText = () => {
+  const serialized = serializeQpuioText('PhaseDemo', phaseDemoTruthTable());
+  return serialized.replace('MAIN-PROCES: PhaseDemo\n', 'MAIN-PROCES: PhaseDemo\nOUTPUTS: Q0\n');
+};
 
 describe('generate bundled qpuio', () => {
-  it('generate qpuio files for bundled processes', () => {
-    writeProcess('two-bit-full-adder.qpuio', serializeQpuioText('TwoBitFullAdder', twoBitFullAdderTruthTable()));
-    writeProcess('four-bit-full-adder.qpuio', serializeQpuioText('FourBitFullAdder', fourBitFullAdderTruthTable()));
-    writeProcess('phase-demo.qpuio', `${serializeQpuioText('PhaseDemo', phaseDemoTruthTable()).replace(
-      'MAIN-PROCES: PhaseDemo\n',
-      'MAIN-PROCES: PhaseDemo\nINPUTS: Init\nOUTPUTS: Q0\n',
-    )}`);
+  it('matches checked-in bundled qpuio fixtures', () => {
+    expect(serializeQpuioText('TwoBitFullAdder', twoBitFullAdderTruthTable())).toBe(readFixture('two-bit-full-adder.qpuio'));
+    expect(serializeQpuioText('FourBitFullAdder', fourBitFullAdderTruthTable())).toBe(readFixture('four-bit-full-adder.qpuio'));
+    expect(phaseDemoQpuioText()).toBe(readFixture('phase-demo.qpuio'));
   });
 });

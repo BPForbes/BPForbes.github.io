@@ -4,7 +4,7 @@ import {
   getProtectedTruthTable,
   isProtectedQpuioProcess,
 } from './protectedQpuio';
-import { singleBitFullAdderTruthTable } from '../simulator/truthTable';
+import { singleBitFullAdderTruthTable, truthTablesEqual } from '../simulator/truthTable';
 
 describe('protectedQpuio', () => {
   it('marks bundled adder and phase-demo processes as protected', () => {
@@ -25,5 +25,22 @@ describe('protectedQpuio', () => {
     const enforced = enforceProtectedTruthTable('SingleBitFullAdder', edited);
     expect(enforced?.reverted).toBe(true);
     expect(enforced?.truthTable).toEqual(canonical);
+  });
+
+  it('keeps canonical tables immutable after callers mutate returned copies', () => {
+    const original = getProtectedTruthTable('SingleBitFullAdder');
+    expect(original).toBeTruthy();
+
+    const mutable = getProtectedTruthTable('SingleBitFullAdder');
+    mutable!.rows[0][0] = '1p';
+
+    const fresh = getProtectedTruthTable('SingleBitFullAdder');
+    expect(truthTablesEqual(fresh!, original!)).toBe(true);
+
+    const edited = singleBitFullAdderTruthTable();
+    edited.rows[0] = ['1p', '1p', '1p', '1p', '1p'];
+    const enforced = enforceProtectedTruthTable('SingleBitFullAdder', edited);
+    enforced!.truthTable.rows[0][0] = 'sp';
+    expect(getProtectedTruthTable('SingleBitFullAdder')).toEqual(original);
   });
 });

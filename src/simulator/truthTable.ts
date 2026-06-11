@@ -11,6 +11,8 @@ export type TruthTable = {
   rows: TruthCellValue[][];
 };
 
+export const cloneTruthTable = (table: TruthTable): TruthTable => structuredClone(table);
+
 export type TruthTableDimensions = {
   rowCount: number;
   columnCount: number;
@@ -67,7 +69,7 @@ export const inferTruthTableDimensions = (source: string): TruthTableDimensions 
   return {
     inputCount,
     outputCount,
-    rowCount: inputCount > 0 ? 2 ** inputCount : 0,
+    rowCount: inputCount > 0 ? 2 ** inputCount : (outputCount > 0 ? 1 : 0),
     columnCount: inputCount + outputCount,
   };
 };
@@ -78,7 +80,7 @@ export const indexToInputRow = (index: number, inputCount: number): TruthCellVal
 };
 
 export const createTruthTableFromColumns = (inputColumns: string[], outputColumns: string[]): TruthTable => {
-  const rowCount = inputColumns.length > 0 ? 2 ** inputColumns.length : 0;
+  const rowCount = inputColumns.length > 0 ? 2 ** inputColumns.length : (outputColumns.length > 0 ? 1 : 0);
   const rows = Array.from({ length: rowCount }, (_, rowIndex) => [
     ...indexToInputRow(rowIndex, inputColumns.length),
     ...Array.from({ length: outputColumns.length }, () => '0p' as TruthCellValue),
@@ -167,10 +169,13 @@ export const validateTruthTable = (table: TruthTable, source?: string): string[]
   const errors: string[] = [];
   const expected = source ? inferTruthTableDimensions(source) : null;
 
-  if (table.inputColumns.length === 0) errors.push('Truth table requires at least one input column.');
   if (table.outputColumns.length === 0) errors.push('Truth table requires at least one output column.');
 
-  const expectedRows = expected?.rowCount ?? (table.inputColumns.length > 0 ? 2 ** table.inputColumns.length : 0);
+  const expectedRows = expected?.rowCount ?? (
+    table.inputColumns.length > 0
+      ? 2 ** table.inputColumns.length
+      : (table.outputColumns.length > 0 ? 1 : 0)
+  );
   if (table.rows.length !== expectedRows) {
     errors.push(`Truth table has ${table.rows.length} row(s); expected ${expectedRows}.`);
   }

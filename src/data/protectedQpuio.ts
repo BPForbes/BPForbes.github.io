@@ -5,7 +5,7 @@ import {
 } from './bundledTruthTables';
 import { configuredProcesses } from './protocolExamples';
 import type { TruthTable } from '../simulator/truthTable';
-import { singleBitFullAdderTruthTable, truthTablesEqual } from '../simulator/truthTable';
+import { cloneTruthTable, singleBitFullAdderTruthTable, truthTablesEqual } from '../simulator/truthTable';
 
 const PROTECTED_PROCESS_NAMES = new Set([
   'SingleBitFullAdder',
@@ -15,15 +15,15 @@ const PROTECTED_PROCESS_NAMES = new Set([
 ]);
 
 const canonicalByProcess = new Map<string, TruthTable>([
-  ['SingleBitFullAdder', singleBitFullAdderTruthTable()],
-  ['TwoBitFullAdder', twoBitFullAdderTruthTable()],
-  ['FourBitFullAdder', fourBitFullAdderTruthTable()],
-  ['PhaseDemo', phaseDemoTruthTable()],
+  ['SingleBitFullAdder', cloneTruthTable(singleBitFullAdderTruthTable())],
+  ['TwoBitFullAdder', cloneTruthTable(twoBitFullAdderTruthTable())],
+  ['FourBitFullAdder', cloneTruthTable(fourBitFullAdderTruthTable())],
+  ['PhaseDemo', cloneTruthTable(phaseDemoTruthTable())],
 ]);
 
 configuredProcesses.forEach((process) => {
   if (process.truthTable && PROTECTED_PROCESS_NAMES.has(process.name)) {
-    canonicalByProcess.set(process.name, process.truthTable);
+    canonicalByProcess.set(process.name, cloneTruthTable(process.truthTable));
   }
 });
 
@@ -33,9 +33,10 @@ export const isProtectedQpuioProcess = (processName: string | null | undefined) 
   Boolean(processName && PROTECTED_PROCESS_NAMES.has(processName))
 );
 
-export const getProtectedTruthTable = (processName: string): TruthTable | undefined => (
-  canonicalByProcess.get(processName)
-);
+export const getProtectedTruthTable = (processName: string): TruthTable | undefined => {
+  const canonical = canonicalByProcess.get(processName);
+  return canonical ? cloneTruthTable(canonical) : undefined;
+};
 
 export const protectedQpuioFileNames = () => configuredProcesses
   .filter((process) => isProtectedQpuioProcess(process.name) && process.truthTableFileName)
@@ -63,14 +64,14 @@ export const enforceProtectedTruthTable = (
     return attempted ? { truthTable: attempted, reverted: false } : null;
   }
 
-  const canonical = getProtectedTruthTable(processName);
+  const canonical = canonicalByProcess.get(processName);
   if (!canonical) {
     return attempted ? { truthTable: attempted, reverted: false } : null;
   }
 
   if (!attempted || truthTablesEqual(attempted, canonical)) {
-    return { truthTable: canonical, reverted: false };
+    return { truthTable: cloneTruthTable(canonical), reverted: false };
   }
 
-  return { truthTable: canonical, reverted: true };
+  return { truthTable: cloneTruthTable(canonical), reverted: true };
 };
