@@ -750,7 +750,7 @@ export const ModuleLab = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
   const downloadQpuioTable = () => {
