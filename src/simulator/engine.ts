@@ -1,7 +1,8 @@
 import { Complex, magnitudeSquared, ONE, ZERO } from './complex';
 import { applyGate as applyRegisteredGate } from './gates/registry';
 import { applyStartState, hasBit, measureQubit, padStateVector } from './gates/operations';
-import { CircuitGate, ExecutionResult, MeasurementMap, ParticleStartState } from './types';
+import { buildOperationTransition, snapshotAllParticles } from './particleTracking';
+import { CircuitGate, ExecutionResult, MeasurementMap, OperationTransition, ParticleStartState } from './types';
 
 export {
   applySingleQubitGate,
@@ -67,21 +68,73 @@ const ensureStateWidth = (state: Complex[], qubitCount: number, gate: CircuitGat
   return { state: padStateVector(state, qubitCount, nextCount), qubitCount: nextCount };
 };
 
+export type ApplyGateOptions = {
+  librarySources?: Record<string, string>;
+  trackParticles?: boolean;
+};
+
+const normalizeApplyGateOptions = (
+  input: Record<string, string> | ApplyGateOptions = {},
+): ApplyGateOptions => {
+  if ('trackParticles' in input || 'librarySources' in input) {
+    return input as ApplyGateOptions;
+  }
+  return { librarySources: input as Record<string, string>, trackParticles: false };
+};
+
 export const applyGate = (
   state: Complex[],
   qubitCount: number,
   gate: CircuitGate,
   measurements: MeasurementMap,
-  librarySources: Record<string, string> = {},
-): ExecutionResult => applyRegisteredGate(state, qubitCount, gate, measurements, librarySources);
+  librarySourcesOrOptions: Record<string, string> | ApplyGateOptions = {},
+): ExecutionResult => {
+  const options = normalizeApplyGateOptions(librarySourcesOrOptions);
+  const librarySources = options.librarySources ?? {};
+
+  if (!options.trackParticles) {
+    const result = applyRegisteredGate(state, qubitCount, gate, measurements, librarySources);
+    return result;
+  }
+
+  const beforeState = state;
+  const beforeMeasurements = measurements;
+  const result = applyRegisteredGate(state, qubitCount, gate, measurements, librarySources);
+  const particles = snapshotAllParticles(result.state, qubitCount, result.measurements);
+  const transition = buildOperationTransition(
+    gate,
+    beforeState,
+    result.state,
+    qubitCount,
+    beforeMeasurements,
+    result.measurements,
+  );
+  return { ...result, particles, transitions: [transition] };
+};
+
+export type RunCircuitOptions = {
+  librarySources?: Record<string, string>;
+  trackParticles?: boolean;
+};
+
+const normalizeRunCircuitOptions = (
+  input: Record<string, string> | RunCircuitOptions = {},
+): RunCircuitOptions => {
+  if ('trackParticles' in input || 'librarySources' in input) {
+    return input as RunCircuitOptions;
+  }
+  return { librarySources: input as Record<string, string>, trackParticles: false };
+};
 
 export const runCircuit = (
   qubitCount: number,
   gates: CircuitGate[],
   startStates: ParticleStartState[] = [],
   paramQubitIndices?: number[],
-  librarySources: Record<string, string> = {},
+  librarySourcesOrOptions: Record<string, string> | RunCircuitOptions = {},
 ): ExecutionResult => {
+  const options = normalizeRunCircuitOptions(librarySourcesOrOptions);
+  const librarySources = options.librarySources ?? {};
   const initSummary = paramQubitIndices?.length
     ? paramQubitIndices.map((qubit) => startStates[qubit] ?? '0p').join(' ')
     : Array.from({ length: qubitCount }, (_, index) => startStates[index] ?? '0p').join(' ');
@@ -97,18 +150,31 @@ export const runCircuit = (
         const sized = ensureStateWidth(workingState, workingQubitCount, gate);
         workingState = sized.state;
         workingQubitCount = sized.qubitCount;
-        const next = applyGate(workingState, workingQubitCount, gate, result.measurements, librarySources);
+        const next = applyGate(workingState, workingQubitCount, gate, result.measurements, {
+          librarySources,
+          trackParticles: options.trackParticles,
+        });
         workingState = next.state;
         const vectorWidth = Math.round(Math.log2(workingState.length));
         if (Number.isFinite(vectorWidth) && vectorWidth > workingQubitCount) {
           workingQubitCount = vectorWidth;
         }
-        return { state: workingState, measurements: next.measurements, log: [...result.log, ...next.log] };
+        return {
+          state: workingState,
+          measurements: next.measurements,
+          log: [...result.log, ...next.log],
+          particles: next.particles ?? result.particles,
+          transitions: [...(result.transitions ?? []), ...(next.transitions ?? [])],
+        };
       },
       {
         state: workingState,
         measurements: {},
         log: [`Initialized ${initSummary}.`],
+        particles: options.trackParticles
+          ? snapshotAllParticles(workingState, workingQubitCount, {})
+          : undefined,
+        transitions: [],
       },
     );
 };

@@ -1,4 +1,5 @@
 import type { GateDefinition } from '../types';
+import { gateIoArity } from '../types';
 import { applyControlledZ } from '../operations';
 
 export const czGate: GateDefinition = {
@@ -6,6 +7,7 @@ export const czGate: GateDefinition = {
   category: 'preconfigured',
   label: 'CZ',
   controlKind: 'single',
+  ioArity: gateIoArity(1, 1),
   astInputCount: 1,
   inPalette: true,
   isAstPrimitive: true,

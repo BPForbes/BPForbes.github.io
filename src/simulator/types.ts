@@ -117,8 +117,14 @@ export type CircuitGate = {
 
 export type MeasurementMap = Record<number, 0 | 1>;
 
+export type { OperationTransition, ParticleDelta, ParticleSnapshot, SphericalCoordinates } from './particleTracking';
+
 export type ExecutionResult = {
   state: Complex[];
   measurements: MeasurementMap;
   log: string[];
+  /** Latest per-qubit spherical snapshots after this execution step. */
+  particles?: import('./particleTracking').ParticleSnapshot[];
+  /** Per-gate particle transitions when execution tracing is enabled. */
+  transitions?: import('./particleTracking').OperationTransition[];
 };

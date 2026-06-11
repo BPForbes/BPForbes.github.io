@@ -1,4 +1,5 @@
 import type { GateDefinition } from '../types';
+import { gateIoArity } from '../types';
 import { prepareZeroQubit } from '../operations';
 
 export const resetGate: GateDefinition = {
@@ -6,6 +7,7 @@ export const resetGate: GateDefinition = {
   category: 'preconfigured',
   label: 'R',
   controlKind: 'none',
+  ioArity: gateIoArity(0, 0),
   astInputCount: 0,
   inPalette: false,
   isAstPrimitive: true,

@@ -1,3 +1,4 @@
+import { assertGateArity } from './gates/arity';
 import { astDerivedGateIds, astGateInputCounts, astPrimitiveGateIds } from './gates/metadata';
 import { CircuitGate, GateType, QpuOperation } from './types';
 
@@ -229,9 +230,8 @@ export const parseCommand = (line: string): ParsedCommand => {
   if ((primitiveGates.has(op) || derivedGates.has(op)) && op !== 'MEASURE' && !outputs.length) {
     throw new Error(`${op} requires -O output`);
   }
-  const expectedInputs = gateInputCounts[op];
-  if (expectedInputs !== undefined && inputs.length < expectedInputs) {
-    throw new Error(`${op} requires ${expectedInputs} input${expectedInputs === 1 ? '' : 's'}`);
+  if (primitiveGates.has(op) || derivedGates.has(op)) {
+    assertGateArity(op, inputs.length, outputs.length);
   }
 
   return { op, raw: line, inputs, outputs, args: tokens.slice(1), phase, reverse, noParameterSubstitution };

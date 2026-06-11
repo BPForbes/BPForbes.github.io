@@ -1,4 +1,5 @@
 import type { GateDefinition } from '../types';
+import { gateIoArity } from '../types';
 import { applySingleQubitGate } from '../operations';
 import { MATRIX_X } from '../matrices';
 
@@ -7,6 +8,7 @@ export const notGate: GateDefinition = {
   category: 'preconfigured',
   label: '¬',
   controlKind: 'none',
+  ioArity: gateIoArity(1, 1),
   astInputCount: 1,
   inPalette: true,
   isAstPrimitive: false,

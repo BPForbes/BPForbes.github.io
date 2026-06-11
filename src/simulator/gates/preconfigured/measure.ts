@@ -1,4 +1,5 @@
 import type { GateDefinition } from '../types';
+import { gateIoArity } from '../types';
 import { measureQubit } from '../operations';
 
 export const measureGate: GateDefinition = {
@@ -6,6 +7,7 @@ export const measureGate: GateDefinition = {
   category: 'preconfigured',
   label: 'M',
   controlKind: 'none',
+  ioArity: gateIoArity(0, 0, 1, 0),
   astInputCount: 0,
   inPalette: true,
   isAstPrimitive: true,

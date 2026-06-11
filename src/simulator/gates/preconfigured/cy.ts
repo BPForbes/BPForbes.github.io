@@ -1,4 +1,5 @@
 import type { GateDefinition } from '../types';
+import { gateIoArity } from '../types';
 import { applyControlledSingleQubit } from '../operations';
 import { MATRIX_Y } from '../matrices';
 
@@ -7,6 +8,7 @@ export const cyGate: GateDefinition = {
   category: 'preconfigured',
   label: 'CY',
   controlKind: 'single',
+  ioArity: gateIoArity(1, 1),
   astInputCount: 1,
   inPalette: true,
   isAstPrimitive: true,

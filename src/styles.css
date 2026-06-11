@@ -81,6 +81,9 @@ button { font: inherit; }
 .particle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
 .particle-card { min-height: 8rem; display: grid; place-items: center; gap: .35rem; border-radius: 1rem; background: linear-gradient(180deg, rgba(30,41,59,.85), rgba(15,23,42,.92)); border: 1px solid rgba(148,163,184,.22); transition: transform .35s ease; }
 .particle-card.collapsed { transform: translateY(2px); }
+.particle-coords,
+.particle-delta { display: flex; flex-wrap: wrap; gap: .35rem; justify-content: center; font-size: .68rem; font-weight: 800; color: #cbd5e1; }
+.particle-delta { color: #fde68a; }
 .qubit-label { font-weight: 900; color: #cbd5e1; }
 .sphere { width: 4rem; height: 4rem; border-radius: 50%; background: radial-gradient(circle at 30% 24%, #fff 0 8%, #67e8f9 18%, #2563eb 56%, #111827 100%); box-shadow: inset -14px -18px 28px rgba(0,0,0,.36), 0 0 32px rgba(103,232,249,.48); animation: float 2.4s ease-in-out infinite; }
 .state-card { width: 4rem; height: 3.1rem; display: grid; place-items: center; border-radius: .7rem; color: #111827; background: #facc15; font-size: 2rem; font-weight: 950; animation: collapse .42s ease both; }

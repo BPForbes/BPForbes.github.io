@@ -1,4 +1,5 @@
 import type { GateDefinition } from '../types';
+import { gateIoArity } from '../types';
 import { applySwap } from '../operations';
 
 export const swapGate: GateDefinition = {
@@ -6,6 +7,7 @@ export const swapGate: GateDefinition = {
   category: 'preconfigured',
   label: 'SW',
   controlKind: 'swap',
+  ioArity: gateIoArity(2, 2),
   astInputCount: 2,
   inPalette: true,
   isAstPrimitive: true,

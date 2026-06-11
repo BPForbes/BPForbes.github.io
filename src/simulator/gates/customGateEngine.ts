@@ -1,6 +1,7 @@
 import { compileQpuProtocol } from '../qpuAst';
 import type { CircuitGate, ExecutionResult, MeasurementMap } from '../types';
 import type { GateDefinition } from './types';
+import { gateIoArity } from './types';
 import { padStateVector } from './operations';
 import { preconfiguredGateMap } from './preconfigured';
 
@@ -195,6 +196,12 @@ export const customGateToDefinition = (record: CustomGateRecord): GateDefinition
   category: 'custom',
   label: record.label,
   controlKind: record.inputParamNames.length > 1 ? 'parametric' : record.inputParamNames.length === 1 ? 'single' : 'none',
+  ioArity: gateIoArity(
+    record.inputParamNames.length,
+    Math.max(record.outputParamNames.length, 1),
+    record.inputParamNames.length,
+    Math.max(record.outputParamNames.length, 1),
+  ),
   astInputCount: Math.max(record.inputParamNames.length, 1),
   inPalette: true,
   isAstPrimitive: false,

@@ -1,5 +1,6 @@
 import type { ExecutionResult } from '../types';
 import type { GateApplyContext, GateDefinition } from './types';
+import { gateIoArity } from './types';
 import { applySingleQubitGate, applyControlledX, applyControlledPredicateX, anyControlIsActive, controlsHaveParity } from './operations';
 import { MATRIX_X, phaseMatrix } from './matrices';
 
@@ -26,6 +27,7 @@ export const createSingleQubitMatrixGate = ({
   category: 'preconfigured',
   label,
   controlKind: 'none',
+  ioArity: gateIoArity(1, 1),
   astInputCount: 1,
   inPalette,
   isAstPrimitive,
@@ -56,6 +58,7 @@ export const createFixedPhaseGate = ({ id, label, angle, cssClass }: FixedPhaseG
   category: 'preconfigured',
   label,
   controlKind: 'none',
+  ioArity: gateIoArity(1, 1),
   astInputCount: 1,
   inPalette: true,
   isAstPrimitive: true,
@@ -82,6 +85,7 @@ type ControlledXFamilyOptions = {
   predicate?: 'all' | 'any' | 'parity';
   invertTarget?: boolean;
   isAstDerived?: boolean;
+  ioArity?: import('./types').GateIoArity;
 };
 
 export const createControlledXFamilyGate = ({
@@ -93,11 +97,13 @@ export const createControlledXFamilyGate = ({
   predicate = 'all',
   invertTarget = false,
   isAstDerived = false,
+  ioArity: arityOverride,
 }: ControlledXFamilyOptions): GateDefinition => ({
   id,
   category: 'preconfigured',
   label,
   controlKind,
+  ioArity: arityOverride ?? gateIoArity(astInputCount, 1),
   astInputCount,
   inPalette: true,
   isAstPrimitive: !isAstDerived,

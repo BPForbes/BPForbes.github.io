@@ -1,4 +1,5 @@
 import type { GateDefinition } from '../types';
+import { gateIoArity } from '../types';
 import { applySingleQubitGate } from '../operations';
 import { phaseMatrix } from '../matrices';
 
@@ -7,6 +8,7 @@ export const phaseGate: GateDefinition = {
   category: 'preconfigured',
   label: 'P',
   controlKind: 'none',
+  ioArity: gateIoArity(1, 1),
   astInputCount: 1,
   inPalette: true,
   isAstPrimitive: true,
