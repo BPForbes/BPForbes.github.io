@@ -154,13 +154,14 @@ export const registerCatalogProcess = (input: {
   const existing = catalog.get(entryIdForName(name));
   const signatureMatches = existing ? protocolSignatureMatches(existing.source, input.source) : false;
   const inheritedTable = signatureMatches ? existing?.truthTable : undefined;
-  const protectedTable = enforceProtectedTruthTable(name, input.truthTable ?? inheritedTable);
+  const candidateTable = input.truthTable ?? inheritedTable ?? existing?.truthTable;
+  const protectedTable = enforceProtectedTruthTable(name, candidateTable);
   const entry: ProcessCatalogEntry = {
     id: entryIdForName(name),
     name,
     source: input.source,
     fileName: input.fileName?.trim() || existing?.fileName || undefined,
-    truthTable: protectedTable?.truthTable ?? input.truthTable ?? inheritedTable,
+    truthTable: protectedTable?.truthTable ?? candidateTable,
     truthTableFileName: canonicalProtectedTruthTableFileName(
       name,
       input.truthTableFileName?.trim() || existing?.truthTableFileName || undefined,
@@ -364,8 +365,8 @@ export type PersistCatalogArtifactsResult = {
 export const persistCatalogArtifacts = (input: PersistCatalogArtifactsInput): PersistCatalogArtifactsResult => {
   const name = input.processName.trim() || extractMainProcessName(input.source) || 'UntitledCircuit';
   const existing = getCatalogEntry(name);
-  const updateQpuio = input.updateQpuio ?? true;
-  const updateQpucir = input.updateQpucir ?? true;
+  const updateQpuio = input.updateQpuio ?? false;
+  const updateQpucir = input.updateQpucir ?? false;
 
   if (existing?.origin === 'bundled') {
     return {
@@ -395,7 +396,7 @@ export const persistCatalogArtifacts = (input: PersistCatalogArtifactsInput): Pe
     fileName: updateQpucir
       ? existing?.fileName ?? qpucirFileNameForSource(nextSource, name)
       : existing?.fileName,
-    truthTable: updateQpuio ? nextTable : undefined,
+    truthTable: updateQpuio ? nextTable : existing?.truthTable,
     truthTableFileName: updateQpuio
       ? existing?.truthTableFileName ?? qpuioFileNameForProcess(name)
       : existing?.truthTableFileName,

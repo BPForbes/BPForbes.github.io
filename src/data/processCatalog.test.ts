@@ -57,6 +57,51 @@ describe('processCatalog', () => {
     expect(getCatalogEntry('PhaseDemo')?.truthTable?.rows).toHaveLength(1);
   });
 
+  it('does not update qpuio when persisting qpucir-only correction artifacts', () => {
+    const originalTable = {
+      inputColumns: ['S', 'R'],
+      outputColumns: ['Q', 'Qbar'],
+      rows: [
+        ['0p', '0p', '0p', '1p'],
+        ['0p', '1p', '0p', '1p'],
+        ['1p', '0p', '1p', '0p'],
+        ['1p', '1p', '0p', '0p'],
+      ],
+    };
+    const originalSource = `PARAMS: S:state R:state
+
+MAIN-PROCESS LatchStep
+RETURNVALS Q Qbar`;
+
+    registerCatalogProcess({
+      name: 'LatchStep',
+      source: originalSource,
+      origin: 'uploaded',
+      truthTable: originalTable,
+    });
+
+    const correctedSource = `${originalSource}\nCNOT -I 0:0 -O Q:0`;
+    const probedTable = {
+      inputColumns: ['S', 'R', 'Qprev'],
+      outputColumns: ['Q'],
+      rows: [['0p', '0p', '0p', '1p']],
+    };
+
+    const result = persistCatalogArtifacts({
+      processName: 'LatchStep',
+      source: correctedSource,
+      truthTable: probedTable,
+      updateQpuio: false,
+      updateQpucir: true,
+      origin: 'corrected',
+    });
+
+    expect(result.qpuioUpdated).toBe(false);
+    expect(result.qpucirUpdated).toBe(true);
+    expect(resolveCatalogEntry('LatchStep')?.source).toBe(correctedSource);
+    expect(resolveCatalogEntry('LatchStep')?.truthTable).toEqual(originalTable);
+  });
+
   it('persists custom qpucir and qpuio metadata after workflow sync', () => {
     registerCatalogProcess({
       name: 'MyCircuit',
