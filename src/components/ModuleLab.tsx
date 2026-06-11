@@ -32,9 +32,10 @@ import {
   downloadQpuioContents,
   parseQpuioPayload,
   qpuioFileNameForProcess,
+  qpuioTxtFileNameForProcess,
   serializeQpuioText,
 } from '../data/qpuioFile';
-import { downloadQpucirSource, parseQpucirPayload } from '../data/qpucirFile';
+import { downloadQpucirSource, downloadQpucirTxtSource, parseQpucirPayload } from '../data/qpucirFile';
 import {
   formatClarificationRetry,
   resolveClarificationResponse,
@@ -86,7 +87,7 @@ const generateId = () => {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 };
 
-const welcomeMessage = `Welcome to the Circuit Correction Lab. Pick a cataloged process or upload a .qpucir module, shape the truth table, then chat to test and correct circuits.
+const welcomeMessage = `Welcome to the Circuit Correction Lab. Pick a cataloged process or upload a .qpucir module (or -qpucir.txt on devices that hide custom extensions), shape the truth table, then chat to test and correct circuits.
 Commands like "test the circuit" or "fix automatically" use the fast built-in parser. For free-form questions, enable AI below — the browser model downloads once and is cached for later visits.
 Try: "open SingleBitFullAdder", "test the circuit", or "fix the circuit automatically".`;
 
@@ -765,19 +766,24 @@ export const ModuleLab = () => {
     setTimeout(() => URL.revokeObjectURL(url), 100);
   };
 
-  const downloadQpuioTable = () => {
+  const downloadQpuioTable = (asTxt = false) => {
     if (!truthTable || !activeProcessName) return;
-    downloadQpuioContents(
-      qpuioFileNameForProcess(activeProcessName),
-      serializeQpuioText(activeProcessName, truthTable),
-    );
-    setStatus(`Downloaded ${qpuioFileNameForProcess(activeProcessName)}.`);
+    const fileName = asTxt
+      ? qpuioTxtFileNameForProcess(activeProcessName)
+      : qpuioFileNameForProcess(activeProcessName);
+    downloadQpuioContents(fileName, serializeQpuioText(activeProcessName, truthTable));
+    setStatus(`Downloaded ${fileName}.`);
   };
 
-  const downloadCircuit = () => {
+  const downloadCircuit = (asTxt = false) => {
     try {
-      downloadQpucirSource(source, librarySources, activeProcessName ?? 'CorrectedCircuit');
-      setStatus('Downloaded corrected circuit as -qpucir.txt.');
+      const fallbackName = activeProcessName ?? 'CorrectedCircuit';
+      if (asTxt) {
+        downloadQpucirTxtSource(source, fallbackName);
+      } else {
+        downloadQpucirSource(source, librarySources, fallbackName);
+      }
+      setStatus(`Downloaded corrected circuit as ${asTxt ? 'tagged .txt' : '.qpucir'}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(`Download error: ${message}`);
@@ -843,7 +849,7 @@ export const ModuleLab = () => {
         <div>
           <p className="eyebrow">Circuit correction lab</p>
           <h1>Test modules and fix circuits with natural language.</h1>
-          <p>Choose a cataloged process or upload a .qpucir or -qpucir.txt file (optionally with a companion .qpuio or -qpuio.txt truth table), define the expected truth table, and chat with the correction assistant to translate human instructions into gate-level fixes.</p>
+          <p>Choose a cataloged process or upload a .qpucir file (optionally with a companion .qpuio truth table). Tagged -qpucir.txt and -qpuio.txt names are also accepted when a device file picker cannot see custom extensions.</p>
         </div>
       </header>
 
@@ -857,13 +863,13 @@ export const ModuleLab = () => {
           <div className="module-tester-grid">
             <label className="upload-card">
               <strong>Upload protocol</strong>
-              <span>.qpucir or -qpucir.txt; select a matching .qpuio or -qpuio.txt in the same dialog to load its truth table.</span>
+              <span>.qpucir (preferred) or -qpucir.txt; select a matching .qpuio or -qpuio.txt in the same dialog to load its truth table.</span>
               <input accept={QPU_FILE_UPLOAD_ACCEPT} multiple onChange={uploadQpucir} type="file" />
             </label>
 
             <label className="upload-card">
               <strong>Upload truth table</strong>
-              <span>.qpuio or -qpuio.txt metadata for a cataloged or paired process.</span>
+              <span>.qpuio (preferred) or -qpuio.txt metadata for a cataloged or paired process.</span>
               <input accept=".qpuio,.txt,text/plain" onChange={uploadQpuio} type="file" />
             </label>
 
@@ -910,8 +916,10 @@ export const ModuleLab = () => {
                 Probe outputs
               </button>
               <button disabled={!truthTable} onClick={downloadTruthTable} type="button">Download JSON</button>
-              <button disabled={!truthTable || !activeProcessName} onClick={downloadQpuioTable} type="button">Download -qpuio.txt</button>
-              <button disabled={!source.trim()} onClick={downloadCircuit} type="button">Download -qpucir.txt</button>
+              <button disabled={!truthTable || !activeProcessName} onClick={() => downloadQpuioTable(false)} type="button">Download .qpuio</button>
+              <button disabled={!truthTable || !activeProcessName} onClick={() => downloadQpuioTable(true)} type="button">Download -qpuio.txt</button>
+              <button disabled={!source.trim()} onClick={() => downloadCircuit(false)} type="button">Download .qpucir</button>
+              <button disabled={!source.trim()} onClick={() => downloadCircuit(true)} type="button">Download -qpucir.txt</button>
             </div>
           </div>
 

@@ -29,9 +29,11 @@ describe('qpuFileNames', () => {
     expect(() => validateUploadFileName('RsNorLatchStep-qpuio.txt')).not.toThrow();
   });
 
-  it('builds download filenames', () => {
+  it('builds tagged txt download filenames alongside canonical types', () => {
     expect(qpucirTxtFileNameForProcess('RsNorLatchStep')).toBe('RsNorLatchStep-qpucir.txt');
     expect(qpuioTxtFileNameForProcess('RsNorLatchStep')).toBe('RsNorLatchStep-qpuio.txt');
+    expect(isQpucirFileName('RsNorLatchStep.qpucir')).toBe(true);
+    expect(isQpuioFileName('RsNorLatchStep.qpuio')).toBe(true);
   });
 
   it('maps companion names across qpucir and txt conventions', () => {

@@ -1,4 +1,5 @@
 import { compileQpuProtocol } from '../simulator/qpuAst';
+import { qpucirTxtFileNameForProcess } from './qpuFileNames';
 import { extractMainProcessName, qpucirFileNameForSource } from '../simulator/qpuFormat';
 import type { QpucirPayload } from './protocolExamples';
 
@@ -56,4 +57,12 @@ export const downloadQpucirSource = (
 ) => {
   const name = extractMainProcessName(source) ?? fallbackName;
   downloadQpucirContents(qpucirFileNameForSource(source, name), source);
+};
+
+export const downloadQpucirTxtSource = (
+  source: string,
+  fallbackName = 'CircuitProcess',
+) => {
+  const name = extractMainProcessName(source) ?? fallbackName;
+  downloadQpucirContents(qpucirTxtFileNameForProcess(name), source);
 };

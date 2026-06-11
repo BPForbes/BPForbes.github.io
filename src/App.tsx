@@ -15,7 +15,7 @@ import {
 } from './data/qpuFileNames';
 import { companionQpuioFileName, parseQpuioPayload } from './data/qpuioFile';
 import { isProtectedQpuioProcess, warnProtectedTruthTable } from './data/protectedQpuio';
-import { downloadQpucirContents, parseQpucirPayload } from './data/qpucirFile';
+import { downloadQpucirContents, downloadQpucirTxtSource, parseQpucirPayload } from './data/qpucirFile';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess } from './data/protocolExamples';
 import { applyGate, createInitialState, measureAll, measureQubit, projectStateOntoQubits, runCircuit } from './simulator/engine';
@@ -85,7 +85,7 @@ function App() {
   const [returnValues, setReturnValues] = useState<ReturnValue[]>([]);
   const [activeView, setActiveView] = useState<AppView>('builder');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [fileStatus, setFileStatus] = useState('Upload a .qpucir or -qpucir.txt file, or download one of the bundled AST circuits.');
+  const [fileStatus, setFileStatus] = useState('Upload a .qpucir file (or -qpucir.txt on restrictive file pickers), or download one of the bundled AST circuits.');
   const [protocolMode, setProtocolMode] = useState<'canvas' | 'process'>('process');
 
   const orderedGates = useMemo(() => gates.slice().sort((a, b) => a.step - b.step), [gates]);
@@ -535,7 +535,7 @@ function App() {
       const qpucirFile = fileList.find((file) => isQpucirFileName(file.name))
         ?? fileList.find((file) => isLooseQpucirUpload(file.name) && !isQpuioFileName(file.name));
       if (!qpucirFile) {
-        throw new Error('Upload at least one .qpucir or -qpucir.txt file.');
+        throw new Error('Upload at least one .qpucir file (or -qpucir.txt when .qpucir is not available).');
       }
 
       const contents = await qpucirFile.text();
@@ -770,7 +770,8 @@ function App() {
             />
             <div className="compiler-footer">
               <button onClick={compileProtocol} type="button">Compile AST to circuit</button>
-              <button onClick={downloadCompiledAst} type="button">Download AST as -qpucir.txt</button>
+              <button onClick={downloadCompiledAst} type="button">Download AST as .qpucir</button>
+              <button onClick={() => downloadQpucirTxtSource(protocolSource, extractMainProcessName(protocolSource) ?? 'Compiled AST circuit')} type="button">Download AST as -qpucir.txt</button>
               <span>{compileSummary}</span>
             </div>
             <details>
@@ -847,12 +848,12 @@ function App() {
           <div className="file-grid">
             <label className="upload-card">
               <strong>Upload files</strong>
-              <span>Select a .qpucir or -qpucir.txt protocol file (optionally with a matching .qpuio or -qpuio.txt truth table). Plain .txt files must include -qpucir or -qpuio in the name.</span>
+              <span>Select a .qpucir protocol file (optionally with a matching .qpuio truth table). Use -qpucir.txt / -qpuio.txt only when your device file picker cannot open custom extensions.</span>
               <input accept={QPU_FILE_UPLOAD_ACCEPT} multiple onChange={uploadProtocol} type="file" />
             </label>
             <div className="download-card">
               <strong>Download files</strong>
-              <span>Bundled AST examples download as .qpucir; user exports use -qpucir.txt and -qpuio.txt.</span>
+              <span>Downloads use .qpucir by default; -qpucir.txt is available where plain .txt is easier to share from mobile file pickers.</span>
               <div className="download-list">
                 {protocolExamples.map((example) => (
                   <button key={example.name} onClick={() => downloadConfiguredProtocol(example)} type="button">

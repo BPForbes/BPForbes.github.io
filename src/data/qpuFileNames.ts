@@ -1,3 +1,4 @@
+/** Canonical types remain .qpucir / .qpuio; tagged .txt names are an additive alias for file pickers that mishandle custom extensions. */
 export const QPUCIR_TXT_MARKER = '-qpucir';
 export const QPUIO_TXT_MARKER = '-qpuio';
 
@@ -24,7 +25,7 @@ export const isLooseQpucirUpload = (fileName: string) => (
 export const validateUploadFileName = (fileName: string): void => {
   if (isTxtFileName(fileName) && !isQpucirFileName(fileName) && !isQpuioFileName(fileName)) {
     throw new Error(
-      'Text uploads must include -qpucir or -qpuio in the filename (e.g. RsNorLatchStep-qpucir.txt).',
+      'Plain .txt uploads must include -qpucir or -qpuio in the filename (e.g. RsNorLatchStep-qpucir.txt). Use .qpucir or .qpuio when your device supports them.',
     );
   }
 };
