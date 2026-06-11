@@ -1,5 +1,5 @@
 import { assertGateArity } from './gates/arity';
-import { astDerivedGateIds, astGateInputCounts, astPrimitiveGateIds } from './gates/metadata';
+import { astDerivedGateIds, astPrimitiveGateIds } from './gates/metadata';
 import { CircuitGate, GateType, QpuOperation } from './types';
 
 export type ParsedCommand = {
@@ -49,7 +49,6 @@ const NUMERIC_PARAM_TYPES = ['int', 'float'] as const;
 
 const primitiveGates = new Set(astPrimitiveGateIds());
 const derivedGates = new Set(astDerivedGateIds());
-const gateInputCounts: Partial<Record<QpuOperation, number>> = astGateInputCounts() as Partial<Record<QpuOperation, number>>;
 
 export const supportedQpuOperations: QpuOperation[] = [
   'INCREASECYCLE',
