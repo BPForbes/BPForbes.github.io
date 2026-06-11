@@ -17,8 +17,10 @@ export type {
 export {
   createEmptyTruthTable,
   createTruthTableFromColumns,
+  describeTruthTableDimensions,
   extractProcessName,
   formatTestFailureSummary,
+  formatTruthTableRowSummary,
   resizeTruthTable,
   fillTruthTableFromCircuit,
   indexToInputRow,
@@ -57,6 +59,7 @@ import {
 import type { TruthTable, TruthTableTestResult } from './truthTable';
 import {
   createEmptyTruthTable,
+  describeTruthTableDimensions,
   fillTruthTableFromCircuit,
   inferTruthTableDimensions,
   testCircuitAgainstTruthTable,
@@ -78,7 +81,7 @@ export type ModuleTestRequest = {
 };
 
 export type ModuleTestResponse = {
-  dimensions: ReturnType<typeof inferTruthTableDimensions>;
+  dimensions: ReturnType<typeof describeTruthTableDimensions>;
   truthTable: TruthTable;
   testResult: TruthTableTestResult;
   correctedSource?: string;
@@ -88,8 +91,8 @@ export type ModuleTestResponse = {
 };
 
 export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse => {
-  const dimensions = inferTruthTableDimensions(request.source);
   const truthTable = request.truthTable ?? createEmptyTruthTable(request.source);
+  const dimensions = describeTruthTableDimensions(request.source, truthTable);
   const validationErrors = validateTruthTable(truthTable, request.source);
   if (validationErrors.length > 0) {
     throw new Error(validationErrors.join(' '));

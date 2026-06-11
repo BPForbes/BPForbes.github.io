@@ -7,7 +7,7 @@ import {
 } from './protectedQpuio';
 import { qpuioFileNameForProcess } from './qpuioFile';
 import { extractMainProcessName, qpucirFileNameForSource } from '../simulator/qpuFormat';
-import { inferTruthTableDimensions } from '../simulator/truthTable';
+import { describeTruthTableDimensions, formatTruthTableRowSummary, inferTruthTableDimensions } from '../simulator/truthTable';
 import { getProtocolParameterEntries } from '../simulator/qpuFormat';
 import { getReturnValTokens } from '../simulator/qpuAst';
 import type { TruthTable, TruthTableTestResult } from '../simulator/truthTable';
@@ -298,6 +298,9 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
       // Non-state protocols may not infer cleanly.
     }
     const truthTable = entry.truthTable;
+    const tableDimensions = truthTable
+      ? describeTruthTableDimensions(entry.source, truthTable)
+      : dimensions;
     return {
       name: entry.name,
       origin: entry.origin,
@@ -305,6 +308,8 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
       inputColumns: truthTable?.inputColumns ?? columns.inputs,
       outputColumns: truthTable?.outputColumns ?? columns.outputs,
       rowCount: truthTable?.rows.length ?? dimensions.rowCount,
+      combinatorialRowCount: tableDimensions.rowCount,
+      isPartialTruthTable: tableDimensions.isPartial,
       hasTruthTable: Boolean(truthTable),
       truthTableProtected: entry.truthTableProtected ?? isProtectedQpuioProcess(entry.name),
       summary: summarizeSource(entry.source),
@@ -323,7 +328,18 @@ export const formatCatalogForPrompt = (
     `- ${entry.name} [${entry.origin}]`,
     `  inputs: ${entry.inputColumns.join(', ') || '(none)'}`,
     `  outputs: ${entry.outputColumns.join(', ') || '(none)'}`,
-    entry.rowCount ? `  truth-table rows: ${entry.rowCount}` : null,
+    entry.rowCount
+      ? `  truth-table rows: ${entry.isPartialTruthTable
+        ? formatTruthTableRowSummary({
+          rowCount: entry.combinatorialRowCount ?? entry.rowCount,
+          listedRowCount: entry.rowCount,
+          isPartial: true,
+          columnCount: entry.inputColumns.length + entry.outputColumns.length,
+          inputCount: entry.inputColumns.length,
+          outputCount: entry.outputColumns.length,
+        })
+        : entry.rowCount}`
+      : null,
     entry.description ? `  note: ${entry.description}` : null,
     !options.compact && entry.summary
       ? `  source preview:\n${entry.summary.split('\n').map((line) => `    ${line}`).join('\n')}`
@@ -333,7 +349,10 @@ export const formatCatalogForPrompt = (
 
 export const formatTestFailuresForPrompt = (result: TruthTableTestResult | null | undefined) => {
   if (!result) return 'No test has been run yet.';
-  if (result.passed) return `All ${result.totalRows} truth-table rows pass.`;
+  const scope = result.dimensions.isPartial
+    ? `${result.totalRows} listed row(s) (${result.totalRows} of ${result.dimensions.rowCount} combinatorial rows)`
+    : `${result.totalRows} truth-table row(s)`;
+  if (result.passed) return `All ${scope} pass.`;
   const lines = result.failedRows.slice(0, 12).map((row) => (
     `Row ${row.rowIndex}: inputs [${row.inputs.join(', ')}] expected [${row.expectedOutputs.join(', ')}] got [${row.actualOutputs.join(', ')}]`
   ));

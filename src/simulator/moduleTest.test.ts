@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { correctCircuit, runModuleTest, synthesizeProtocolFromTruthTable } from './moduleTestApi';
 import {
   createEmptyTruthTable,
+  describeTruthTableDimensions,
+  formatTruthTableRowSummary,
   inferTruthTableDimensions,
+  resizeTruthTable,
   singleBitFullAdderTruthTable,
   testCircuitAgainstTruthTable,
   truthTablesEqual,
@@ -100,10 +103,55 @@ describe('partial truth tables', () => {
     expect(validateTruthTable(rsNorLatchStepTable, rsNorLatchStepSource)).toEqual([]);
   });
 
+  it('describes partial dimensions with listed and combinatorial row counts', () => {
+    const dimensions = describeTruthTableDimensions(rsNorLatchStepSource, rsNorLatchStepTable);
+    expect(dimensions).toMatchObject({
+      rowCount: 16,
+      listedRowCount: 8,
+      isPartial: true,
+    });
+    expect(formatTruthTableRowSummary(dimensions)).toBe('8 of 16 rows (partial)');
+  });
+
+  it('rejects duplicate input rows in partial tables', () => {
+    const duplicate = {
+      ...rsNorLatchStepTable,
+      rows: [...rsNorLatchStepTable.rows, rsNorLatchStepTable.rows[0]],
+    };
+    expect(validateTruthTable(duplicate, rsNorLatchStepSource)).toContain(
+      'Row 8 duplicates the input pattern from row 0.',
+    );
+  });
+
+  it('preserves partial row count when resizing output columns', () => {
+    const resized = resizeTruthTable(rsNorLatchStepTable, rsNorLatchStepTable.inputColumns, ['Q', 'Qbar', 'Hold']);
+    expect(resized.rows).toHaveLength(8);
+    expect(resized.outputColumns).toEqual(['Q', 'Qbar', 'Hold']);
+    expect(resized.rows[0]).toEqual(['0p', '0p', '1p', '0p', '1p', '0p', '0p']);
+  });
+
   it('runs tests only across listed partial rows', () => {
     const result = testCircuitAgainstTruthTable(rsNorLatchStepSource, rsNorLatchStepTable);
     expect(result.totalRows).toBe(8);
-    expect(result.dimensions.rowCount).toBe(16);
+    expect(result.dimensions).toMatchObject({
+      rowCount: 16,
+      listedRowCount: 8,
+      isPartial: true,
+    });
+  });
+
+  it('synthesizes circuits from partial tables with arbitrary input rows', () => {
+    const table = {
+      inputColumns: ['A', 'B'],
+      outputColumns: ['Y'],
+      rows: [
+        ['0p', '1p', '1p'],
+        ['1p', '0p', '1p'],
+      ],
+    };
+    const synthesized = synthesizeProtocolFromTruthTable(table, 'PartialMinterm');
+    const result = testCircuitAgainstTruthTable(synthesized, table);
+    expect(result.passed).toBe(true);
   });
 });
 
