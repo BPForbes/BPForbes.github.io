@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  clearBrowserModel,
   parseNaturalLanguageWithWebLlm,
   preloadBrowserModel,
   resetWebLlmEngineForTests,
 } from './webLlmNaturalLanguageCorrector';
+import { getCachedBrowserModelId } from './llmConfig';
 import { hasWebGpu } from './webGpu';
 
 const context = {
@@ -21,6 +23,7 @@ vi.mock('@mlc-ai/web-llm', () => ({
       },
     },
   })),
+  deleteModelInCache: vi.fn(async () => undefined),
 }));
 
 describe('parseNaturalLanguageWithWebLlm', () => {
@@ -69,6 +72,28 @@ describe('parseNaturalLanguageWithWebLlm', () => {
       guidance: undefined,
     });
     expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the in-memory engine, session marker, and browser model cache', async () => {
+    vi.stubGlobal('navigator', { gpu: {} });
+    vi.stubGlobal('sessionStorage', {
+      storage: {} as Record<string, string>,
+      setItem(key: string, value: string) { this.storage[key] = value; },
+      getItem(key: string) { return this.storage[key] ?? null; },
+      removeItem(key: string) { delete this.storage[key]; },
+    });
+
+    const { CreateMLCEngine, deleteModelInCache } = await import('@mlc-ai/web-llm');
+    vi.mocked(CreateMLCEngine).mockResolvedValue({
+      chat: { completions: { create: vi.fn() } },
+    } as never);
+
+    await preloadBrowserModel('Llama-3.2-1B-Instruct-q4f16_1-MLC');
+    expect(getCachedBrowserModelId()).toBe('Llama-3.2-1B-Instruct-q4f16_1-MLC');
+
+    await clearBrowserModel('Llama-3.2-1B-Instruct-q4f16_1-MLC');
+    expect(deleteModelInCache).toHaveBeenCalledWith('Llama-3.2-1B-Instruct-q4f16_1-MLC');
+    expect(getCachedBrowserModelId()).toBeNull();
   });
 
   it('reuses the cached engine on preload and subsequent calls', async () => {

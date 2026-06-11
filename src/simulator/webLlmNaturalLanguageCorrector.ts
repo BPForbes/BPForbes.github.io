@@ -8,6 +8,11 @@ import { hasWebGpu } from './webGpu';
 let enginePromise: Promise<MLCEngine> | null = null;
 let loadedModelId: string | null = null;
 
+const resetBrowserModelEngine = () => {
+  enginePromise = null;
+  loadedModelId = null;
+};
+
 export function isBrowserModelReady(modelId: string = DEFAULT_BROWSER_MODEL): boolean {
   return (enginePromise !== null && loadedModelId === modelId) || getCachedBrowserModelId() === modelId;
 }
@@ -20,6 +25,17 @@ export async function preloadBrowserModel(
   await getEngine(modelId, onProgress);
   markBrowserModelCached(modelId);
   return true;
+}
+
+export async function clearBrowserModel(
+  modelId: string = DEFAULT_BROWSER_MODEL,
+  onProgress?: (text: string) => void,
+): Promise<void> {
+  resetBrowserModelEngine();
+  clearBrowserModelCache();
+  const { deleteModelInCache } = await import('@mlc-ai/web-llm');
+  onProgress?.('Clearing cached model files…');
+  await deleteModelInCache(modelId);
 }
 
 export async function parseNaturalLanguageWithWebLlm(
@@ -115,7 +131,6 @@ Rules:
 
 /** @internal Test helper */
 export function resetWebLlmEngineForTests() {
-  enginePromise = null;
-  loadedModelId = null;
+  resetBrowserModelEngine();
   clearBrowserModelCache();
 }

@@ -142,6 +142,7 @@ export const ModuleLab = () => {
     getCachedBrowserModelId() === loadLlmSettings().browserModel
   ));
   const [modelLoading, setModelLoading] = useState(false);
+  const [cacheClearing, setCacheClearing] = useState(false);
   const [pendingGuidance, setPendingGuidance] = useState<CorrectionGuidance>({});
   const [pendingClarification, setPendingClarification] = useState<PendingClarification | null>(null);
   const [catalogRefresh, setCatalogRefresh] = useState(() => getCatalogVersion());
@@ -809,6 +810,22 @@ export const ModuleLab = () => {
     }
   };
 
+  const handleClearBrowserModel = async () => {
+    setCacheClearing(true);
+    try {
+      const { clearBrowserModel } = await import('../simulator/webLlmNaturalLanguageCorrector');
+      await clearBrowserModel(llmSettings.browserModel, (progress) => setStatus(progress));
+      setModelReady(false);
+      setStatus(`Cleared browser cache for ${llmSettings.browserModel}. Download again before using AI mode.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setModelReady(false);
+      setStatus(`Cache clear error: ${message}`);
+    } finally {
+      setCacheClearing(false);
+    }
+  };
+
   return (
     <div className="module-lab-shell">
       <header className="module-lab-hero panel">
@@ -1018,8 +1035,11 @@ export const ModuleLab = () => {
                   </select>
                 </label>
                 <div className="module-tester-actions">
-                  <button disabled={!webGpuAvailable || modelLoading} onClick={loadBrowserModel} type="button">
+                  <button disabled={!webGpuAvailable || modelLoading || cacheClearing} onClick={loadBrowserModel} type="button">
                     {modelLoading ? 'Downloading model…' : modelReady ? 'Model cached' : 'Download & cache model'}
+                  </button>
+                  <button disabled={modelLoading || cacheClearing} onClick={handleClearBrowserModel} type="button">
+                    {cacheClearing ? 'Clearing cache…' : 'Clear Cache for Model'}
                   </button>
                 </div>
               </>
