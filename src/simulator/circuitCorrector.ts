@@ -32,16 +32,18 @@ export type CircuitCorrectionResult = {
 
 const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0];
 
-const mintermIndices = (inputCount: number, outputColumnIndex: number, rows: TruthTable['rows'], inputWidth: number) =>
-  rows
-    .map((row, index) => ({ index, output: row[inputWidth + outputColumnIndex] }))
-    .filter(({ output }) => output === '1p')
-    .map(({ index }) => index);
+const mintermInputRows = (
+  outputColumnIndex: number,
+  rows: TruthTable['rows'],
+  inputWidth: number,
+) => rows
+  .filter((row) => row[inputWidth + outputColumnIndex] === '1p')
+  .map((row) => row.slice(0, inputWidth));
 
-const mintermControls = (rowIndex: number, inputCount: number, inputNames: string[]) =>
-  Array.from({ length: inputCount }, (_, bit) => ({
-    name: inputNames[bit],
-    value: ((rowIndex >> (inputCount - 1 - bit)) & 1) === 1,
+const mintermControlsFromInputs = (inputs: TruthTable['rows'][number], inputNames: string[]) =>
+  inputNames.map((name, index) => ({
+    name,
+    value: inputs[index] === '1p',
   }));
 
 const formatRef = (name: string, cycle = 0) => {
@@ -105,11 +107,11 @@ const isPairwiseMajorityOutput = (
 const appendMintermGate = (
   lines: string[],
   inputNames: string[],
-  rowIndex: number,
+  inputs: TruthTable['rows'][number],
   outputRef: string,
   preferredGates: GatePreference[],
 ) => {
-  const controlSpec = mintermControls(rowIndex, inputNames.length, inputNames);
+  const controlSpec = mintermControlsFromInputs(inputs, inputNames);
   const zeroControls = controlSpec.filter((control) => !control.value).map((control) => formatRef(control.name, 0));
   const oneControls = controlSpec.filter((control) => control.value).map((control) => formatRef(control.name, 0));
 
@@ -140,7 +142,7 @@ const synthesizeOutputGates = (
   preferredGates: GatePreference[],
 ) => {
   const lines: string[] = [];
-  const activeMinterms = mintermIndices(inputNames.length, outputColumnIndex, rows, inputWidth);
+  const activeMinterms = mintermInputRows(outputColumnIndex, rows, inputWidth);
   const outputRef = `${outputName}:0`;
 
   if (activeMinterms.length === 0) {
@@ -165,8 +167,8 @@ const synthesizeOutputGates = (
   }
 
   lines.push(`SET ${outputRef} 0p`);
-  activeMinterms.forEach((rowIndex) => {
-    appendMintermGate(lines, inputNames, rowIndex, outputRef, preferredGates);
+  activeMinterms.forEach((inputs) => {
+    appendMintermGate(lines, inputNames, inputs, outputRef, preferredGates);
   });
 
   return lines;

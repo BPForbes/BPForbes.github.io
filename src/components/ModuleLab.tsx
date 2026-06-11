@@ -55,6 +55,8 @@ import {
   CorrectionGuidance,
   createEmptyTruthTable,
   createTruthTableFromColumns,
+  describeTruthTableDimensions,
+  formatTruthTableRowSummary,
   formatTestFailureSummary,
   isTruthCellValue,
   probeModuleOutputs,
@@ -165,13 +167,18 @@ export const ModuleLab = () => {
 
   const dimensions = useMemo(() => {
     if (!truthTable) return null;
-    return {
-      rowCount: truthTable.rows.length,
-      columnCount: truthTable.inputColumns.length + truthTable.outputColumns.length,
-      inputCount: truthTable.inputColumns.length,
-      outputCount: truthTable.outputColumns.length,
-    };
-  }, [truthTable]);
+    try {
+      return describeTruthTableDimensions(source, truthTable);
+    } catch {
+      return {
+        rowCount: truthTable.rows.length,
+        columnCount: truthTable.inputColumns.length + truthTable.outputColumns.length,
+        inputCount: truthTable.inputColumns.length,
+        outputCount: truthTable.outputColumns.length,
+        listedRowCount: truthTable.rows.length,
+      };
+    }
+  }, [truthTable, source]);
 
   const failedRowIndexes = useMemo(
     () => new Set(lastTestResult?.failedRows.map((row) => row.rowIndex) ?? []),
@@ -456,7 +463,8 @@ export const ModuleLab = () => {
     const table = createEmptyTruthTable(inferSource);
     commitTruthTable(processName, table);
     setLastTestResult(null);
-    setStatus(`Inferred ${table.rows.length} rows × ${table.inputColumns.length + table.outputColumns.length} columns.`);
+    const inferredDimensions = describeTruthTableDimensions(inferSource, table);
+    setStatus(`Inferred ${formatTruthTableRowSummary(inferredDimensions)} × ${inferredDimensions.columnCount} columns.`);
     return table;
   }, [source, commitTruthTable]);
 
@@ -954,7 +962,8 @@ export const ModuleLab = () => {
 
           {dimensions && (
             <p className="canvas-tip">
-              Table size: {dimensions.rowCount} rows × {dimensions.columnCount} columns.
+              Table size: {formatTruthTableRowSummary(dimensions)} × {dimensions.columnCount} columns.
+              {dimensions.isPartial ? ' Only listed rows are tested and corrected.' : ''}
               {activeProcessName ? ` Active process: ${activeProcessName}.` : ''}
               {truthTableProtected ? ' Protected bundled truth table (edits are reverted).' : ''}
             </p>

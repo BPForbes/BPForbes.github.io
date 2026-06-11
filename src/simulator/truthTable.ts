@@ -14,10 +14,15 @@ export type TruthTable = {
 export const cloneTruthTable = (table: TruthTable): TruthTable => structuredClone(table);
 
 export type TruthTableDimensions = {
+  /** Full combinatorial row count from PARAMS (2^n), or 1/0 when there are no state inputs. */
   rowCount: number;
   columnCount: number;
   inputCount: number;
   outputCount: number;
+  /** Rows actually listed in the table, when known. */
+  listedRowCount?: number;
+  /** True when listed rows are fewer than the combinatorial maximum. */
+  isPartial?: boolean;
 };
 
 export type TruthTableRowResult = {
@@ -74,6 +79,28 @@ export const inferTruthTableDimensions = (source: string): TruthTableDimensions 
   };
 };
 
+export const describeTruthTableDimensions = (
+  source: string,
+  table?: TruthTable | null,
+): TruthTableDimensions => {
+  const base = inferTruthTableDimensions(source);
+  if (!table) return base;
+  const listedRowCount = table.rows.length;
+  return {
+    ...base,
+    listedRowCount,
+    isPartial: listedRowCount > 0 && listedRowCount < base.rowCount,
+  };
+};
+
+export const formatTruthTableRowSummary = (dimensions: TruthTableDimensions) => {
+  const listed = dimensions.listedRowCount ?? dimensions.rowCount;
+  if (dimensions.isPartial) {
+    return `${listed} of ${dimensions.rowCount} rows (partial)`;
+  }
+  return `${listed} row${listed === 1 ? '' : 's'}`;
+};
+
 export const indexToInputRow = (index: number, inputCount: number): TruthCellValue[] => {
   if (inputCount === 0) return [];
   return Array.from({ length: inputCount }, (_, bit) => (((index >> (inputCount - 1 - bit)) & 1) === 1 ? '1p' : '0p'));
@@ -88,35 +115,68 @@ export const createTruthTableFromColumns = (inputColumns: string[], outputColumn
   return { inputColumns, outputColumns, rows };
 };
 
+const remapTruthTableRow = (
+  previous: TruthCellValue[],
+  table: TruthTable,
+  inputColumns: string[],
+  outputColumns: string[],
+  fallbackRow: TruthCellValue[],
+) => fallbackRow.map((cell, columnIndex) => {
+  const nextColumn = columnIndex < inputColumns.length
+    ? inputColumns[columnIndex]
+    : outputColumns[columnIndex - inputColumns.length];
+  const previousInputIndex = table.inputColumns.indexOf(nextColumn);
+  const previousOutputIndex = table.outputColumns.indexOf(nextColumn);
+  const previousIndex = previousInputIndex >= 0
+    ? previousInputIndex
+    : previousOutputIndex >= 0
+      ? table.inputColumns.length + previousOutputIndex
+      : -1;
+  return previousIndex >= 0 ? (previous[previousIndex] ?? cell) : cell;
+});
+
 export const resizeTruthTable = (
   table: TruthTable,
   inputColumns: string[],
   outputColumns: string[],
 ): TruthTable => {
+  const combinatorialRowCount = inputColumns.length > 0
+    ? 2 ** inputColumns.length
+    : (outputColumns.length > 0 ? 1 : 0);
+  const preservePartial = table.rows.length > 0 && table.rows.length < combinatorialRowCount;
+
+  if (preservePartial) {
+    return {
+      inputColumns,
+      outputColumns,
+      rows: table.rows.map((previous) => remapTruthTableRow(
+        previous,
+        table,
+        inputColumns,
+        outputColumns,
+        [
+          ...Array.from({ length: inputColumns.length }, () => '0p' as TruthCellValue),
+          ...Array.from({ length: outputColumns.length }, () => '0p' as TruthCellValue),
+        ],
+      )),
+    };
+  }
+
   const next = createTruthTableFromColumns(inputColumns, outputColumns);
   next.rows = next.rows.map((row, rowIndex) => {
     const previous = table.rows[rowIndex];
     if (!previous) return row;
-    return row.map((cell, columnIndex) => {
-      const nextColumn = columnIndex < inputColumns.length
-        ? inputColumns[columnIndex]
-        : outputColumns[columnIndex - inputColumns.length];
-      const previousInputIndex = table.inputColumns.indexOf(nextColumn);
-      const previousOutputIndex = table.outputColumns.indexOf(nextColumn);
-      const previousIndex = previousInputIndex >= 0
-        ? previousInputIndex
-        : previousOutputIndex >= 0
-          ? table.inputColumns.length + previousOutputIndex
-          : -1;
-      return previousIndex >= 0 ? (previous[previousIndex] ?? cell) : cell;
-    });
+    return remapTruthTableRow(previous, table, inputColumns, outputColumns, row);
   });
   return next;
 };
 
 export const formatTestFailureSummary = (result: TruthTableTestResult) => {
+  const scope = result.dimensions.isPartial
+    ? `${result.totalRows} listed row(s) (${formatTruthTableRowSummary(result.dimensions)})`
+    : `${result.totalRows} truth-table row(s)`;
   if (result.passed) {
-    return `All ${result.totalRows} truth-table rows pass.`;
+    return `All ${scope} pass.`;
   }
   const details = result.failedRows.slice(0, 8).map((row) => (
     `Row ${row.rowIndex} (${row.inputs.join(', ')}): expected [${row.expectedOutputs.join(', ')}], got [${row.actualOutputs.join(', ')}]`
@@ -171,13 +231,15 @@ export const validateTruthTable = (table: TruthTable, source?: string): string[]
 
   if (table.outputColumns.length === 0) errors.push('Truth table requires at least one output column.');
 
-  const expectedRows = expected?.rowCount ?? (
+  const maxRows = expected?.rowCount ?? (
     table.inputColumns.length > 0
       ? 2 ** table.inputColumns.length
       : (table.outputColumns.length > 0 ? 1 : 0)
   );
-  if (table.rows.length !== expectedRows) {
-    errors.push(`Truth table has ${table.rows.length} row(s); expected ${expectedRows}.`);
+  if (table.rows.length === 0) {
+    errors.push('Truth table requires at least one row.');
+  } else if (table.rows.length > maxRows) {
+    errors.push(`Truth table has ${table.rows.length} row(s); expected at most ${maxRows}.`);
   }
 
   table.rows.forEach((row, rowIndex) => {
@@ -203,6 +265,17 @@ export const validateTruthTable = (table: TruthTable, source?: string): string[]
       errors.push(`Output columns [${table.outputColumns.join(', ')}] do not match RETURNVALS [${outputs.join(', ')}].`);
     }
   }
+
+  const seenInputRows = new Map<string, number>();
+  table.rows.forEach((row, rowIndex) => {
+    const inputKey = row.slice(0, table.inputColumns.length).join(',');
+    const previousIndex = seenInputRows.get(inputKey);
+    if (previousIndex !== undefined) {
+      errors.push(`Row ${rowIndex} duplicates the input pattern from row ${previousIndex}.`);
+      return;
+    }
+    seenInputRows.set(inputKey, rowIndex);
+  });
 
   return errors;
 };
@@ -263,7 +336,7 @@ export const testCircuitAgainstTruthTable = (
   }
 
   const compiled = compileQpuProtocol(source, librarySources);
-  const dimensions = inferTruthTableDimensions(source);
+  const dimensions = describeTruthTableDimensions(source, table);
   const failedRows: TruthTableRowResult[] = [];
   let passedRows = 0;
 

@@ -3,6 +3,7 @@ import { formatCatalogForPrompt, formatTestFailuresForPrompt } from '../data/pro
 import { isProtectedQpuioProcess } from '../data/protectedQpuio';
 import { extractMainProcessName } from './qpuFormat';
 import type { NlCorrectionContext } from './nlIntentTypes';
+import { describeTruthTableDimensions, formatTruthTableRowSummary } from './truthTable';
 
 export const buildNlContextSections = (context: NlCorrectionContext) => {
   const activeName = context.activeProcessName ?? extractMainProcessName(context.source) ?? 'UntitledCircuit';
@@ -15,6 +16,17 @@ export const buildNlContextSections = (context: NlCorrectionContext) => {
   const protectionNote = isProtectedQpuioProcess(activeName)
     ? `Active process truth table: PROTECTED site metadata (edits are reverted).`
     : 'Active process truth table: editable.';
+  let tableDimensions = null;
+  if (context.truthTable) {
+    try {
+      tableDimensions = describeTruthTableDimensions(context.source, context.truthTable);
+    } catch {
+      // Fall back when protocol source cannot be parsed for dimension inference.
+    }
+  }
+  const tableScopeNote = tableDimensions
+    ? `Truth table scope: ${formatTruthTableRowSummary(tableDimensions)}. Tests, probe, and correction only evaluate listed rows.`
+    : 'Truth table scope: not loaded.';
 
   return `
 ${buildAgentRulesPrompt()}
@@ -24,6 +36,7 @@ ${protectionNote}
 Current protocol registers:
 - inputs: ${context.inputColumns.join(', ') || '(none)'}
 - outputs: ${context.outputColumns.join(', ') || '(none)'}
+${tableScopeNote}
 
 Cataloged processes (builder compiles, uploads, and bundled examples):
 ${catalog}

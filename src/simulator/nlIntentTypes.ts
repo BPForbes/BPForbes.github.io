@@ -8,6 +8,8 @@ export type ProcessCatalogSummary = {
   inputColumns: string[];
   outputColumns: string[];
   rowCount?: number;
+  combinatorialRowCount?: number;
+  isPartialTruthTable?: boolean;
   hasTruthTable?: boolean;
   truthTableProtected?: boolean;
   summary: string;
