@@ -24,6 +24,29 @@ OUTPUTS: Y
     expect(() => parseQpuioPayload(typo)).toThrow(/MAIN-PROCESS:/i);
   });
 
+  it('parses data rows with inline # comments', () => {
+    const qpuio = `MAIN-PROCESS: RsNorLatchStep
+INPUTS:  S  R  Qprev  QbarPrev
+OUTPUTS: Q  Qbar
+#  S  R  Qprev  QbarPrev  Q  Qbar
+0  0p 0p 1p     0p        1p 0p    # hold
+1  0p 0p 0p     1p        0p 1p    # hold
+2  0p 1p 1p     0p        0p 1p    # reset
+3  0p 1p 0p     1p        0p 1p    # reset
+4  1p 0p 0p     1p        1p 0p    # set
+5  1p 0p 1p     0p        1p 0p    # set
+6  1p 1p 1p     0p        0p 0p    # invalid (both low)
+7  1p 1p 0p     1p        0p 0p    # invalid`;
+
+    const parsed = parseQpuioPayload(qpuio);
+    expect(parsed.processName).toBe('RsNorLatchStep');
+    expect(parsed.truthTable.inputColumns).toEqual(['S', 'R', 'Qprev', 'QbarPrev']);
+    expect(parsed.truthTable.outputColumns).toEqual(['Q', 'Qbar']);
+    expect(parsed.truthTable.rows).toHaveLength(8);
+    expect(parsed.truthTable.rows[0]).toEqual(['0p', '0p', '1p', '0p', '1p', '0p']);
+    expect(parsed.truthTable.rows[6]).toEqual(['1p', '1p', '1p', '0p', '0p', '0p']);
+  });
+
   it('parses csv-style qpuio rows', () => {
     const csv = `MAIN-PROCESS: DemoGate
 #,A,B,Y
