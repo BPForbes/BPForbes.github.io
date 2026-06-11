@@ -123,17 +123,26 @@ export const prepareZeroQubit = (state: Complex[], qubitCount: number, qubit: nu
   const next = [...state];
 
   for (let index = 0; index < state.length; index += 1) {
-    if ((index & mask) === 0) continue;
-    const zeroIndex = index & ~mask;
-    next[zeroIndex] = add(next[zeroIndex], state[index]);
-    next[index] = ZERO;
+    if ((index & mask) !== 0) {
+      next[index] = ZERO;
+    }
   }
 
-  const keptProbability = next.reduce((sum, amplitude) => sum + magnitudeSquared(amplitude), 0);
+  let keptProbability = next.reduce((sum, amplitude) => sum + magnitudeSquared(amplitude), 0);
   if (keptProbability < 1e-12) {
-    const zeroState = Array.from({ length: state.length }, () => ZERO);
-    zeroState[0] = ONE;
-    return zeroState;
+    const recovered = Array.from({ length: state.length }, () => ZERO);
+    for (let index = 0; index < state.length; index += 1) {
+      if ((index & mask) !== 0) {
+        recovered[index & ~mask] = state[index];
+      }
+    }
+    next.splice(0, next.length, ...recovered);
+    keptProbability = next.reduce((sum, amplitude) => sum + magnitudeSquared(amplitude), 0);
+    if (keptProbability < 1e-12) {
+      const zeroState = Array.from({ length: state.length }, () => ZERO);
+      zeroState[0] = ONE;
+      return zeroState;
+    }
   }
 
   const normalizer = 1 / Math.sqrt(keptProbability);

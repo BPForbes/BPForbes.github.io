@@ -20,7 +20,7 @@ export function CustomGatePanel({ protocolSource, onRegistryChange, registryVers
   const [customColor, setCustomColor] = useState('');
   const [status, setStatus] = useState('Turn a compiled QPU process into a reusable palette macro.');
   const catalog = useMemo(() => buildProcessCatalogSummaries(), []);
-  const customGates = useMemo(() => listCustomGateRecords(), [registryVersion, status]);
+  const customGates = useMemo(() => listCustomGateRecords(), [registryVersion]);
 
   const sourceForRegistration = () => {
     if (selectedCatalog) {

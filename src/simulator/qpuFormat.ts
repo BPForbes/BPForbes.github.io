@@ -265,6 +265,7 @@ export const serializeCircuitToQpuProtocol = (
         return;
       }
       if (gate.type === 'SWAP') {
+        if (gate.targets.length < 2) return;
         const [first, second] = gate.targets;
         lines.push(`SWAP -I ${canvasParamRef(first)}:0 ${canvasParamRef(second)}:0 -O ${canvasParamRef(first)}:0 ${canvasParamRef(second)}:0`);
         return;

@@ -8,9 +8,11 @@ import { astDerivedGateIds, astGateInputCounts, astPrimitiveGateIds } from './me
 export { astDerivedGateIds, astGateInputCounts, astPrimitiveGateIds };
 
 let customDefinitions: GateDefinition[] = buildCustomGateDefinitions();
+let cachedGateLabels: Record<string, string> | null = null;
 
 export const refreshCustomGateRegistry = () => {
   customDefinitions = buildCustomGateDefinitions();
+  cachedGateLabels = null;
 };
 
 const allDefinitions = () => [...preconfiguredGates, ...customDefinitions];
@@ -37,10 +39,12 @@ export const paletteGateIds = () => [
 ];
 
 export const gateLabels = (): Record<string, string> => {
+  if (cachedGateLabels) return cachedGateLabels;
   const labels: Record<string, string> = {};
   allDefinitions().forEach((gate) => {
     labels[gate.id] = gate.label;
   });
+  cachedGateLabels = labels;
   return labels;
 };
 

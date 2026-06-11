@@ -54,16 +54,10 @@ export const gateTypes = [...preconfiguredGateTypes] as const;
 export const isPreconfiguredGateType = (value: string): value is PreconfiguredGateType =>
   (preconfiguredGateTypes as readonly string[]).includes(value);
 
-/** Palette/canvas guard — accepts preconfigured and registered custom gate ids. */
-export const isGateType = (value: string): boolean => {
-  if (isPreconfiguredGateType(value)) return true;
-  try {
-    // Lazy import avoided; registry checked at call sites via isKnownGateType when possible.
-    return /^[A-Za-z][A-Za-z0-9_]*$/.test(value);
-  } catch {
-    return false;
-  }
-};
+/**
+ * @deprecated Use `isKnownGateType` from `gates/registry` to validate palette and custom gate ids.
+ */
+export const isGateType = (value: string): boolean => isPreconfiguredGateType(value);
 
 export type QpuOperation =
   | 'INCREASECYCLE'
