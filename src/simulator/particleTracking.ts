@@ -1,3 +1,4 @@
+import { blochBallRhoExpectationFast } from './blochQuadrature';
 import { complex, formatComplex, magnitudeSquared, type Complex } from './complex';
 import { hasBit } from './gates/operations';
 import type { CircuitGate, MeasurementMap } from './types';
@@ -71,7 +72,6 @@ export type OperationTransition = {
 };
 
 const PURE_TOLERANCE = 1e-6;
-const BLOCH_INTEGRAL_GRID = 14;
 
 const bitMask = (qubit: number, qubitCount: number) => 1 << (qubitCount - qubit - 1);
 
@@ -134,58 +134,8 @@ export const formatPsiKet = (alpha: Complex, beta: Complex): string => {
   return `|ψ⟩ = ${alphaText}|0⟩ + ${betaText}|1⟩`;
 };
 
-const angularDistance = (thetaA: number, phiA: number, thetaB: number, phiB: number) => {
-  const ax = Math.sin(thetaA) * Math.cos(phiA);
-  const ay = Math.sin(thetaA) * Math.sin(phiA);
-  const az = Math.cos(thetaA);
-  const bx = Math.sin(thetaB) * Math.cos(phiB);
-  const by = Math.sin(thetaB) * Math.sin(phiB);
-  const bz = Math.cos(thetaB);
-  const dot = Math.min(1, Math.max(-1, ax * bx + ay * by + az * bz));
-  return Math.acos(dot);
-};
-
-/**
- * Numerically evaluate ⟨ρ⟩ = ∫₀^{2π} ∫₀^π ∫₀^1 ρ(r,θ,φ) r² sinθ dr dθ dφ.
- * ρ is modeled as a Bloch-ball density peaked at (r₀,θ₀,φ₀) with noise spread.
- */
-export const blochBallRhoExpectation = (
-  r0: number,
-  theta0: number,
-  phi0: number,
-  noise: number,
-  gridSize = BLOCH_INTEGRAL_GRID,
-): number => {
-  if (noise < 1e-8) return 1;
-
-  let weighted = 0;
-  let measure = 0;
-  const dr = 1 / gridSize;
-  const dtheta = Math.PI / gridSize;
-  const dphi = (2 * Math.PI) / gridSize;
-  const spread = Math.max(noise, 0.05);
-
-  for (let ir = 0; ir < gridSize; ir += 1) {
-    const r = (ir + 0.5) * dr;
-    for (let it = 0; it < gridSize; it += 1) {
-      const theta = (it + 0.5) * dtheta;
-      const sinTheta = Math.sin(theta);
-      for (let ip = 0; ip < gridSize; ip += 1) {
-        const phi = (ip + 0.5) * dphi;
-        const volume = r * r * sinTheta * dr * dtheta * dphi;
-        const radial = Math.exp(-((r - r0) * (r - r0)) / (2 * spread * spread));
-        const angular = Math.exp(-(angularDistance(theta0, phi0, theta, phi) ** 2) / (2 * spread * spread));
-        const peaked = radial * angular;
-        const uniform = 1 / (4 * Math.PI / 3);
-        const rho = (1 - noise) * peaked + noise * uniform;
-        weighted += rho * volume;
-        measure += volume;
-      }
-    }
-  }
-
-  return measure > 0 ? weighted / measure : 0;
-};
+/** ⟨ρ⟩ via separable O(1) quadrature (see blochQuadrature.ts). */
+export const blochBallRhoExpectation = blochBallRhoExpectationFast;
 
 export const mixedStateMetrics = (spherical: SphericalCoordinates): MixedStateMetrics => {
   const purity = spherical.r;
