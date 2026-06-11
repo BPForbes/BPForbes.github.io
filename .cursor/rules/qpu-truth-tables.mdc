@@ -1,0 +1,16 @@
+---
+description: Protected QPU truth-table metadata and bundled process rules
+globs:
+  - src/data/processes/*.qpuio
+  - src/data/**/*
+  - src/components/ModuleLab.tsx
+  - AGENTS.md
+alwaysApply: true
+---
+
+# QPU truth-table protection
+
+- Never edit bundled or site-provided `.qpuio` files for `SingleBitFullAdder`, `TwoBitFullAdder`, `FourBitFullAdder`, or `PhaseDemo` in pull requests.
+- Canonical tables live in `src/data/processes/*.qpuio` and are enforced at runtime via `src/data/protectedQpuio.ts`.
+- To change expectations for experiments, register a new uploaded/corrected catalog process instead of mutating bundled metadata.
+- Follow `AGENTS.md` for Correction Lab LLM behavior and child-process compatibility requirements.

@@ -9,6 +9,7 @@ export type ProcessCatalogSummary = {
   outputColumns: string[];
   rowCount?: number;
   hasTruthTable?: boolean;
+  truthTableProtected?: boolean;
   summary: string;
   description?: string;
 };

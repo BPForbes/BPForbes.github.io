@@ -3,6 +3,7 @@ import {
   getCatalogEntries,
   getCatalogEntry,
   registerCatalogProcess,
+  registerCatalogTruthTable,
   resetProcessCatalogForTests,
   resolveCatalogEntry,
 } from './processCatalog';
@@ -48,8 +49,21 @@ describe('processCatalog', () => {
   });
 
   it('stores and retrieves bundled truth tables', () => {
-    const entry = getCatalogEntry('SingleBitFullAdder');
-    expect(entry?.truthTable?.rows).toHaveLength(8);
-    expect(entry?.truthTableFileName).toBe('single-bit-full-adder.qpuio');
+    expect(getCatalogEntry('SingleBitFullAdder')?.truthTable?.rows).toHaveLength(8);
+    expect(getCatalogEntry('TwoBitFullAdder')?.truthTable?.rows).toHaveLength(32);
+    expect(getCatalogEntry('FourBitFullAdder')?.truthTable?.rows).toHaveLength(512);
+    expect(getCatalogEntry('PhaseDemo')?.truthTable?.rows).toHaveLength(1);
+  });
+
+  it('reverts protected truth-table registration to canonical metadata', () => {
+    const edited = structuredClone(getCatalogEntry('SingleBitFullAdder')!.truthTable!);
+    edited.rows[0] = ['1p', '1p', '1p', '1p', '1p'];
+    const result = registerCatalogTruthTable({
+      processName: 'SingleBitFullAdder',
+      truthTable: edited,
+      truthTableFileName: 'hacked.qpuio',
+    });
+    expect(result.reverted).toBe(true);
+    expect(result.entry.truthTable?.rows[0]).toEqual(['0p', '0p', '0p', '0p', '0p']);
   });
 });

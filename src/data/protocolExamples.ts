@@ -1,8 +1,11 @@
 import fourBitFullAdderQpucir from './processes/four-bit-full-adder.qpucir?raw';
+import fourBitFullAdderQpuio from './processes/four-bit-full-adder.qpuio?raw';
 import phaseDemoQpucir from './processes/phase-demo.qpucir?raw';
+import phaseDemoQpuio from './processes/phase-demo.qpuio?raw';
 import singleBitFullAdderQpuio from './processes/single-bit-full-adder.qpuio?raw';
 import singleBitFullAdderQpucir from './processes/single-bit-full-adder.qpucir?raw';
 import twoBitFullAdderQpucir from './processes/two-bit-full-adder.qpucir?raw';
+import twoBitFullAdderQpuio from './processes/two-bit-full-adder.qpuio?raw';
 import { parseQpuioPayload } from './qpuioFile';
 import type { CircuitGate } from '../simulator/types';
 import { extractMainProcessName } from '../simulator/qpuFormat';
@@ -77,14 +80,13 @@ const parseConfiguredProcess = (
   };
 };
 
+const bundledQpuio = (fileName: string, contents: string) => ({ fileName, contents });
+
 export const configuredProcesses = [
-  parseConfiguredProcess('four-bit-full-adder.qpucir', fourBitFullAdderQpucir),
-  parseConfiguredProcess('two-bit-full-adder.qpucir', twoBitFullAdderQpucir),
-  parseConfiguredProcess('single-bit-full-adder.qpucir', singleBitFullAdderQpucir, {
-    fileName: 'single-bit-full-adder.qpuio',
-    contents: singleBitFullAdderQpuio,
-  }),
-  parseConfiguredProcess('phase-demo.qpucir', phaseDemoQpucir),
+  parseConfiguredProcess('four-bit-full-adder.qpucir', fourBitFullAdderQpucir, bundledQpuio('four-bit-full-adder.qpuio', fourBitFullAdderQpuio)),
+  parseConfiguredProcess('two-bit-full-adder.qpucir', twoBitFullAdderQpucir, bundledQpuio('two-bit-full-adder.qpuio', twoBitFullAdderQpuio)),
+  parseConfiguredProcess('single-bit-full-adder.qpucir', singleBitFullAdderQpucir, bundledQpuio('single-bit-full-adder.qpuio', singleBitFullAdderQpuio)),
+  parseConfiguredProcess('phase-demo.qpucir', phaseDemoQpucir, bundledQpuio('phase-demo.qpuio', phaseDemoQpuio)),
 ];
 
 const protocolLibraryNames: Record<string, string> = {

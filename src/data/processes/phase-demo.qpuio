@@ -1,0 +1,5 @@
+MAIN-PROCES: PhaseDemo
+INPUTS: Init
+OUTPUTS: Q0
+#  Init  Q0
+0  0p  sp

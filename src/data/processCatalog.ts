@@ -1,4 +1,9 @@
 import { configuredProcesses } from './protocolExamples';
+import {
+  enforceProtectedTruthTable,
+  getProtectedTruthTable,
+  isProtectedQpuioProcess,
+} from './protectedQpuio';
 import { extractMainProcessName } from '../simulator/qpuFormat';
 import { inferTruthTableDimensions } from '../simulator/truthTable';
 import { getProtocolParameterEntries } from '../simulator/qpuFormat';
@@ -16,6 +21,7 @@ export type ProcessCatalogEntry = {
   fileName?: string;
   truthTable?: TruthTable;
   truthTableFileName?: string;
+  truthTableProtected?: boolean;
   description?: string;
   updatedAt: string;
 };
@@ -104,6 +110,7 @@ const seedBundledProcesses = () => {
       fileName: process.fileName,
       truthTable,
       truthTableFileName: process.truthTableFileName,
+      truthTableProtected: isProtectedQpuioProcess(name),
       origin: 'bundled',
       description: `Bundled example (${process.fileName})`,
       updatedAt: process.exportedAt ?? new Date(0).toISOString(),
@@ -125,13 +132,17 @@ export const registerCatalogProcess = (input: {
 }) => {
   const name = input.name.trim() || extractMainProcessName(input.source) || 'UntitledCircuit';
   const existing = catalog.get(entryIdForName(name));
+  const protectedTable = enforceProtectedTruthTable(name, input.truthTable ?? existing?.truthTable);
   const entry: ProcessCatalogEntry = {
     id: entryIdForName(name),
     name,
     source: input.source,
     fileName: input.fileName?.trim() || existing?.fileName || undefined,
-    truthTable: input.truthTable ?? existing?.truthTable,
-    truthTableFileName: input.truthTableFileName?.trim() || existing?.truthTableFileName || undefined,
+    truthTable: protectedTable?.truthTable ?? input.truthTable ?? existing?.truthTable,
+    truthTableFileName: isProtectedQpuioProcess(name)
+      ? existing?.truthTableFileName ?? configuredProcesses.find((process) => process.name === name)?.truthTableFileName
+      : input.truthTableFileName?.trim() || existing?.truthTableFileName || undefined,
+    truthTableProtected: isProtectedQpuioProcess(name),
     origin: input.origin,
     description: input.description ?? existing?.description,
     updatedAt: new Date().toISOString(),
@@ -147,11 +158,12 @@ export const registerCatalogTruthTable = (input: {
   truthTable: TruthTable;
   truthTableFileName?: string;
   protocolSource?: string;
-}) => {
+}): { entry: ProcessCatalogEntry; reverted: boolean } => {
   const name = input.processName.trim();
   if (!name) throw new Error('Process name is required to register a truth table.');
 
   const existing = getCatalogEntry(name);
+  const protectedTable = enforceProtectedTruthTable(name, input.truthTable);
   const entry: ProcessCatalogEntry = existing ?? {
     id: entryIdForName(name),
     name,
@@ -162,19 +174,27 @@ export const registerCatalogTruthTable = (input: {
 
   const merged: ProcessCatalogEntry = {
     ...entry,
-    truthTable: input.truthTable,
-    truthTableFileName: input.truthTableFileName?.trim() || entry.truthTableFileName,
+    truthTable: protectedTable?.truthTable ?? input.truthTable,
+    truthTableFileName: isProtectedQpuioProcess(name)
+      ? entry.truthTableFileName ?? configuredProcesses.find((process) => process.name === name)?.truthTableFileName
+      : input.truthTableFileName?.trim() || entry.truthTableFileName,
+    truthTableProtected: isProtectedQpuioProcess(name),
     updatedAt: new Date().toISOString(),
   };
   catalog.set(merged.id, merged);
   invalidateCatalogCache();
   persistCatalog();
-  return merged;
+  return { entry: merged, reverted: protectedTable?.reverted ?? false };
 };
 
-export const getCatalogTruthTable = (processName: string): TruthTable | undefined => (
-  getCatalogEntry(processName)?.truthTable
-);
+export const getCatalogTruthTable = (processName: string): TruthTable | undefined => {
+  if (isProtectedQpuioProcess(processName)) {
+    return getProtectedTruthTable(processName) ?? getCatalogEntry(processName)?.truthTable;
+  }
+  return getCatalogEntry(processName)?.truthTable;
+};
+
+export const isCatalogTruthTableProtected = (processName: string) => isProtectedQpuioProcess(processName);
 
 export const getCatalogEntries = (): ProcessCatalogEntry[] => (
   Array.from(catalog.values()).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
@@ -261,6 +281,7 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
       outputColumns: truthTable?.outputColumns ?? columns.outputs,
       rowCount: truthTable?.rows.length ?? dimensions.rowCount,
       hasTruthTable: Boolean(truthTable),
+      truthTableProtected: entry.truthTableProtected ?? isProtectedQpuioProcess(entry.name),
       summary: summarizeSource(entry.source),
       description: entry.description,
     };

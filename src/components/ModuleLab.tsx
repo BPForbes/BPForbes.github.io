@@ -7,9 +7,15 @@ import {
   resolveCatalogEntry,
   getCatalogLibrarySources,
   getCatalogVersion,
+  isCatalogTruthTableProtected,
   registerCatalogProcess,
   registerCatalogTruthTable,
 } from '../data/processCatalog';
+import {
+  enforceProtectedTruthTable,
+  isProtectedQpuioProcess,
+  warnProtectedTruthTable,
+} from '../data/protectedQpuio';
 import {
   companionQpuioFileName,
   downloadQpuioContents,
@@ -84,6 +90,7 @@ type TruthTableRowProps = {
   row: TruthCellValue[];
   failed: boolean;
   passed: boolean;
+  readOnly: boolean;
   onCellChange: (rowIndex: number, columnIndex: number, value: TruthCellValue) => void;
 };
 
@@ -92,6 +99,7 @@ const TruthTableRow = memo(({
   row,
   failed,
   passed,
+  readOnly,
   onCellChange,
 }: TruthTableRowProps) => (
   <tr className={failed ? 'truth-row-fail' : passed ? 'truth-row-pass' : undefined}>
@@ -99,6 +107,7 @@ const TruthTableRow = memo(({
     {row.map((cell, columnIndex) => (
       <td key={`${rowIndex}-${columnIndex}`}>
         <select
+          disabled={readOnly}
           onChange={(event) => {
             const value = event.target.value;
             if (isTruthCellValue(value)) onCellChange(rowIndex, columnIndex, value);
@@ -139,6 +148,7 @@ export const ModuleLab = () => {
   const librarySources = useMemo(() => getCatalogLibrarySources(), [catalogRefresh]);
   const processCatalog = useMemo(() => buildProcessCatalogSummaries(), [catalogRefresh]);
   const activeProcessName = extractMainProcessName(source);
+  const truthTableProtected = isCatalogTruthTableProtected(activeProcessName ?? '');
 
   const dimensions = useMemo(() => {
     if (!truthTable) return null;
@@ -180,27 +190,46 @@ export const ModuleLab = () => {
     pendingClarification: clarification,
   }), [source, truthTable, activeProcessName, processCatalog, lastTestResult, librarySources, pendingClarification]);
 
+  const commitTruthTable = useCallback((
+    processName: string | null | undefined,
+    attempted: TruthTable,
+    reason?: string,
+  ) => {
+    const enforced = enforceProtectedTruthTable(processName, attempted);
+    if (!enforced) {
+      setTruthTable(attempted);
+      return attempted;
+    }
+    setTruthTable(enforced.truthTable);
+    if (enforced.reverted) {
+      warnProtectedTruthTable(processName ?? 'this process', reason ?? 'Manual truth-table edits are not allowed for bundled site metadata.');
+      setStatus(`Protected truth table restored for ${processName}.`);
+    }
+    return enforced.truthTable;
+  }, []);
+
   const applySource = useCallback((
     nextSource: string,
     label: string,
     options?: { resetTable?: boolean; truthTable?: TruthTable | null },
   ) => {
     const resetTable = options?.resetTable ?? true;
+    const processName = extractMainProcessName(nextSource);
     setSource(nextSource);
     setLastTestResult(null);
     if (resetTable) {
       if (options?.truthTable) {
-        setTruthTable(options.truthTable);
+        commitTruthTable(processName, options.truthTable);
       } else {
         try {
-          setTruthTable(createEmptyTruthTable(nextSource));
+          commitTruthTable(processName, createEmptyTruthTable(nextSource));
         } catch {
           setTruthTable(createInitialTruthTable());
         }
       }
     }
     setStatus(label);
-  }, []);
+  }, [commitTruthTable]);
 
   const loadCatalogProcess = useCallback((name: string, options?: { silent?: boolean }) => {
     const entry = resolveCatalogEntry(name) ?? getCatalogEntry(name);
@@ -223,18 +252,25 @@ export const ModuleLab = () => {
   }, [applySource, pushMessage]);
 
   const updateCell = useCallback((rowIndex: number, columnIndex: number, value: TruthCellValue) => {
-    setTruthTable((current) => {
-      if (!current) return current;
-      const nextRows = current.rows.map((row, index) => (
-        index === rowIndex ? row.map((cell, cellIndex) => (cellIndex === columnIndex ? value : cell)) : row
-      ));
-      return { ...current, rows: nextRows };
-    });
+    if (!truthTable) return;
+    if (truthTableProtected) {
+      warnProtectedTruthTable(activeProcessName ?? 'this process', 'Cell edits are disabled for protected bundled truth tables.');
+      commitTruthTable(activeProcessName, truthTable, 'Cell edits are disabled for protected bundled truth tables.');
+      return;
+    }
+    const nextRows = truthTable.rows.map((row, index) => (
+      index === rowIndex ? row.map((cell, cellIndex) => (cellIndex === columnIndex ? value : cell)) : row
+    ));
+    commitTruthTable(activeProcessName, { ...truthTable, rows: nextRows });
     setLastTestResult(null);
-  }, []);
+  }, [truthTable, truthTableProtected, activeProcessName, commitTruthTable]);
 
   const updateInputCount = (count: number) => {
     if (!truthTable) return;
+    if (truthTableProtected) {
+      warnProtectedTruthTable(activeProcessName ?? 'this process', 'Truth-table dimensions cannot be changed for protected bundled processes.');
+      return;
+    }
     const inputColumns = nextColumnNames('A', count, truthTable.inputColumns);
     const nextTable = resizeTruthTable(truthTable, inputColumns, truthTable.outputColumns);
     setTruthTable(nextTable);
@@ -244,6 +280,10 @@ export const ModuleLab = () => {
 
   const updateOutputCount = (count: number) => {
     if (!truthTable) return;
+    if (truthTableProtected) {
+      warnProtectedTruthTable(activeProcessName ?? 'this process', 'Truth-table dimensions cannot be changed for protected bundled processes.');
+      return;
+    }
     const outputColumns = nextColumnNames('Y', count, truthTable.outputColumns);
     const nextTable = resizeTruthTable(truthTable, truthTable.inputColumns, outputColumns);
     setTruthTable(nextTable);
@@ -264,22 +304,28 @@ export const ModuleLab = () => {
       const contents = await file.text();
       const entry = resolveCatalogEntry(file.name.replace(/\.qpuio$/i, ''));
       const parsed = parseQpuioPayload(contents, entry?.source);
-      registerCatalogTruthTable({
+      const registration = registerCatalogTruthTable({
         processName: parsed.processName,
         truthTable: parsed.truthTable,
         truthTableFileName: file.name,
         protocolSource: entry?.source,
       });
       refreshCatalog();
+      if (registration.reverted) {
+        warnProtectedTruthTable(parsed.processName, `Uploaded ${file.name} cannot replace protected site metadata.`);
+      }
+      const resolvedTable = registration.entry.truthTable ?? parsed.truthTable;
       if (entry) {
         setSelectedCatalogId(entry.id);
-        applySource(entry.source, `Loaded truth table from ${file.name}.`, { truthTable: parsed.truthTable });
+        applySource(entry.source, `Loaded truth table from ${file.name}.`, { truthTable: resolvedTable });
       } else {
-        setTruthTable(parsed.truthTable);
+        commitTruthTable(parsed.processName, resolvedTable);
         setLastTestResult(null);
         setStatus(`Loaded truth table for ${parsed.processName} from ${file.name}.`);
       }
-      pushMessage('assistant', `Loaded ${file.name} for ${parsed.processName}. Pair with a matching .qpucir file if the protocol is not already in the catalog.`);
+      pushMessage('assistant', registration.reverted
+        ? `Ignored edits from ${file.name}; ${parsed.processName} uses the protected bundled truth table.`
+        : `Loaded ${file.name} for ${parsed.processName}. Pair with a matching .qpucir file if the protocol is not already in the catalog.`);
       return;
     }
 
@@ -306,7 +352,11 @@ export const ModuleLab = () => {
       truthTableFileName = companion.name;
     }
 
-    registerCatalogProcess({
+    if (companion && isProtectedQpuioProcess(parsed.name)) {
+      warnProtectedTruthTable(parsed.name, `Uploaded ${companion.name} cannot replace protected site metadata.`);
+    }
+
+    const registration = registerCatalogProcess({
       name: parsed.name,
       source: parsed.source,
       origin: 'uploaded',
@@ -317,9 +367,9 @@ export const ModuleLab = () => {
     });
     refreshCatalog();
     setSelectedCatalogId('');
-    applySource(parsed.source, `Loaded ${primary.name}.`, { truthTable: bundledTable });
-    const tableNote = bundledTable
-      ? ` Truth table loaded from ${truthTableFileName}.`
+    applySource(parsed.source, `Loaded ${primary.name}.`, { truthTable: registration.truthTable });
+    const tableNote = registration.truthTable
+      ? ` Truth table loaded${companion && isProtectedQpuioProcess(parsed.name) ? ' (protected default restored)' : ` from ${truthTableFileName}`}.`
       : ' Say "infer truth table" or upload a companion .qpuio to continue.';
     pushMessage('assistant', `Loaded ${primary.name} into the catalog.${tableNote}`);
   };
@@ -353,12 +403,20 @@ export const ModuleLab = () => {
   };
 
   const inferTable = useCallback((inferSource = source) => {
+    const processName = extractMainProcessName(inferSource);
+    if (isProtectedQpuioProcess(processName)) {
+      const protectedTable = getCatalogTruthTable(processName ?? '') ?? createEmptyTruthTable(inferSource);
+      commitTruthTable(processName, protectedTable, 'Infer is disabled for protected bundled truth tables.');
+      setLastTestResult(null);
+      setStatus(`Using protected truth table for ${processName}.`);
+      return protectedTable;
+    }
     const table = createEmptyTruthTable(inferSource);
-    setTruthTable(table);
+    commitTruthTable(processName, table);
     setLastTestResult(null);
     setStatus(`Inferred ${table.rows.length} rows × ${table.inputColumns.length + table.outputColumns.length} columns.`);
     return table;
-  }, [source]);
+  }, [source, commitTruthTable]);
 
   const runTestOnly = useCallback((table: TruthTable, testSource = source) => {
     const testResult = testCircuitAgainstTruthTable(testSource, table, librarySources);
@@ -459,19 +517,20 @@ export const ModuleLab = () => {
         return;
       }
       currentSource = entry.source;
-      try {
-        table = createEmptyTruthTable(entry.source);
-      } catch {
-        table = createInitialTruthTable();
-      }
+      table = getCatalogTruthTable(entry.name) ?? (() => {
+        try {
+          return createEmptyTruthTable(entry.source);
+        } catch {
+          return createInitialTruthTable();
+        }
+      })();
       if (!hasFollowUpIntent) {
         return;
       }
     }
 
     if (intent.loadFullAdderTable) {
-      table = singleBitFullAdderTruthTable();
-      setTruthTable(table);
+      table = commitTruthTable('SingleBitFullAdder', singleBitFullAdderTruthTable());
       setLastTestResult(null);
     }
 
@@ -480,8 +539,16 @@ export const ModuleLab = () => {
     }
 
     if (intent.truthTable) {
-      table = intent.truthTable;
-      setTruthTable(table);
+      const processName = extractMainProcessName(currentSource) ?? activeProcessName;
+      const enforced = enforceProtectedTruthTable(processName, intent.truthTable);
+      if (enforced?.reverted) {
+        warnProtectedTruthTable(processName ?? 'this process', 'Assistant-requested truth-table edits are blocked for protected bundled metadata.');
+        pushMessage('assistant', `${intent.reply}\n\nThat truth-table edit is blocked because ${processName} is protected site metadata.`);
+        table = enforced.truthTable;
+      } else {
+        table = intent.truthTable;
+        setTruthTable(table);
+      }
       setLastTestResult(null);
     }
 
@@ -490,8 +557,15 @@ export const ModuleLab = () => {
         pushMessage('assistant', 'Infer or load a truth table before probing outputs.');
         return;
       }
-      table = probeModuleOutputs(currentSource, table, librarySources);
-      setTruthTable(table);
+      const processName = extractMainProcessName(currentSource) ?? activeProcessName;
+      if (isProtectedQpuioProcess(processName)) {
+        warnProtectedTruthTable(processName ?? 'this process', 'Probe outputs cannot overwrite protected bundled truth tables.');
+        table = getCatalogTruthTable(processName ?? '') ?? table;
+        setTruthTable(table);
+      } else {
+        table = probeModuleOutputs(currentSource, table, librarySources);
+        setTruthTable(table);
+      }
       setLastTestResult(null);
     }
 
@@ -728,8 +802,21 @@ export const ModuleLab = () => {
 
             <div className="module-tester-actions">
               <button onClick={() => { inferTable(); pushMessage('assistant', 'Inferred truth-table dimensions from PARAMS and RETURNVALS.'); }} type="button">Infer truth table</button>
-              <button onClick={() => { setTruthTable(singleBitFullAdderTruthTable()); setLastTestResult(null); pushMessage('assistant', 'Loaded canonical full-adder truth table.'); }} type="button">Full-adder table</button>
-              <button disabled={!truthTable} onClick={() => truthTable && setTruthTable(probeModuleOutputs(source, truthTable, librarySources))} type="button">Probe outputs</button>
+              <button onClick={() => { commitTruthTable('SingleBitFullAdder', singleBitFullAdderTruthTable()); setLastTestResult(null); pushMessage('assistant', 'Loaded canonical full-adder truth table.'); }} type="button">Full-adder table</button>
+              <button
+                disabled={!truthTable}
+                onClick={() => {
+                  if (!truthTable) return;
+                  if (truthTableProtected) {
+                    warnProtectedTruthTable(activeProcessName ?? 'this process', 'Probe outputs cannot overwrite protected bundled truth tables.');
+                    return;
+                  }
+                  setTruthTable(probeModuleOutputs(source, truthTable, librarySources));
+                }}
+                type="button"
+              >
+                Probe outputs
+              </button>
               <button disabled={!truthTable} onClick={downloadTruthTable} type="button">Download JSON</button>
               <button disabled={!truthTable || !activeProcessName} onClick={downloadQpuioTable} type="button">Download .qpuio</button>
               <button disabled={!source.trim()} onClick={downloadCircuit} type="button">Download .qpucir</button>
@@ -740,6 +827,7 @@ export const ModuleLab = () => {
             <label>
               Input columns
               <input
+                disabled={truthTableProtected}
                 max={MAX_INPUT_COUNT}
                 min={0}
                 onChange={(event) => updateInputCount(Number(event.target.value))}
@@ -750,6 +838,7 @@ export const ModuleLab = () => {
             <label>
               Output columns
               <input
+                disabled={truthTableProtected}
                 max={MAX_OUTPUT_COUNT}
                 min={1}
                 onChange={(event) => updateOutputCount(Number(event.target.value))}
@@ -763,6 +852,7 @@ export const ModuleLab = () => {
             <p className="canvas-tip">
               Table size: {dimensions.rowCount} rows × {dimensions.columnCount} columns.
               {activeProcessName ? ` Active process: ${activeProcessName}.` : ''}
+              {truthTableProtected ? ' Protected bundled truth table (edits are reverted).' : ''}
             </p>
           )}
 
@@ -797,6 +887,7 @@ export const ModuleLab = () => {
                       key={rowIndex}
                       onCellChange={updateCell}
                       passed={allRowsPass}
+                      readOnly={truthTableProtected}
                       row={row}
                       rowIndex={rowIndex}
                     />

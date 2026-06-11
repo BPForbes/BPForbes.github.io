@@ -44,6 +44,9 @@ Allowed JSON shape:
 
 ${buildNlContextSections(context)}
 
+Rules:
+- Follow AGENTS.md. Never propose edits to protected bundled truth tables.
+
 Examples:
 - "load the full adder truth table" -> { "reply": "...", "loadFullAdderTable": true }
 - "add a CNOT from A to Sum" -> { "reply": "...", "runTest": true, "guidance": { "gates": [{ "gate": "CNOT", "inputs": ["A"], "output": "Sum" }] } }

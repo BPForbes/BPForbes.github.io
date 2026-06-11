@@ -7,6 +7,7 @@ import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
 import { registerCatalogProcess, type ProcessCatalogOrigin } from './data/processCatalog';
 import { companionQpuioFileName, parseQpuioPayload } from './data/qpuioFile';
+import { isProtectedQpuioProcess, warnProtectedTruthTable } from './data/protectedQpuio';
 import { downloadQpucirContents, parseQpucirPayload } from './data/qpucirFile';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess } from './data/protocolExamples';
@@ -537,7 +538,11 @@ function App() {
         if (qpuioParsed.processName !== parsed.name) {
           throw new Error(`QPUIO process '${qpuioParsed.processName}' does not match .qpucir process '${parsed.name}'.`);
         }
-        truthTable = qpuioParsed.truthTable;
+        if (isProtectedQpuioProcess(parsed.name)) {
+          warnProtectedTruthTable(parsed.name, `Uploaded ${companion.name} cannot replace protected site metadata.`);
+        } else {
+          truthTable = qpuioParsed.truthTable;
+        }
         truthTableFileName = companion.name;
       }
 

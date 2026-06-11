@@ -1,0 +1,19 @@
+language: en-US
+reviews:
+  profile: chill
+  path_filters:
+    - "!dist/**"
+  path_instructions:
+    - path: "src/data/processes/*.qpuio"
+      instructions: |
+        These are protected site-provided truth-table metadata files.
+        Reject any PR that edits bundled .qpuio files for SingleBitFullAdder,
+        TwoBitFullAdder, FourBitFullAdder, or PhaseDemo unless the PR is an
+        explicit maintainer refresh of canonical metadata. See AGENTS.md.
+    - path: "AGENTS.md"
+      instructions: |
+        Keep agent governance rules in sync with protectedQpuio behavior and
+        Correction Lab LLM prompts.
+  auto_review:
+    enabled: true
+    drafts: true

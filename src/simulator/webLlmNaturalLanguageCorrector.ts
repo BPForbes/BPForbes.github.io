@@ -102,6 +102,7 @@ Allowed schema:
 ${buildNlContextSections(context)}
 
 Rules:
+- Follow AGENTS.md. Never propose edits to protected bundled truth tables.
 - Test/check/verify requests set runTest=true.
 - Automatic repair requests set autonomous=true and runTest=true.
 - Catalog open requests set loadCatalogProcess to the process name.
