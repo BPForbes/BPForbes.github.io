@@ -50,6 +50,7 @@ RETURNVALS Y`);
 
   it('builds companion qpuio names for qpucir and non-qpucir stems', () => {
     expect(companionQpuioFileName('adder.qpucir')).toBe('adder.qpuio');
+    expect(companionQpuioFileName('RsNorLatchStep-qpucir.txt')).toBe('RsNorLatchStep-qpuio.txt');
     expect(companionQpuioFileName('custom-upload')).toBe('custom-upload.qpuio');
   });
 
