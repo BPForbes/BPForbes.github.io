@@ -111,11 +111,27 @@ export function ParticleView({
                 </div>
               )}
               {snapshot && (
-                <div className="particle-coords" aria-label={`q${physicalQubit} spherical coordinates`}>
-                  <span>r {snapshot.spherical.r.toFixed(3)}</span>
-                  <span>θ {deg(snapshot.spherical.theta)}</span>
-                  <span>φ {deg(snapshot.spherical.phi)}</span>
-                </div>
+                <>
+                  <div className="particle-ket" aria-label={`q${physicalQubit} state ket`}>
+                    <code>{snapshot.ket.formatted}</code>
+                  </div>
+                  <div className="particle-coords" aria-label={`q${physicalQubit} spherical coordinates`}>
+                    <span>r {snapshot.spherical.r.toFixed(3)}</span>
+                    <span>θ {deg(snapshot.spherical.theta)}</span>
+                    <span>φ {deg(snapshot.spherical.phi)}</span>
+                  </div>
+                  <div className="particle-bloch" aria-label={`q${physicalQubit} Bloch coordinates`}>
+                    <span>x {snapshot.bloch.x.toFixed(3)}</span>
+                    <span>y {snapshot.bloch.y.toFixed(3)}</span>
+                    <span>z {snapshot.bloch.z.toFixed(3)}</span>
+                  </div>
+                  {!snapshot.mixed.isPure && (
+                    <div className="particle-mixed" aria-label={`q${physicalQubit} mixed-state metrics`}>
+                      <span>⟨ρ⟩ {snapshot.mixed.rhoExpectation.toFixed(3)}</span>
+                      <span>noise {snapshot.mixed.noise.toFixed(3)}</span>
+                    </div>
+                  )}
+                </>
               )}
               {delta && delta.displacement > 1e-4 && (
                 <div className="particle-delta" aria-label={`q${physicalQubit} change after last gate`}>

@@ -1,28 +1,52 @@
-import { complex, magnitudeSquared, type Complex } from './complex';
+import { complex, formatComplex, magnitudeSquared, type Complex } from './complex';
 import { hasBit } from './gates/operations';
 import type { CircuitGate, MeasurementMap } from './types';
 
-/** Bloch-vector Cartesian components for a single qubit marginal. */
+/** Bloch-vector Cartesian components: x = r sinθ cosφ, y = r sinθ sinφ, z = r cosθ. */
 export type BlochVector = {
   x: number;
   y: number;
   z: number;
 };
 
-/** Spherical coordinates (r, θ, φ) derived from the Bloch vector. */
+/** Spherical coordinates on the Bloch ball. */
 export type SphericalCoordinates = {
-  /** Bloch-vector length in [0, 1]; 1 means a pure marginal state. */
+  /** Radial coordinate in [0, 1]; 1 is the pure-state surface. */
   r: number;
-  /** Polar angle θ from the +Z axis in radians. */
+  /** Polar angle θ from +Z in radians. */
   theta: number;
   /** Azimuthal angle φ in radians. */
   phi: number;
+};
+
+/** |ψ⟩ = cos(θ/2)|0⟩ + e^{iφ} sin(θ/2)|1⟩ */
+export type PsiKet = {
+  alpha: Complex;
+  beta: Complex;
+  theta: number;
+  phi: number;
+  formatted: string;
+};
+
+/** Mixed-state / noise metrics from the Bloch-ball density model. */
+export type MixedStateMetrics = {
+  /** Bloch-vector length r in [0, 1]. */
+  purity: number;
+  /** Tr(ρ²) for the single-qubit marginal. */
+  traceRhoSquared: number;
+  /** ⟨ρ⟩ = ∫ ρ(r,θ,φ) r² sinθ dr dθ dφ over the unit ball. */
+  rhoExpectation: number;
+  /** 1 − purity; grows with depolarizing spread. */
+  noise: number;
+  isPure: boolean;
 };
 
 export type ParticleSnapshot = {
   qubit: number;
   bloch: BlochVector;
   spherical: SphericalCoordinates;
+  ket: PsiKet;
+  mixed: MixedStateMetrics;
   probOne: number;
   measured?: 0 | 1;
 };
@@ -32,7 +56,6 @@ export type ParticleDelta = {
   deltaR: number;
   deltaTheta: number;
   deltaPhi: number;
-  /** Euclidean distance moved on the Bloch sphere. */
   displacement: number;
 };
 
@@ -46,6 +69,9 @@ export type OperationTransition = {
   after: ParticleSnapshot[];
   deltas: ParticleDelta[];
 };
+
+const PURE_TOLERANCE = 1e-6;
+const BLOCH_INTEGRAL_GRID = 14;
 
 const bitMask = (qubit: number, qubitCount: number) => 1 << (qubitCount - qubit - 1);
 
@@ -69,6 +95,111 @@ const marginalRho = (state: Complex[], qubitCount: number, qubit: number) => {
   return { rho00, rho11, rho01: complex(rho01re, rho01im) };
 };
 
+/** Pauli Bloch coordinates from spherical angles. */
+export const blochCartesianFromSpherical = (r: number, theta: number, phi: number): BlochVector => ({
+  x: r * Math.sin(theta) * Math.cos(phi),
+  y: r * Math.sin(theta) * Math.sin(phi),
+  z: r * Math.cos(theta),
+});
+
+export const sphericalFromBlochCartesian = ({ x, y, z }: BlochVector): SphericalCoordinates => {
+  const r = Math.sqrt(x * x + y * y + z * z);
+  if (r < 1e-12) return { r: 0, theta: 0, phi: 0 };
+  return {
+    r,
+    theta: Math.acos(Math.min(1, Math.max(-1, z / r))),
+    phi: Math.atan2(y, x),
+  };
+};
+
+/** |ψ⟩ = cos(θ/2)|0⟩ + e^{iφ} sin(θ/2)|1⟩ */
+export const ketFromSpherical = (theta: number, phi: number): PsiKet => {
+  const half = theta / 2;
+  const alpha = complex(Math.cos(half), 0);
+  const beta = complex(Math.cos(phi) * Math.sin(half), Math.sin(phi) * Math.sin(half));
+  return {
+    alpha,
+    beta,
+    theta,
+    phi,
+    formatted: formatPsiKet(alpha, beta),
+  };
+};
+
+export const formatPsiKet = (alpha: Complex, beta: Complex): string => {
+  const alphaText = formatComplex(alpha);
+  const betaText = formatComplex(beta);
+  if (magnitudeSquared(beta) < 1e-12) return `|ψ⟩ = ${alphaText}|0⟩`;
+  if (magnitudeSquared(alpha) < 1e-12) return `|ψ⟩ = ${betaText}|1⟩`;
+  return `|ψ⟩ = ${alphaText}|0⟩ + ${betaText}|1⟩`;
+};
+
+const angularDistance = (thetaA: number, phiA: number, thetaB: number, phiB: number) => {
+  const ax = Math.sin(thetaA) * Math.cos(phiA);
+  const ay = Math.sin(thetaA) * Math.sin(phiA);
+  const az = Math.cos(thetaA);
+  const bx = Math.sin(thetaB) * Math.cos(phiB);
+  const by = Math.sin(thetaB) * Math.sin(phiB);
+  const bz = Math.cos(thetaB);
+  const dot = Math.min(1, Math.max(-1, ax * bx + ay * by + az * bz));
+  return Math.acos(dot);
+};
+
+/**
+ * Numerically evaluate ⟨ρ⟩ = ∫₀^{2π} ∫₀^π ∫₀^1 ρ(r,θ,φ) r² sinθ dr dθ dφ.
+ * ρ is modeled as a Bloch-ball density peaked at (r₀,θ₀,φ₀) with noise spread.
+ */
+export const blochBallRhoExpectation = (
+  r0: number,
+  theta0: number,
+  phi0: number,
+  noise: number,
+  gridSize = BLOCH_INTEGRAL_GRID,
+): number => {
+  if (noise < 1e-8) return 1;
+
+  let weighted = 0;
+  let measure = 0;
+  const dr = 1 / gridSize;
+  const dtheta = Math.PI / gridSize;
+  const dphi = (2 * Math.PI) / gridSize;
+  const spread = Math.max(noise, 0.05);
+
+  for (let ir = 0; ir < gridSize; ir += 1) {
+    const r = (ir + 0.5) * dr;
+    for (let it = 0; it < gridSize; it += 1) {
+      const theta = (it + 0.5) * dtheta;
+      const sinTheta = Math.sin(theta);
+      for (let ip = 0; ip < gridSize; ip += 1) {
+        const phi = (ip + 0.5) * dphi;
+        const volume = r * r * sinTheta * dr * dtheta * dphi;
+        const radial = Math.exp(-((r - r0) * (r - r0)) / (2 * spread * spread));
+        const angular = Math.exp(-(angularDistance(theta0, phi0, theta, phi) ** 2) / (2 * spread * spread));
+        const peaked = radial * angular;
+        const uniform = 1 / (4 * Math.PI / 3);
+        const rho = (1 - noise) * peaked + noise * uniform;
+        weighted += rho * volume;
+        measure += volume;
+      }
+    }
+  }
+
+  return measure > 0 ? weighted / measure : 0;
+};
+
+export const mixedStateMetrics = (spherical: SphericalCoordinates): MixedStateMetrics => {
+  const purity = spherical.r;
+  const noise = 1 - purity;
+  const traceRhoSquared = (1 + purity * purity) / 2;
+  return {
+    purity,
+    traceRhoSquared,
+    rhoExpectation: blochBallRhoExpectation(spherical.r, spherical.theta, spherical.phi, noise),
+    noise,
+    isPure: purity >= 1 - PURE_TOLERANCE,
+  };
+};
+
 export const blochVectorForQubit = (
   state: Complex[],
   qubitCount: number,
@@ -77,7 +208,7 @@ export const blochVectorForQubit = (
 ): BlochVector => {
   const measured = measurements[qubit];
   if (measured !== undefined) {
-    return { x: 0, y: 0, z: measured === 1 ? 1 : -1 };
+    return blochCartesianFromSpherical(1, measured === 1 ? 0 : Math.PI, 0);
   }
 
   const { rho00, rho11, rho01 } = marginalRho(state, qubitCount, qubit);
@@ -88,15 +219,8 @@ export const blochVectorForQubit = (
   };
 };
 
-export const sphericalFromBloch = ({ x, y, z }: BlochVector): SphericalCoordinates => {
-  const r = Math.sqrt(x * x + y * y + z * z);
-  if (r < 1e-12) {
-    return { r: 0, theta: 0, phi: 0 };
-  }
-  const theta = Math.acos(Math.min(1, Math.max(-1, z / r)));
-  const phi = Math.atan2(y, x);
-  return { r, theta, phi };
-};
+/** @deprecated Use sphericalFromBlochCartesian */
+export const sphericalFromBloch = sphericalFromBlochCartesian;
 
 export const snapshotParticle = (
   state: Complex[],
@@ -105,12 +229,16 @@ export const snapshotParticle = (
   measurements: MeasurementMap = {},
 ): ParticleSnapshot => {
   const bloch = blochVectorForQubit(state, qubitCount, qubit, measurements);
-  const spherical = sphericalFromBloch(bloch);
+  const spherical = sphericalFromBlochCartesian(bloch);
+  const ket = ketFromSpherical(spherical.theta, spherical.phi);
+  const mixed = mixedStateMetrics(spherical);
   const measured = measurements[qubit];
   return {
     qubit,
     bloch,
     spherical,
+    ket,
+    mixed,
     probOne: (1 - bloch.z) / 2,
     measured,
   };

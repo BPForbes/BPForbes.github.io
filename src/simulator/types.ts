@@ -117,7 +117,14 @@ export type CircuitGate = {
 
 export type MeasurementMap = Record<number, 0 | 1>;
 
-export type { OperationTransition, ParticleDelta, ParticleSnapshot, SphericalCoordinates } from './particleTracking';
+export type {
+  MixedStateMetrics,
+  OperationTransition,
+  ParticleDelta,
+  ParticleSnapshot,
+  PsiKet,
+  SphericalCoordinates,
+} from './particleTracking';
 
 export type ExecutionResult = {
   state: Complex[];
