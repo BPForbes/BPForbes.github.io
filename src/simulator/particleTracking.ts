@@ -158,7 +158,7 @@ export const blochVectorForQubit = (
 ): BlochVector => {
   const measured = measurements[qubit];
   if (measured !== undefined) {
-    return blochCartesianFromSpherical(1, measured === 1 ? 0 : Math.PI, 0);
+    return blochCartesianFromSpherical(1, measured === 1 ? Math.PI : 0, 0);
   }
 
   const { rho00, rho11, rho01 } = marginalRho(state, qubitCount, qubit);

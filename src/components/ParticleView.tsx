@@ -96,7 +96,7 @@ export function ParticleView({
       <div className="particle-grid">
         {Array.from({ length: qubitCount }, (_, displayIndex) => {
           const physicalQubit = physicalQubitIndices?.[displayIndex] ?? displayIndex;
-          const measured = measurements[displayIndex];
+          const measured = measurements[physicalQubit];
           const baseColor = oklabToCss(rgbToOklab(seededColor(physicalQubit)));
           const snapshot = snapshotByQubit.get(physicalQubit);
           const delta = deltaByQubit.get(physicalQubit);
@@ -154,7 +154,7 @@ export function ParticleView({
                 <span>{gate.step + 1}</span>
                 <strong>{gate.type}</strong>
                 <small>
-                  -I {transition?.inputQubits.map((qubit) => `q${qubit}`).join(', ') || gate.controls.map((qubit) => `q${qubit}`).join(', ') || '—'}
+                  -I {transition?.inputQubits.map((qubit) => `q${qubit}`).join(', ') || gate.controls.map((qubit) => `q${qubit}`).join(', ') || gate.targets.map((qubit) => `q${qubit}`).join(', ') || '—'}
                   {' · '}
                   -O {transition?.outputQubits.map((qubit) => `q${qubit}`).join(', ') || gate.targets.map((qubit) => `q${qubit}`).join(', ')}
                 </small>

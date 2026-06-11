@@ -21,6 +21,16 @@ const gate = (type: string, step: number, targets: number[], controls: number[] 
 });
 
 describe('particleTracking', () => {
+  it('maps measured |1⟩ to south pole (θ = π) on the Bloch sphere', () => {
+    const bloch = blochVectorForQubit(createInitialState(1), 1, 0, { 0: 1 });
+    expect(bloch.z).toBeCloseTo(-1, 5);
+  });
+
+  it('maps measured |0⟩ to north pole (θ = 0) on the Bloch sphere', () => {
+    const bloch = blochVectorForQubit(createInitialState(1), 1, 0, { 0: 0 });
+    expect(bloch.z).toBeCloseTo(1, 5);
+  });
+
   it('maps |0⟩ to z = cosθ = 1 on the Bloch sphere', () => {
     const state = createInitialState(1);
     const bloch = blochVectorForQubit(state, 1, 0);
