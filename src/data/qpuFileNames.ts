@@ -2,18 +2,23 @@
 export const QPUCIR_TXT_MARKER = '-qpucir';
 export const QPUIO_TXT_MARKER = '-qpuio';
 
+const QPUCIR_EXTENSION_PATTERN = /\.qpucir$/i;
+const QPUCIR_TXT_PATTERN = new RegExp(`${QPUCIR_TXT_MARKER}\\.txt$`, 'i');
+const QPUIO_EXTENSION_PATTERN = /\.qpuio$/i;
+const QPUIO_TXT_PATTERN = new RegExp(`${QPUIO_TXT_MARKER}\\.txt$`, 'i');
+
 export const QPU_FILE_UPLOAD_ACCEPT = '.qpucir,.qpuio,.txt,.qpu,application/json,text/plain';
 
 export const isTxtFileName = (fileName: string) => /\.txt$/i.test(fileName);
 
 export const isQpucirFileName = (fileName: string) => (
-  /\.qpucir$/i.test(fileName)
-  || new RegExp(`${QPUCIR_TXT_MARKER}\\.txt$`, 'i').test(fileName)
+  QPUCIR_EXTENSION_PATTERN.test(fileName)
+  || QPUCIR_TXT_PATTERN.test(fileName)
 );
 
 export const isQpuioFileName = (fileName: string) => (
-  /\.qpuio$/i.test(fileName)
-  || new RegExp(`${QPUIO_TXT_MARKER}\\.txt$`, 'i').test(fileName)
+  QPUIO_EXTENSION_PATTERN.test(fileName)
+  || QPUIO_TXT_PATTERN.test(fileName)
 );
 
 export const isLooseQpucirUpload = (fileName: string) => (
@@ -35,29 +40,36 @@ export const qpucirTxtFileNameForProcess = (processName: string) => `${processNa
 export const qpuioTxtFileNameForProcess = (processName: string) => `${processName}${QPUIO_TXT_MARKER}.txt`;
 
 export const companionQpuioFileName = (qpucirFileName: string) => {
-  if (/\.qpucir$/i.test(qpucirFileName)) {
-    return qpucirFileName.replace(/\.qpucir$/i, '.qpuio');
+  if (QPUCIR_EXTENSION_PATTERN.test(qpucirFileName)) {
+    return qpucirFileName.replace(QPUCIR_EXTENSION_PATTERN, '.qpuio');
   }
-  if (new RegExp(`${QPUCIR_TXT_MARKER}\\.txt$`, 'i').test(qpucirFileName)) {
-    return qpucirFileName.replace(new RegExp(`${QPUCIR_TXT_MARKER}\\.txt$`, 'i'), `${QPUIO_TXT_MARKER}.txt`);
+  if (QPUCIR_TXT_PATTERN.test(qpucirFileName)) {
+    return qpucirFileName.replace(QPUCIR_TXT_PATTERN, `${QPUIO_TXT_MARKER}.txt`);
   }
   return `${qpucirFileName}.qpuio`;
 };
 
 export const companionQpucirFileName = (qpuioFileName: string) => {
-  if (/\.qpuio$/i.test(qpuioFileName)) {
-    return qpuioFileName.replace(/\.qpuio$/i, '.qpucir');
+  if (QPUIO_EXTENSION_PATTERN.test(qpuioFileName)) {
+    return qpuioFileName.replace(QPUIO_EXTENSION_PATTERN, '.qpucir');
   }
-  if (new RegExp(`${QPUIO_TXT_MARKER}\\.txt$`, 'i').test(qpuioFileName)) {
-    return qpuioFileName.replace(new RegExp(`${QPUIO_TXT_MARKER}\\.txt$`, 'i'), `${QPUCIR_TXT_MARKER}.txt`);
+  if (QPUIO_TXT_PATTERN.test(qpuioFileName)) {
+    return qpuioFileName.replace(QPUIO_TXT_PATTERN, `${QPUCIR_TXT_MARKER}.txt`);
   }
   return `${qpuioFileName}.qpucir`;
 };
 
 export const processStemFromQpuioFileName = (fileName: string) => {
-  if (/\.qpuio$/i.test(fileName)) return fileName.replace(/\.qpuio$/i, '');
-  if (new RegExp(`${QPUIO_TXT_MARKER}\\.txt$`, 'i').test(fileName)) {
-    return fileName.replace(new RegExp(`${QPUIO_TXT_MARKER}\\.txt$`, 'i'), '');
+  let stem = fileName;
+  if (QPUIO_EXTENSION_PATTERN.test(fileName)) {
+    stem = fileName.replace(QPUIO_EXTENSION_PATTERN, '');
+  } else if (QPUIO_TXT_PATTERN.test(fileName)) {
+    stem = fileName.replace(QPUIO_TXT_PATTERN, '');
   }
-  return fileName;
+  if (!stem && (QPUIO_EXTENSION_PATTERN.test(fileName) || QPUIO_TXT_PATTERN.test(fileName))) {
+    throw new Error(
+      `QPUIO filename '${fileName}' has an empty process stem (e.g. '.qpuio' or '-qpuio.txt' are invalid).`,
+    );
+  }
+  return stem;
 };

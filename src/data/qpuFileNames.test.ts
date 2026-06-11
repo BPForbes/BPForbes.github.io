@@ -4,6 +4,7 @@ import {
   companionQpuioFileName,
   isQpucirFileName,
   isQpuioFileName,
+  processStemFromQpuioFileName,
   qpucirTxtFileNameForProcess,
   qpuioTxtFileNameForProcess,
   validateUploadFileName,
@@ -41,5 +42,16 @@ describe('qpuFileNames', () => {
     expect(companionQpuioFileName('RsNorLatchStep-qpucir.txt')).toBe('RsNorLatchStep-qpuio.txt');
     expect(companionQpucirFileName('adder.qpuio')).toBe('adder.qpucir');
     expect(companionQpucirFileName('RsNorLatchStep-qpuio.txt')).toBe('RsNorLatchStep-qpucir.txt');
+  });
+
+  it('extracts process stems from qpuio filenames', () => {
+    expect(processStemFromQpuioFileName('RsNorLatchStep.qpuio')).toBe('RsNorLatchStep');
+    expect(processStemFromQpuioFileName('RsNorLatchStep-qpuio.txt')).toBe('RsNorLatchStep');
+    expect(processStemFromQpuioFileName('custom-upload')).toBe('custom-upload');
+  });
+
+  it('rejects qpuio filenames with empty process stems', () => {
+    expect(() => processStemFromQpuioFileName('.qpuio')).toThrow(/empty process stem/i);
+    expect(() => processStemFromQpuioFileName('-qpuio.txt')).toThrow(/empty process stem/i);
   });
 });
