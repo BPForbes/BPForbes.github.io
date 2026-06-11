@@ -10,7 +10,7 @@ import { extractMainProcessName, qpucirFileNameForSource } from '../simulator/qp
 import { describeTruthTableDimensions, formatTruthTableRowSummary, inferTruthTableDimensions } from '../simulator/truthTable';
 import { getProtocolParameterEntries } from '../simulator/qpuFormat';
 import { getReturnValTokens } from '../simulator/qpuAst';
-import type { TruthTable, TruthTableTestResult } from '../simulator/truthTable';
+import type { TruthTable, TruthTableDimensions, TruthTableTestResult } from '../simulator/truthTable';
 import type { ProcessCatalogSummary } from '../simulator/nlIntentTypes';
 
 export type ProcessCatalogOrigin = 'bundled' | 'compiled' | 'uploaded' | 'corrected';
@@ -291,14 +291,14 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
   if (summariesCache) return summariesCache;
   summariesCache = getCatalogEntries().map((entry) => {
     const columns = readColumns(entry.source);
-    let dimensions = { rowCount: 0, columnCount: 0, inputCount: 0, outputCount: 0 };
+    let dimensions: TruthTableDimensions = { rowCount: 0, columnCount: 0, inputCount: 0, outputCount: 0 };
     try {
       dimensions = inferTruthTableDimensions(entry.source);
     } catch {
       // Non-state protocols may not infer cleanly.
     }
     const truthTable = entry.truthTable;
-    let tableDimensions = dimensions;
+    let tableDimensions: TruthTableDimensions = dimensions;
     if (truthTable) {
       try {
         tableDimensions = describeTruthTableDimensions(entry.source, truthTable);
