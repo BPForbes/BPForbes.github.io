@@ -6,6 +6,8 @@ import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
 import { registerCatalogProcess, type ProcessCatalogOrigin } from './data/processCatalog';
+import { companionQpuioFileName, parseQpuioPayload } from './data/qpuioFile';
+import { isProtectedQpuioProcess, warnProtectedTruthTable } from './data/protectedQpuio';
 import { downloadQpucirContents, parseQpucirPayload } from './data/qpucirFile';
 import { protocolExamples, protocolLibrary } from './data/protocolExamples';
 import type { ConfiguredQpucirProcess } from './data/protocolExamples';
@@ -440,6 +442,7 @@ function App() {
     source: string,
     label = 'QPU AST protocol',
     origin: ProcessCatalogOrigin = 'compiled',
+    options?: { fileName?: string; skipCatalogRegister?: boolean },
   ) => {
     try {
       const result = compileQpuProtocol(source, protocolLibrary);
@@ -464,13 +467,15 @@ function App() {
       setCompileSummary(`Compiled ${result.parsed.length} AST command(s) into ${result.gates.length} runnable gate(s) over ${registerSummary} with ${paramSummary}.`);
       resetRuntime(result.qubitCount, `Compiled ${label}. ${result.log[0] ?? ''}`, nextStartStates, result.processParams);
       setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared')).slice(0, 24)]);
-      registerCatalogProcess({
-        name: extractMainProcessName(source) ?? label,
-        source,
-        origin,
-        fileName: qpucirFileNameForSource(source, label),
-        description: `Compiled in circuit builder (${result.gates.length} gate(s))`,
-      });
+      if (!options?.skipCatalogRegister) {
+        registerCatalogProcess({
+          name: extractMainProcessName(source) ?? label,
+          source,
+          origin,
+          fileName: options?.fileName ?? qpucirFileNameForSource(source, label),
+          description: `Compiled in circuit builder (${result.gates.length} gate(s))`,
+        });
+      }
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -514,22 +519,53 @@ function App() {
   };
 
   const uploadProtocol = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
     try {
-      const contents = await file.text();
+      const fileList = Array.from(files);
+      const qpucirFile = fileList.find((file) => /\.qpucir$/i.test(file.name))
+        ?? fileList.find((file) => !/\.qpuio$/i.test(file.name));
+      if (!qpucirFile) {
+        throw new Error('Upload at least one .qpucir file.');
+      }
+
+      const contents = await qpucirFile.text();
       const parsed = parseQpucirPayload(contents);
+      const companion = fileList.find((file) => file.name === companionQpuioFileName(qpucirFile.name))
+        ?? fileList.find((file) => /\.qpuio$/i.test(file.name));
+      let truthTable;
+      let truthTableFileName;
+      if (companion) {
+        const qpuioParsed = parseQpuioPayload(await companion.text(), parsed.source);
+        if (qpuioParsed.processName !== parsed.name) {
+          throw new Error(`QPUIO process '${qpuioParsed.processName}' does not match .qpucir process '${parsed.name}'.`);
+        }
+        if (isProtectedQpuioProcess(parsed.name)) {
+          warnProtectedTruthTable(parsed.name, `Uploaded ${companion.name} cannot replace protected site metadata.`);
+        } else {
+          truthTable = qpuioParsed.truthTable;
+        }
+        truthTableFileName = companion.name;
+      }
+
       registerCatalogProcess({
         name: parsed.name,
         source: parsed.source,
         origin: 'uploaded',
-        fileName: file.name,
-        description: `Uploaded from ${file.name}`,
+        fileName: qpucirFile.name,
+        truthTable,
+        truthTableFileName,
+        description: `Uploaded from ${qpucirFile.name}${companion ? ` + ${companion.name}` : ''}`,
       });
       setProtocolSource(parsed.source);
-      compileProtocolSource(parsed.source, parsed.name, 'uploaded');
-      setFileStatus(`Uploaded and compiled ${file.name}.`);
+      compileProtocolSource(parsed.source, parsed.name, 'uploaded', {
+        fileName: qpucirFile.name,
+        skipCatalogRegister: true,
+      });
+      setFileStatus(
+        `Uploaded and compiled ${qpucirFile.name}${companion ? ` with truth table from ${companion.name}` : ''}.`,
+      );
       setActiveView('builder');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -804,7 +840,7 @@ function App() {
             <label className="upload-card">
               <strong>Upload files</strong>
               <span>Select a .qpucir JSON export or a plain QPU protocol text file. The app reads the source, compiles it, and opens the circuit builder.</span>
-              <input accept=".qpucir,.txt,.qpu,application/json,text/plain" onChange={uploadProtocol} type="file" />
+              <input accept=".qpucir,.qpuio,.txt,.qpu,application/json,text/plain" multiple onChange={uploadProtocol} type="file" />
             </label>
             <div className="download-card">
               <strong>Download files</strong>

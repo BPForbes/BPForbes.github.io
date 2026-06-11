@@ -39,10 +39,21 @@ export {
   synthesizeProtocolFromTruthTable,
 } from './circuitCorrector';
 
+export type { ChildCorrectionResult } from './childProcessCorrection';
+export {
+  collectDescendantProcesses,
+  correctChildProcessesForCompatibility,
+  getReferencedChildProcesses,
+} from './childProcessCorrection';
+
 export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './nlIntentTypes';
 export { parseNaturalLanguageCorrection } from './naturalLanguageCorrector';
 import type { CorrectionGuidance } from './circuitCorrector';
 import { correctCircuit } from './circuitCorrector';
+import {
+  correctChildProcessesForCompatibility,
+  type ChildCorrectionResult,
+} from './childProcessCorrection';
 import type { TruthTable, TruthTableTestResult } from './truthTable';
 import {
   createEmptyTruthTable,
@@ -60,6 +71,10 @@ export type ModuleTestRequest = {
   autonomous?: boolean;
   /** When false, only test and report failures without mutating the circuit. */
   correct?: boolean;
+  /** When correcting, also test and fix declared child processes that have truth tables. */
+  propagateToChildren?: boolean;
+  processName?: string;
+  getTruthTable?: (processName: string) => TruthTable | undefined;
 };
 
 export type ModuleTestResponse = {
@@ -68,6 +83,8 @@ export type ModuleTestResponse = {
   testResult: TruthTableTestResult;
   correctedSource?: string;
   correctionSteps?: ReturnType<typeof correctCircuit>['steps'];
+  childCorrections?: ChildCorrectionResult[];
+  librarySources?: Record<string, string>;
 };
 
 export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse => {
@@ -78,15 +95,30 @@ export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse =>
     throw new Error(validationErrors.join(' '));
   }
 
-  const testResult = testCircuitAgainstTruthTable(request.source, truthTable, request.librarySources);
+  let librarySources = { ...(request.librarySources ?? {}) };
+  let childCorrections: ChildCorrectionResult[] | undefined;
+
+  if (request.correct !== false && request.propagateToChildren !== false && request.processName && request.getTruthTable) {
+    const childResult = correctChildProcessesForCompatibility(
+      request.processName,
+      librarySources,
+      request.getTruthTable,
+      request.guidance,
+      request.autonomous ?? true,
+    );
+    librarySources = childResult.librarySources;
+    childCorrections = childResult.childCorrections;
+  }
+
+  const testResult = testCircuitAgainstTruthTable(request.source, truthTable, librarySources);
   if (testResult.passed || request.correct === false) {
-    return { dimensions, truthTable, testResult };
+    return { dimensions, truthTable, testResult, childCorrections, librarySources };
   }
 
   const correction = correctCircuit(
     request.source,
     truthTable,
-    request.librarySources,
+    librarySources,
     request.guidance,
     { autonomous: request.autonomous ?? true },
   );
@@ -97,6 +129,8 @@ export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse =>
     testResult: correction.testResult,
     correctedSource: correction.source,
     correctionSteps: correction.steps,
+    childCorrections,
+    librarySources,
   };
 };
 

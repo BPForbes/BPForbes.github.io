@@ -71,6 +71,21 @@ describe('parseNaturalLanguageCorrection', () => {
     ]);
   });
 
+  it('maps update qpuio and qpucir catalog commands', () => {
+    expect(parseNaturalLanguageCorrection('update qpuio', context)).toMatchObject({
+      updateQpuio: true,
+      updateQpucir: false,
+    });
+    expect(parseNaturalLanguageCorrection('update qpucir', context)).toMatchObject({
+      updateQpuio: false,
+      updateQpucir: true,
+    });
+    expect(parseNaturalLanguageCorrection('update both qpucir and qpuio', context)).toMatchObject({
+      updateQpuio: true,
+      updateQpucir: true,
+    });
+  });
+
   it('recognizes autonomous correction requests', () => {
     const intent = parseNaturalLanguageCorrection('fix the circuit automatically', context);
     expect(intent.autonomous).toBe(true);

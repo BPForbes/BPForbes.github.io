@@ -426,6 +426,7 @@ export const parseNaturalLanguageCorrection = (
         '• "Add a CNOT from A to Sum"',
         '• "Insert CCNOT with inputs A and B into Cout"',
         '• "Fix the circuit automatically"',
+        '• "update qpuio", "update qpucir", or "update both qpucir and qpuio"',
       ].join('\n'),
     };
   }
@@ -457,6 +458,24 @@ export const parseNaturalLanguageCorrection = (
         })),
       );
     }
+  }
+
+  const updateBoth = /update\s+both\s+(?:qpucir\s+and\s+qpuio|qpuio\s+and\s+qpucir)/i.test(lower)
+    || /update\s+(?:qpucir\s+and\s+qpuio|qpuio\s+and\s+qpucir)/i.test(lower);
+  const updateQpuioOnly = !updateBoth && /update\s+(?:the\s+)?qpuio(?:\s+file)?/i.test(lower);
+  const updateQpucirOnly = !updateBoth && /update\s+(?:the\s+)?qpucir(?:\s+file)?/i.test(lower);
+
+  if (updateBoth || updateQpuioOnly || updateQpucirOnly) {
+    const targets = updateBoth
+      ? 'the .qpucir protocol and .qpuio truth table'
+      : updateQpuioOnly
+        ? 'the .qpuio truth table'
+        : 'the .qpucir protocol';
+    return {
+      reply: `Saved ${targets} for the active process in the catalog.`,
+      updateQpuio: updateBoth || updateQpuioOnly,
+      updateQpucir: updateBoth || updateQpucirOnly,
+    };
   }
 
   if (/(?:infer|create|build).*(?:truth table|table dimensions)/i.test(lower)) {

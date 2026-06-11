@@ -8,6 +8,8 @@ export type ProcessCatalogSummary = {
   inputColumns: string[];
   outputColumns: string[];
   rowCount?: number;
+  hasTruthTable?: boolean;
+  truthTableProtected?: boolean;
   summary: string;
   description?: string;
 };
@@ -30,6 +32,8 @@ export type ModelCorrectionIntent = {
   probeOutputs?: boolean;
   runTest?: boolean;
   autonomous?: boolean;
+  updateQpuio?: boolean;
+  updateQpucir?: boolean;
   guidance?: CorrectionGuidance;
   truthTable?: TruthTable;
   clarification?: PendingClarification;

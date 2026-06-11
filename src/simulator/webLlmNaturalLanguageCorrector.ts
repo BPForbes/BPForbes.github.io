@@ -8,6 +8,11 @@ import { hasWebGpu } from './webGpu';
 let enginePromise: Promise<MLCEngine> | null = null;
 let loadedModelId: string | null = null;
 
+const resetBrowserModelEngine = () => {
+  enginePromise = null;
+  loadedModelId = null;
+};
+
 export function isBrowserModelReady(modelId: string = DEFAULT_BROWSER_MODEL): boolean {
   return (enginePromise !== null && loadedModelId === modelId) || getCachedBrowserModelId() === modelId;
 }
@@ -20,6 +25,17 @@ export async function preloadBrowserModel(
   await getEngine(modelId, onProgress);
   markBrowserModelCached(modelId);
   return true;
+}
+
+export async function clearBrowserModel(
+  modelId: string = DEFAULT_BROWSER_MODEL,
+  onProgress?: (text: string) => void,
+): Promise<void> {
+  resetBrowserModelEngine();
+  clearBrowserModelCache();
+  const { deleteModelInCache } = await import('@mlc-ai/web-llm');
+  onProgress?.('Clearing cached model files…');
+  await deleteModelInCache(modelId);
 }
 
 export async function parseNaturalLanguageWithWebLlm(
@@ -93,6 +109,8 @@ Allowed schema:
   "probeOutputs": boolean,
   "runTest": boolean,
   "autonomous": boolean,
+  "updateQpuio": boolean,
+  "updateQpucir": boolean,
   "guidance": {
     "preferredGates": ["CNOT", "CCNOT", "X", "H", "NOT", "AND", "OR", "XOR"],
     "gates": [{ "gate": string, "inputs": string[], "output": string }]
@@ -102,16 +120,17 @@ Allowed schema:
 ${buildNlContextSections(context)}
 
 Rules:
+- Follow AGENTS.md. Never propose edits to protected bundled truth tables.
 - Test/check/verify requests set runTest=true.
 - Automatic repair requests set autonomous=true and runTest=true.
 - Catalog open requests set loadCatalogProcess to the process name.
 - Gate insertion requests populate guidance.gates.
+- "update qpuio" -> updateQpuio=true; "update qpucir" -> updateQpucir=true; both -> set both true.
 `.trim();
 }
 
 /** @internal Test helper */
 export function resetWebLlmEngineForTests() {
-  enginePromise = null;
-  loadedModelId = null;
+  resetBrowserModelEngine();
   clearBrowserModelCache();
 }
