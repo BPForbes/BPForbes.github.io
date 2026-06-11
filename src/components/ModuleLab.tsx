@@ -463,14 +463,10 @@ export const ModuleLab = () => {
   const runTestOnly = useCallback((table: TruthTable, testSource = source) => {
     const testResult = testCircuitAgainstTruthTable(testSource, table, librarySources);
     setLastTestResult(testResult);
-    const persist = persistActiveArtifacts(testSource, table);
     let summary = formatTestFailureSummary(testResult);
-    if (persist && !persist.skipped) {
-      summary += ` ${persist.message}`;
-    }
     setStatus(summary);
-    return { testResult, summary, persist };
-  }, [source, librarySources, persistActiveArtifacts]);
+    return { testResult, summary, persist: null };
+  }, [source, librarySources]);
 
   const runCorrection = useCallback((
     table: TruthTable,
@@ -503,16 +499,20 @@ export const ModuleLab = () => {
     });
 
     const finalSource = response.correctedSource ?? testSource;
+    const processName = extractMainProcessName(testSource) ?? activeProcessName ?? undefined;
     if (response.correctedSource) {
       setSource(response.correctedSource);
     }
+    commitTruthTable(processName, table);
 
-    const persist = persistActiveArtifacts(finalSource, table, {
-      origin: response.correctedSource ? 'corrected' : undefined,
-      description: response.correctedSource
-        ? `Corrected in Circuit Correction Lab (${autonomous ? 'autonomous' : 'guided'})`
-        : undefined,
-    });
+    const persist = response.correctedSource
+      ? persistActiveArtifacts(finalSource, table, {
+        updateQpuio: false,
+        updateQpucir: true,
+        origin: 'corrected',
+        description: `Corrected in Circuit Correction Lab (${autonomous ? 'autonomous' : 'guided'})`,
+      })
+      : null;
 
     if (response.childCorrections?.some((child) => child.corrected)) {
       refreshCatalog();
@@ -529,7 +529,7 @@ export const ModuleLab = () => {
     }
     setStatus(summary);
     return { response, summary, persist };
-  }, [source, librarySources, activeProcessName, refreshCatalog, persistActiveArtifacts]);
+  }, [source, librarySources, activeProcessName, refreshCatalog, persistActiveArtifacts, commitTruthTable]);
 
   const applyParsedIntent = async (intent: ModelCorrectionIntent) => {
     if (intent.clarification) {
@@ -582,16 +582,20 @@ export const ModuleLab = () => {
       }
     }
 
+    const isCircuitCorrection = Boolean(
+      intent.runTest && (intent.autonomous || (intent.guidance?.gates?.length ?? 0) > 0),
+    );
+
     if (intent.loadFullAdderTable) {
       table = commitTruthTable('SingleBitFullAdder', singleBitFullAdderTruthTable());
       setLastTestResult(null);
     }
 
-    if (intent.inferTable) {
+    if (intent.inferTable && !isCircuitCorrection) {
       table = inferTable(currentSource);
     }
 
-    if (intent.truthTable) {
+    if (intent.truthTable && !isCircuitCorrection) {
       const processName = extractMainProcessName(currentSource) ?? activeProcessName;
       const enforced = enforceProtectedTruthTable(processName, intent.truthTable);
       if (enforced?.reverted) {
@@ -605,7 +609,7 @@ export const ModuleLab = () => {
       setLastTestResult(null);
     }
 
-    if (intent.probeOutputs) {
+    if (intent.probeOutputs && !isCircuitCorrection) {
       if (!table) {
         pushMessage('assistant', 'Infer or load a truth table before probing outputs.');
         return;
