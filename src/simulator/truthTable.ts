@@ -1,3 +1,4 @@
+// Truth-table contract between .qpuio metadata, simulator runs, and correction tests.
 import { compileQpuProtocol, getReturnValTokens, parseProtocol } from './qpuAst';
 import { getProtocolParameterEntries } from './qpuFormat';
 import { measureAll, runCircuit } from './engine';
@@ -43,6 +44,7 @@ const VALID_CELLS = new Set<TruthCellValue>(['0p', '1p', 'sp']);
 
 export const isTruthCellValue = (value: string): value is TruthCellValue => VALID_CELLS.has(value as TruthCellValue);
 
+// Compiled tokenMap keys may include scoped paths; match by bare register name suffix.
 const tokenQubit = (tokenMap: Record<string, number>, name: string) => {
   const entry = Object.entries(tokenMap).find(([token]) => token === name || token.endsWith(`/${name}`));
   if (entry === undefined) throw new Error(`Missing register '${name}' in compiled token map`);
@@ -100,11 +102,13 @@ export const formatTruthTableRowSummary = (dimensions: TruthTableDimensions) => 
   return `${listed} row${listed === 1 ? '' : 's'}`;
 };
 
+// Row index encodes inputs MSB-first: index 0 is all-0p, index 2^n-1 is all-1p.
 export const indexToInputRow = (index: number, inputCount: number): TruthCellValue[] => {
   if (inputCount === 0) return [];
   return Array.from({ length: inputCount }, (_, bit) => (((index >> (inputCount - 1 - bit)) & 1) === 1 ? '1p' : '0p'));
 };
 
+// Build the full combinatorial input grid with output cells initialized to 0p.
 export const createTruthTableFromColumns = (inputColumns: string[], outputColumns: string[]): TruthTable => {
   const rowCount = inputColumns.length > 0 ? 2 ** inputColumns.length : (outputColumns.length > 0 ? 1 : 0);
   const rows = Array.from({ length: rowCount }, (_, rowIndex) => [
@@ -188,6 +192,7 @@ export const formatTestFailureSummary = (result: TruthTableTestResult) => {
   return `${result.failedRows.length} row(s) fail (${result.passedRows}/${result.totalRows} pass). ${details.join(' ')}${suffix}`;
 };
 
+// Derive column names and row count from protocol PARAMS/RETURNVALS for a fresh editable table.
 export const createEmptyTruthTable = (source: string): TruthTable => {
   const dimensions = inferTruthTableDimensions(source);
   const inputColumns = getProtocolParameterEntries(source)
@@ -201,6 +206,7 @@ export const createEmptyTruthTable = (source: string): TruthTable => {
   return { inputColumns, outputColumns, rows };
 };
 
+// Canonical single-bit adder reference used by demos and correction tests (not a protected .qpuio file).
 export const singleBitFullAdderTruthTable = (): TruthTable => ({
   inputColumns: ['A', 'B', 'Cin'],
   outputColumns: ['Cout', 'Sum'],
@@ -216,6 +222,7 @@ export const singleBitFullAdderTruthTable = (): TruthTable => ({
   ],
 });
 
+// Structural equality for verifying corrected tables against catalog or inferred expectations.
 export const truthTablesEqual = (left: TruthTable, right: TruthTable) => {
   if (left.inputColumns.join() !== right.inputColumns.join()) return false;
   if (left.outputColumns.join() !== right.outputColumns.join()) return false;
@@ -268,6 +275,7 @@ export const validateTruthTable = (table: TruthTable, source?: string): string[]
     }
   }
 
+  // Partial tables must not list the same input pattern twice.
   const seenInputRows = new Map<string, number>();
   table.rows.forEach((row, rowIndex) => {
     const inputKey = row.slice(0, table.inputColumns.length).join(',');
@@ -360,6 +368,7 @@ export const testCircuitAgainstTruthTable = (
       compiled.processParams.map((param) => param.qubitIndex),
     );
     const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
+    // Compare measured RETURNVALS bits; ancilla/workspace qubits are not part of the truth table.
     const actualOutputs = table.outputColumns.map((name) => readMeasuredBit(compiled.tokenMap, measured.measurements, name));
     const passed = expectedOutputs.every((expected, outputIndex) => {
       // Expected 'sp' is a don't-care marker for truth-table cells where either measured bit is acceptable.
@@ -383,6 +392,7 @@ export const testCircuitAgainstTruthTable = (
   };
 };
 
+// Upload/persistence format for user-provided .qpuio JSON bodies.
 export const parseTruthTableJson = (raw: string): TruthTable => {
   const parsed = JSON.parse(raw) as Partial<TruthTable>;
   if (!parsed.inputColumns || !parsed.outputColumns || !parsed.rows) {

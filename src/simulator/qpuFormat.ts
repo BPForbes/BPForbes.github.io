@@ -1,11 +1,14 @@
+// Protocol text editing and canvas serialization — separate from qpuAst compilation.
 import { CircuitGate, ParticleStartState } from './types';
 
 export type ProtocolParamEntry = { name: string; type: string };
+// MAIN-PROCESS names become filesystem-safe .qpucir stems for catalog entries and uploads.
 const sanitizeProcessName = (name: string) => {
   const cleaned = name.replace(/[^A-Za-z0-9_]+/g, ' ').trim().replace(/\s+(\w)/g, (_, letter: string) => letter.toUpperCase());
   return cleaned.replace(/^[^A-Za-z_]+/, '') || 'CircuitProcess';
 };
 
+// First MAIN-PROCESS line names the catalog entry and default .qpucir filename.
 export const extractMainProcessName = (source: string): string | null => {
   const line = source
     .replace(/\r\n/g, '\n')
@@ -20,6 +23,7 @@ export const qpucirFileNameForSource = (source: string, fallbackName = 'CurrentC
   return `${processName}.qpucir`;
 };
 
+// Strip $ aliases and :bit suffixes so SET/RETURNVALS tokens compare by register name.
 const stripProtocolRef = (token: string) => token.replace(/^\$/, '').split(':')[0];
 const isMainProcessLine = (line: string) => /^\s*MAIN-PROCESS\s+/i.test(line);
 const isParamsLine = (line: string) => /^\s*PARAMS:/i.test(line);
@@ -64,6 +68,7 @@ export const getProtocolParameterEntries = (source: string): ProtocolParamEntry[
   return parseProtocolParamParts(block.logicalLine.slice(block.logicalLine.indexOf(':') + 1));
 };
 
+// Auto-generated Q0/Q1 param names must not collide with existing identifiers in the source.
 const reservedProtocolNames = (source: string) => new Set(
   Array.from(source.matchAll(/\b[A-Za-z_][A-Za-z0-9_]*\b/g), ([name]) => name)
     .filter((name) => !['PARAMS', 'MAIN', 'PROCESS', 'state', 'int', 'float'].includes(name)),
@@ -79,6 +84,7 @@ const nextProtocolParamName = (reserved: Set<string>, index: number) => {
   }
 };
 
+// Rewrites the RETURNVALS block (including backslash continuations) when output columns change.
 export const updateProtocolReturnValTokens = (source: string, outputNames: string[]) => {
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
   const lines = source.replace(/\r\n/g, '\n').split('\n');
@@ -96,6 +102,7 @@ export const updateProtocolReturnValTokens = (source: string, outputNames: strin
   return lines.join(newline);
 };
 
+// Scaffold for a new Correction Lab process: PARAMS, CREATETOKEN outputs, zeroed SET lines, RETURNVALS.
 export const createBlankProtocol = (inputNames: string[], outputNames: string[]) => {
   const inputs = inputNames.length > 0 ? inputNames : ['A', 'B'];
   const outputs = outputNames.length > 0 ? outputNames : ['Y'];
@@ -110,6 +117,7 @@ export const createBlankProtocol = (inputNames: string[], outputNames: string[])
   ].join('\n');
 };
 
+// Ensure CREATETOKEN -I and SET 0p lines exist for every declared output column.
 const syncProtocolOutputRegisters = (source: string, outputColumns: string[]) => {
   const outputNames = outputColumns.map((name) => stripProtocolRef(name));
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
@@ -199,6 +207,7 @@ export const updateProtocolParameterCount = (source: string, paramCount: number)
   return lines.join(newline);
 };
 
+// Map a particle start state (0p/1p/sp) onto the SET line for a PARAMS register, inserting one if missing.
 export const updateProtocolStartStateSet = (source: string, paramName: string, startState: ParticleStartState) => {
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
   const lines = source.replace(/\r\n/g, '\n').split('\n');
@@ -228,6 +237,7 @@ export const updateProtocolStartStateSet = (source: string, paramName: string, s
   return nextLines.join(newline);
 };
 
+// Canvas wires use $Qn refs so serialized protocols do not clash with user-named PARAMS registers.
 const canvasParamRef = (qubit: number) => `$Q${qubit}`;
 
 // Canvas serialization emits a minimal MAIN-PROCESS that the parser/compiler can immediately load again.
@@ -254,6 +264,7 @@ export const serializeCircuitToQpuProtocol = (
     .slice()
     .sort((a, b) => a.step - b.step)
     .forEach((gate) => {
+      // RESET on the canvas becomes explicit SET 0p lines because the protocol has no RESET opcode.
       if (gate.type === 'RESET') {
         gate.targets.forEach((qubit) => {
           lines.push(`SET ${canvasParamRef(qubit)} 0p`);
