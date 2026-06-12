@@ -90,7 +90,7 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
   \item \textbf{Device fingerprint}: per-qubit $f$, $T_1$, $T_2$ property table.
   \item Runtime \textbf{checkpoints} (\texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}) and runtime fingerprints.
   \item Ket formatting for arbitrary register dimension (\texttt{format\_qubit\_state}).
-  \item Process \textbf{section hooks} (\texttt{GLOBALPROLOGUE}, \texttt{MAINPROLOGUE}, \texttt{CHILDPROLOGUE}, \texttt{CHILDRENWRAPUP}, \texttt{MAINWRAPUP}).
+  \item Process \textbf{section hooks} (\texttt{GLOBAL-PROLOG}, \texttt{MAIN-PROLOG}, \texttt{CHILD-PROLOG}, \texttt{CHILD-WRAPUP}, \texttt{MAIN-WRAPUP}, \texttt{SECTION-END}).
   \item \textbf{ClockFrame} stack for nested subprocess cycle numbering.
   \item Register helpers \texttt{embed\_registers}, \texttt{apply\_gate\_on\_register}, \texttt{rebuild\_global\_state} (reversed Kronecker order).
   \item \texttt{generate\_complete\_memory\_snapshot} for LLM/debug context.
@@ -1029,26 +1029,32 @@ Policy: \textbf{AGENTS.md} and \texttt{src/data/catalog/agentRules.ts} govern pr
 
 \subsection{Cycle interpreter: sections and clock}
 
-\textbf{Section hooks} partition a \texttt{.qpucir} process into lifecycle regions (Python \texttt{SECTION\_MAP} + \texttt{split\_sections} in \texttt{ast.py}). Lines before any hook belong to the implicit \texttt{body}. \texttt{ENDWRAPUP} returns parsing to \texttt{body}.
+\textbf{Section hooks} partition a \texttt{.qpucir} process into lifecycle regions. \textbf{Canonical markers} use hyphens (below). Legacy Python names (\texttt{GLOBALPROLOGUE:}, \ldots) are accepted as aliases during migration.
+
+\textbf{\texttt{SECTION-END:}} closes the current prolog or wrap-up block and returns the parser to the implicit \texttt{body} (replaces Python \texttt{ENDWRAPUP}). Nesting rule: every \texttt{*-PROLOG:} or \texttt{*-WRAPUP:} may be closed explicitly with \texttt{SECTION-END:}; if omitted, the next section hook or end-of-file implicitly closes the prior block.
+
+\textbf{Formatting:} leading tabs/spaces on gate and opcode lines are \textbf{optional} and ignored by the parser (visual indentation only); semantics depend on opcode text, not column position.
 
 \begin{center}
 \small
-\begin{tabular}{@{}p{3.4cm}p{10.8cm}@{}}
+\begin{tabular}{@{}p{3.2cm}p{3.2cm}p{8.2cm}@{}}
 \toprule
-Hook & Semantics (when this code runs) \\
+Canonical hook & Legacy alias & Semantics (when this code runs) \\
 \midrule
-\texttt{GLOBALPROLOGUE:} &
-\textbf{Global prolog} --- declarations and setup that apply to the whole compiled process \emph{before any gate work}: tokens, registers, constants, \texttt{COMPILEPROCESS} targets, shared \texttt{CREATETOKEN}/\texttt{SET} prep. ``Everything is declared'' here (pre-gate / pre-main). \\
-\texttt{MAINPROLOGUE:} &
-\textbf{Main prolog} --- run immediately \textbf{before the main process body} begins (after global prolog): finalize inputs, zero workspace, seed \texttt{0p}/\texttt{1p}/\texttt{sp}, initial \texttt{INCREASECYCLE} if needed. \\
-\texttt{CHILDPROLOGUE:} &
-\textbf{Children prolog} --- run \textbf{before each child process} when the parent \texttt{RUNCHILD}s: bind parent tokens, prepare child inputs, snapshot parent state if required. \\
-\texttt{CHILDRENWRAPUP:} &
-\textbf{Children wrap-up} --- run \textbf{after a child process completes}: accept \texttt{RETURNVALS}, merge updated tokens back to parent aliases, unlock child-scoped registers. \\
-\texttt{MAINWRAPUP:} &
-\textbf{Main wrap-up} --- run \textbf{after the main process body} finishes: final \texttt{MEASURE}, \texttt{RETURNVALS}, cleanup \texttt{FREE}, optional \texttt{SAVE\_STATE}. \\
-\texttt{(body)} &
-Gate/cycle program between hooks: the executable circuit proper. \\
+\texttt{GLOBAL-PROLOG:} & \texttt{GLOBALPROLOGUE:} &
+\textbf{Global prolog} --- declarations for the whole process \emph{before any gate work}: tokens, registers, \texttt{CREATETOKEN}/\texttt{SET} prep. Everything is declared here. \\
+\texttt{MAIN-PROLOG:} & \texttt{MAINPROLOGUE:} &
+\textbf{Main prolog} --- run \textbf{before the main body}: bind params, zero workspace, seed \texttt{0p}/\texttt{1p}/\texttt{sp}. \\
+\texttt{CHILD-PROLOG:} & \texttt{CHILDPROLOGUE:} &
+\textbf{Child prolog} --- run \textbf{before each \texttt{RUNCHILD}}: bind parent tokens, prepare child inputs. \\
+\texttt{CHILD-WRAPUP:} & \texttt{CHILDRENWRAPUP:} &
+\textbf{Child wrap-up} --- run \textbf{after a child completes}: \texttt{ACCEPTVALS}, merge tokens, unlock registers. \\
+\texttt{MAIN-WRAPUP:} & \texttt{MAINWRAPUP:} &
+\textbf{Main wrap-up} --- run \textbf{after the main body}: \texttt{MEASURE}, \texttt{RETURNVALS}, \texttt{FREE}, \texttt{SAVE\_STATE}. \\
+\texttt{SECTION-END:} & \texttt{ENDWRAPUP} &
+End of current prolog/wrap-up section; resume \texttt{body}. \\
+\texttt{(body)} & --- &
+Gate/cycle program between sections. \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -1062,42 +1068,66 @@ Gate/cycle program between hooks: the executable circuit proper. \\
     (child file still has its own \texttt{global}/\texttt{main} sections when compiled standalone).
 \end{itemize}
 
-\textbf{Example skeleton:}
+\textbf{Example skeleton} (optional indentation shown):
 \begin{lstlisting}[style=protocol]
 PARAMS: A:state B:state
 MAIN-PROCESS Example
 
-GLOBALPROLOGUE:
-CREATETOKEN -I Sum Cout
-SET Sum:0 0p
+GLOBAL-PROLOG:
+  CREATETOKEN -I Sum Cout
+  SET Sum:0 0p
+SECTION-END:
 
-MAINPROLOGUE:
-SET A:0 $A
-SET B:0 $B
+MAIN-PROLOG:
+  SET A:0 $A
+  SET B:0 $B
+SECTION-END:
 
-# --- body (gates) ---
-H -I A:0
-CNOT -I A:0 -O Sum:0
+# --- body (gates; tabs optional) ---
+  H -I A:0
+  CNOT -I A:0 -O Sum:0
 INCREASECYCLE
 
-CHILDPROLOGUE:
-SET Cin:0 0p
+CHILD-PROLOG:
+  SET Cin:0 0p
+SECTION-END:
 
-CHILDRENWRAPUP:
-ACCEPTVALS Sum
+CHILD-WRAPUP:
+  ACCEPTVALS Sum
+SECTION-END:
 
-MAINWRAPUP:
-MEASURE -I Sum
-RETURNVALS Sum
+MAIN-WRAPUP:
+  MEASURE -I Sum
+  RETURNVALS Sum
+SECTION-END:
 \end{lstlisting}
 
-The cycle compiler stores all six buckets per process; the circuit builder shows prologue/wrap-up lanes when \texttt{executionMode=cycle}.
+The cycle compiler stores section buckets per process; normalize markers before parse:
+\begin{lstlisting}[style=code]
+// compiler/sectionMarkers.ts (proposed)
+const SECTION_ALIASES: Record<string, ProcessSection> = {
+  'GLOBAL-PROLOG:': 'global_prologue',
+  'GLOBALPROLOGUE:': 'global_prologue',
+  'MAIN-PROLOG:': 'main_prologue',
+  'MAINPROLOGUE:': 'main_prologue',
+  'CHILD-PROLOG:': 'child_prologue',
+  'CHILDPROLOGUE:': 'child_prologue',
+  'CHILD-WRAPUP:': 'children_wrapup',
+  'CHILDRENWRAPUP:': 'children_wrapup',
+  'MAIN-WRAPUP:': 'main_wrapup',
+  'MAINWRAPUP:': 'main_wrapup',
+  'SECTION-END:': 'body',
+  'ENDWRAPUP': 'body',
+};
+// strip leading whitespace from each line before tokenizing
+\end{lstlisting}
+The circuit builder shows prologue/wrap-up lanes when \texttt{executionMode=cycle}.
 
 \textbf{ClockFrame stack:} \texttt{type ClockFrame = \{ name, base, local \}}; absolute cycle $c=\mathrm{base}+\mathrm{local}$. Push on \texttt{RUNCHILD}, pop on return. \texttt{hilbert.output(r,c,\cdot)} and $M_c$ always use absolute $c$.
 
 \subsection{Protocol surface (syntax + opcodes)}
 
-\textbf{Syntax} (implement in \texttt{readProtocolLines}, verified partial): \texttt{\textbackslash} line continuation, \texttt{\#} and \texttt{/* */} comments.
+\textbf{Syntax} (implement in \texttt{readProtocolLines}, verified partial): \texttt{\textbackslash} line continuation, \texttt{\#} and \texttt{/* */} comments, optional leading whitespace (strip before parse), canonical section hooks + \texttt{SECTION-END:} (legacy aliases accepted).
 
 \textbf{\texttt{FREE -I <k:c ...>}:} remove $M_c$ entries for listed keys at current cycle; clear \texttt{customStates} token if unlocked; prune matching $\HS$ keys; do \textbf{not} shrink global \texttt{StateVector} width (wire compaction is separate).
 
@@ -1147,7 +1177,7 @@ Expose Module Lab / toolbar actions: \texttt{BB84}, \texttt{SIGNFPRINT} (sign ru
 4 & \texttt{HilbertSpace.copy} & Spec only & Implement \texttt{copy()} for checkpoints \\
 5 & \texttt{bb84.py} & None & \texttt{bb84Demo.ts} + UI command \\
 6 & \texttt{xmss.py} & None & \texttt{xmssDemo.ts} + \texttt{SIGNFPRINT} \\
-7 & Section hooks & None & \texttt{SECTION\_MAP} parser in cycle compiler \\
+7 & Section hooks & None & \texttt{splitSections}: hyphenated hooks + \texttt{SECTION-END:} \\
 8 & \texttt{ClockFrame} & None & Stack in \texttt{CycleSimulator} \\
 9 & Protocol syntax & Partial & Document + test all three comment forms \\
 10 & \texttt{embed\_registers} & None & \texttt{RegisterBank.embedRegisters} \\
