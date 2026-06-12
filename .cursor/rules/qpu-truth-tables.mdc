@@ -14,3 +14,4 @@ alwaysApply: true
 - Canonical tables live in `src/data/processes/*.qpuio` and are enforced at runtime via `src/data/protectedQpuio.ts`.
 - To change expectations for experiments, register a new uploaded/corrected catalog process instead of mutating bundled metadata.
 - Follow `AGENTS.md` for Correction Lab LLM behavior and child-process compatibility requirements.
+- Follow `CLAUDE.md` for Claude-specific workflow and repository conventions.

@@ -14,6 +14,10 @@ reviews:
       instructions: |
         Keep agent governance rules in sync with protectedQpuio behavior and
         Correction Lab LLM prompts.
+    - path: "CLAUDE.md"
+      instructions: |
+        Keep Claude-specific workflow guidance in sync with AGENTS.md, test
+        commands, and catalog/protected-asset conventions.
   auto_review:
     enabled: true
     drafts: true
