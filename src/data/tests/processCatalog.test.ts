@@ -7,8 +7,8 @@ import {
   registerCatalogTruthTable,
   resetProcessCatalogForTests,
   resolveCatalogEntry,
-} from '../processCatalog';
-import { singleBitFullAdderTruthTable } from '../../simulator/truthTable';
+} from '../catalog/processCatalog';
+import { singleBitFullAdderTruthTable } from '../../simulator/compiler/truthTable';
 
 describe('processCatalog', () => {
   afterEach(() => {

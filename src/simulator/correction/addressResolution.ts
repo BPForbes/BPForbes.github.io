@@ -1,4 +1,4 @@
-import type { NlCorrectionContext } from './llm/intentTypes';
+import type { NlCorrectionContext } from '../llm/intentTypes';
 const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0].trim();
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

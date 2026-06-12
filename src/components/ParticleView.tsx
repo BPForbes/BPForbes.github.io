@@ -1,6 +1,6 @@
 import { getGateDefinition } from '../simulator/gates/registry';
 import { resolvedArity } from '../simulator/gates/arity';
-import type { OperationTransition, ParticleSnapshot } from '../simulator/particleTracking';
+import type { OperationTransition, ParticleSnapshot } from '../simulator/physics/particleTracking';
 import { CircuitGate, MeasurementMap, ParticleStartState } from '../simulator/types';
 type ParticleViewProps = {
   qubitCount: number;

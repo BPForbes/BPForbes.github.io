@@ -1,7 +1,7 @@
 // Correct descendant processes leaf-first so parent RUNCHILD calls see compatible child sources.
 import { correctCircuit, type CorrectionGuidance } from './circuitCorrector';
-import type { TruthTable, TruthTableTestResult } from './truthTable';
-import { testCircuitAgainstTruthTable } from './truthTable';
+import type { TruthTable, TruthTableTestResult } from '../compiler/truthTable';
+import { testCircuitAgainstTruthTable } from '../compiler/truthTable';
 
 export type ChildCorrectionResult = {
   processName: string;

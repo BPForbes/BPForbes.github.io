@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { checkGateArity, formatGateArityViolation } from '../arity';
-import { parseCommand } from '../../qpuAst';
+import { parseCommand } from '../../compiler/qpuAst';
 describe('gate arity validation', () => {
   it('rejects too many -I parameters for CNOT', () => {
     const violation = checkGateArity('CNOT', 2, 1);

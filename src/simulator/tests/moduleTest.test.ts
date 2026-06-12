@@ -11,7 +11,7 @@ import {
   testCircuitAgainstTruthTable,
   truthTablesEqual,
   validateTruthTable,
-} from '../truthTable';
+} from '../compiler/truthTable';
 
 const readProcess = (fileName: string) => readFileSync(new URL(`../../data/processes/${fileName}`, import.meta.url), 'utf8');
 

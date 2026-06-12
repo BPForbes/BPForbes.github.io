@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseCorrectionIntent } from '../correctionIntentParser';
+import { parseCorrectionIntent } from '../correction/correctionIntentParser';
 const context = {
   source: 'PARAMS: A:state B:state Cin:state',
   truthTable: null,

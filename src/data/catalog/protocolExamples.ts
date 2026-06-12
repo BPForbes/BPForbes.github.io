@@ -4,18 +4,18 @@
  * The browser imports these raw files through Vite so the examples used by the
  * UI, simulator, and downloads remain identical to the checked-in fixtures.
  */
-import fourBitFullAdderQpucir from './processes/four-bit-full-adder.qpucir?raw';
-import fourBitFullAdderQpuio from './processes/four-bit-full-adder.qpuio?raw';
-import phaseDemoQpucir from './processes/phase-demo.qpucir?raw';
-import phaseDemoQpuio from './processes/phase-demo.qpuio?raw';
-import singleBitFullAdderQpuio from './processes/single-bit-full-adder.qpuio?raw';
-import singleBitFullAdderQpucir from './processes/single-bit-full-adder.qpucir?raw';
-import twoBitFullAdderQpucir from './processes/two-bit-full-adder.qpucir?raw';
-import twoBitFullAdderQpuio from './processes/two-bit-full-adder.qpuio?raw';
-import { parseQpuioPayload } from './qpuioFile';
-import type { CircuitGate } from '../simulator/types';
-import { extractMainProcessName } from '../simulator/qpuFormat';
-import type { TruthTable } from '../simulator/truthTable';
+import fourBitFullAdderQpucir from '../processes/four-bit-full-adder.qpucir?raw';
+import fourBitFullAdderQpuio from '../processes/four-bit-full-adder.qpuio?raw';
+import phaseDemoQpucir from '../processes/phase-demo.qpucir?raw';
+import phaseDemoQpuio from '../processes/phase-demo.qpuio?raw';
+import singleBitFullAdderQpuio from '../processes/single-bit-full-adder.qpuio?raw';
+import singleBitFullAdderQpucir from '../processes/single-bit-full-adder.qpucir?raw';
+import twoBitFullAdderQpucir from '../processes/two-bit-full-adder.qpucir?raw';
+import twoBitFullAdderQpuio from '../processes/two-bit-full-adder.qpuio?raw';
+import { parseQpuioPayload } from '../formats/qpuioFile';
+import type { CircuitGate } from '../../simulator/types';
+import { extractMainProcessName } from '../../simulator/compiler/qpuFormat';
+import type { TruthTable } from '../../simulator/compiler/truthTable';
 
 export type QpucirPayload = {
   format: 'qpucir';

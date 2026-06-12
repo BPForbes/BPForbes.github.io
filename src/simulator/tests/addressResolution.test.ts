@@ -4,7 +4,7 @@ import {
   formatAddressLabel,
   getAddressCandidates,
   resolveWireAddress,
-} from '../addressResolution';
+} from '../correction/addressResolution';
 import type { NlCorrectionContext } from '../llm/intentTypes';
 
 const singleBitSource = readFileSync(new URL('../../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');

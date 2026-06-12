@@ -1,8 +1,8 @@
 // Truth-table contract between .qpuio metadata, simulator runs, and correction tests.
 import { compileQpuProtocol, getReturnValTokens, parseProtocol } from './qpuAst';
 import { getProtocolParameterEntries } from './qpuFormat';
-import { measureAll, runCircuit } from './engine';
-import type { ParticleStartState } from './types';
+import { measureAll, runCircuit } from '../engine';
+import type { ParticleStartState } from '../types';
 
 export type TruthCellValue = '0p' | '1p' | 'sp';
 

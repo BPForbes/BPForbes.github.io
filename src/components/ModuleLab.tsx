@@ -12,13 +12,13 @@ import {
   persistCatalogArtifacts,
   registerCatalogProcess,
   registerCatalogTruthTable,
-} from '../data/processCatalog';
-import type { ProcessCatalogOrigin } from '../data/processCatalog';
+} from '../data/catalog/processCatalog';
+import type { ProcessCatalogOrigin } from '../data/catalog/processCatalog';
 import {
   enforceProtectedTruthTable,
   isProtectedQpuioProcess,
   warnProtectedTruthTable,
-} from '../data/protectedQpuio';
+} from '../data/catalog/protectedQpuio';
 import {
   companionQpucirFileName,
   isLooseQpucirUpload,
@@ -27,7 +27,7 @@ import {
   processStemFromQpuioFileName,
   QPU_FILE_UPLOAD_ACCEPT,
   validateUploadFileName,
-} from '../data/qpuFileNames';
+} from '../data/formats/qpuFileNames';
 import {
   companionQpuioFileName,
   downloadQpuioContents,
@@ -35,13 +35,13 @@ import {
   qpuioFileNameForProcess,
   qpuioTxtFileNameForProcess,
   serializeQpuioText,
-} from '../data/qpuioFile';
-import { downloadQpucirSource, downloadQpucirTxtSource, parseQpucirPayload } from '../data/qpucirFile';
+} from '../data/formats/qpuioFile';
+import { downloadQpucirSource, downloadQpucirTxtSource, parseQpucirPayload } from '../data/formats/qpucirFile';
 import {
   formatClarificationRetry,
   resolveClarificationResponse,
-} from '../simulator/clarification';
-import { parseCorrectionIntent } from '../simulator/correctionIntentParser';
+} from '../simulator/correction/clarification';
+import { parseCorrectionIntent } from '../simulator/correction/correctionIntentParser';
 import type { ModelCorrectionIntent, PendingClarification } from '../simulator/llm/intentTypes';
 import {
   BROWSER_MODEL_OPTIONS,
@@ -50,8 +50,8 @@ import {
   type LlmSettings,
 } from '../simulator/llm/config';
 import { getCachedBrowserModelId } from '../simulator/llm/config';
-import { hasWebGpu } from '../simulator/webGpu';
-import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/qpuFormat';
+import { hasWebGpu } from '../simulator/physics/webGpu';
+import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/compiler/qpuFormat';
 import {
   CorrectionGuidance,
   createEmptyTruthTable,

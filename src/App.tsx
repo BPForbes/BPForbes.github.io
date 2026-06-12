@@ -1,29 +1,29 @@
 import { ChangeEvent, useMemo, useState } from 'react';
 import { CircuitCanvas } from './components/CircuitCanvas';
-import { CustomGatePanel } from './components/CustomGatePanel';
-import { GatePalette } from './components/GatePalette';
+import { CustomGatePanel } from './components/gate/CustomGatePanel';
+import { GatePalette } from './components/gate/GatePalette';
 import { ModuleLab } from './components/ModuleLab';
 import { OutputPanel } from './components/OutputPanel';
 import { ParticleView } from './components/ParticleView';
 import { examples } from './data/examples';
-import { registerCatalogProcess, type ProcessCatalogOrigin } from './data/processCatalog';
+import { registerCatalogProcess, type ProcessCatalogOrigin } from './data/catalog/processCatalog';
 import {
   isLooseQpucirUpload,
   isQpuioFileName,
   isQpucirFileName,
   QPU_FILE_UPLOAD_ACCEPT,
   validateUploadFileName,
-} from './data/qpuFileNames';
-import { companionQpuioFileName, parseQpuioPayload } from './data/qpuioFile';
-import { isProtectedQpuioProcess, warnProtectedTruthTable } from './data/protectedQpuio';
-import { downloadQpucirContents, downloadQpucirTxtSource, parseQpucirPayload } from './data/qpucirFile';
-import { protocolExamples, protocolLibrary } from './data/protocolExamples';
-import type { ConfiguredQpucirProcess } from './data/protocolExamples';
+} from './data/formats/qpuFileNames';
+import { companionQpuioFileName, parseQpuioPayload } from './data/formats/qpuioFile';
+import { isProtectedQpuioProcess, warnProtectedTruthTable } from './data/catalog/protectedQpuio';
+import { downloadQpucirContents, downloadQpucirTxtSource, parseQpucirPayload } from './data/formats/qpucirFile';
+import { protocolExamples, protocolLibrary } from './data/catalog/protocolExamples';
+import type { ConfiguredQpucirProcess } from './data/catalog/protocolExamples';
 import { createInitialState, measureAll, measureQubit, projectStateOntoQubits, resolveStateQubitCount, runCircuit, stepCircuitGate } from './simulator/engine';
-import { compileQpuProtocol, ProcessParam, ReturnValue, supportedQpuOperations, visibleCircuitGates } from './simulator/qpuAst';
-import { extractMainProcessName, getProtocolParameterEntries, qpucirFileNameForSource, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from './simulator/qpuFormat';
+import { compileQpuProtocol, ProcessParam, ReturnValue, supportedQpuOperations, visibleCircuitGates } from './simulator/compiler/qpuAst';
+import { extractMainProcessName, getProtocolParameterEntries, qpucirFileNameForSource, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from './simulator/compiler/qpuFormat';
 import { controlsForGateType, getGateDefinition, paletteGateIds } from './simulator/gates/registry';
-import type { OperationTransition, ParticleSnapshot } from './simulator/particleTracking';
+import type { OperationTransition, ParticleSnapshot } from './simulator/physics/particleTracking';
 import { CircuitGate, GateType, MeasurementMap, ParticleStartState } from './simulator/types';
 import { Complex } from './simulator/complex';
 import './styles.css';

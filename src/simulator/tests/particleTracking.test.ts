@@ -9,7 +9,7 @@ import {
   particleDelta,
   snapshotParticle,
   sphericalFromBlochCartesian,
-} from '../particleTracking';
+} from '../physics/particleTracking';
 import type { CircuitGate } from '../types';
 
 const gate = (type: string, step: number, targets: number[], controls: number[] = []): CircuitGate => ({

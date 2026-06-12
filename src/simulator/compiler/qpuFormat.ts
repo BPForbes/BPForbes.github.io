@@ -1,5 +1,5 @@
 // Protocol text editing and canvas serialization — separate from qpuAst compilation.
-import { CircuitGate, ParticleStartState } from './types';
+import { CircuitGate, ParticleStartState } from '../types';
 
 export type ProtocolParamEntry = { name: string; type: string };
 // MAIN-PROCESS names become filesystem-safe .qpucir stems for catalog entries and uploads.

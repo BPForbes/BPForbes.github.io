@@ -1,4 +1,4 @@
-import { compileQpuProtocol } from '../qpuAst';
+import { compileQpuProtocol } from '../compiler/qpuAst';
 import type { CircuitGate, ExecutionResult, MeasurementMap } from '../types';
 import type { GateDefinition } from './types';
 import { gateIoArity } from './types';

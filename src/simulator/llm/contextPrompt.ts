@@ -1,9 +1,9 @@
 import { buildAgentRulesPrompt } from '../../data/agentRules';
-import { formatCatalogForPrompt, formatTestFailuresForPrompt } from '../../data/processCatalog';
-import { isProtectedQpuioProcess } from '../../data/protectedQpuio';
-import { extractMainProcessName } from '../qpuFormat';
+import { formatCatalogForPrompt, formatTestFailuresForPrompt } from '../../data/catalog/processCatalog';
+import { isProtectedQpuioProcess } from '../../data/catalog/protectedQpuio';
+import { extractMainProcessName } from '../compiler/qpuFormat';
 import type { NlCorrectionContext } from './intentTypes';
-import { describeTruthTableDimensions, formatTruthTableRowSummary } from '../truthTable';
+import { describeTruthTableDimensions, formatTruthTableRowSummary } from '../compiler/truthTable';
 
 // Prompt sections mirror the correction UI state: active protocol, protections, catalog, and latest test failures.
 export const buildNlContextSections = (context: NlCorrectionContext) => {

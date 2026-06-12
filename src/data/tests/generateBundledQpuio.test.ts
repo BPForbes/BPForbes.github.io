@@ -4,8 +4,8 @@ import {
   fourBitFullAdderTruthTable,
   phaseDemoTruthTable,
   twoBitFullAdderTruthTable,
-} from '../bundledTruthTables';
-import { serializeQpuioText } from '../qpuioFile';
+} from '../catalog/bundledTruthTables';
+import { serializeQpuioText } from '../formats/qpuioFile';
 
 const readFixture = (fileName: string) => readFileSync(new URL(`../processes/${fileName}`, import.meta.url), 'utf8');
 

@@ -3,7 +3,7 @@ import {
   singleBitFullAdderTruthTable,
   testCircuitAgainstTruthTable,
   truthTablesEqual,
-} from './truthTable';
+} from '../compiler/truthTable';
 
 export type GatePreference = 'CNOT' | 'CCNOT' | 'X' | 'H' | 'NOT' | 'AND' | 'OR' | 'XOR';
 
@@ -308,4 +308,4 @@ const extractProcessNameFromSource = (source: string) => {
   return line?.split(/\s+/)[1] ?? 'CorrectedCircuit';
 };
 
-export { fillTruthTableFromCircuit as inferTruthTableWithOutputs } from './truthTable';
+export { fillTruthTableFromCircuit as inferTruthTableWithOutputs } from '../compiler/truthTable';

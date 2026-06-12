@@ -1,9 +1,9 @@
-import { findCatalogCandidates } from '../../data/processCatalog';
-import { formatAddressLabel, resolveWireAddress, resolveWireAddressOr } from '../addressResolution';
-import { buildClarificationIntent } from '../clarification';
-import type { GatePreference, GuidedGateSpec } from '../circuitCorrector';
+import { findCatalogCandidates } from '../../data/catalog/processCatalog';
+import { formatAddressLabel, resolveWireAddress, resolveWireAddressOr } from '../correction/addressResolution';
+import { buildClarificationIntent } from '../correction/clarification';
+import type { GatePreference, GuidedGateSpec } from '../correction/circuitCorrector';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './intentTypes';
-import { isTruthCellValue, type TruthCellValue, type TruthTable } from '../truthTable';
+import { isTruthCellValue, type TruthCellValue, type TruthTable } from '../compiler/truthTable';
 
 export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './intentTypes';
 

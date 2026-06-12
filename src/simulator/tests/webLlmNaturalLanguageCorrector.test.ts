@@ -6,7 +6,7 @@ import {
   resetWebLlmEngineForTests,
 } from '../llm/webLlmNaturalLanguageCorrector';
 import { getCachedBrowserModelId } from '../llm/config';
-import { hasWebGpu } from '../webGpu';
+import { hasWebGpu } from '../physics/webGpu';
 
 const context = {
   source: 'PARAMS: A:state B:state Cin:state',

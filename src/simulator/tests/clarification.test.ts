@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   formatClarificationPrompt,
   resolveClarificationResponse,
-} from '../clarification';
+} from '../correction/clarification';
 
 describe('clarification helpers', () => {
   const pending = {
