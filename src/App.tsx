@@ -166,6 +166,7 @@ function App() {
   const chooseDistinctQubit = (avoid: number[], wireCount = simulationQubitCount): number | undefined =>
     Array.from({ length: wireCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));
 
+  // Workbench placement auto-repairs conflicting control selections instead of rejecting common target/control overlaps.
   const workbenchControlsForGate = (type: GateType, target: number) => {
     const definition = getGateDefinition(type);
     if (!definition || definition.controlKind === 'none' || definition.controlKind === 'swap') return undefined;
@@ -363,6 +364,7 @@ function App() {
     setLog((current) => [...current, ...result.log.filter((entry) => !entry.startsWith('RESET') && !entry.startsWith('Cycle workspace prepared'))]);
   };
 
+  // The UI measures display qubits, then maps that choice back onto compiled PARAM qubits when needed.
   const measureSelectedQubit = () => {
     if (measurements[selectedTarget] !== undefined) {
       setLog((current) => [...current, `q${selectedTarget} is already measured as ${measurements[selectedTarget]}.`]);

@@ -8,12 +8,14 @@ import { describeTruthTableDimensions, formatTruthTableRowSummary } from '../tru
 // Prompt sections mirror the correction UI state: active protocol, protections, catalog, and latest test failures.
 export const buildNlContextSections = (context: NlCorrectionContext) => {
   const activeName = context.activeProcessName ?? extractMainProcessName(context.source) ?? 'UntitledCircuit';
+  // Catalog and test summaries are compacted to keep small browser models within their context window.
   const catalog = context.processCatalog?.length
     ? formatCatalogForPrompt(context.processCatalog, { compact: true })
     : formatCatalogForPrompt(undefined, { compact: true });
   const failures = formatTestFailuresForPrompt(context.lastTestResult ?? null);
   const libraryNames = context.libraryProcessNames?.join(', ') || '(catalog processes available for RUNCHILD)';
 
+  // Protected-table status is repeated in the prompt because model intents may request persistence actions.
   const protectionNote = isProtectedQpuioProcess(activeName)
     ? `Active process truth table: PROTECTED site metadata (edits are reverted).`
     : 'Active process truth table: editable.';

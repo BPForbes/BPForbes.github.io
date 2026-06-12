@@ -51,6 +51,7 @@ const formatRef = (name: string, cycle = 0) => {
   return name.startsWith('$') ? `${name}:${cycle}` : `$${stripRef(name)}:${cycle}`;
 };
 
+// The full-adder table is common enough to merit a readable canonical repair before generic synthesis.
 const buildFullAdderSource = (processName: string, inputs: string[], outputs: string[]) => {
   const [a, b, cin] = inputs;
   const [cout, sum] = outputs;
@@ -196,6 +197,7 @@ export const synthesizeProtocolFromTruthTable = (
     ));
   });
 
+  // Synthesized protocols reset inputs/outputs, apply gates, then measure only declared outputs for table comparison.
   const cycleSets = table.inputColumns.map((name) => `SET ${formatRef(name, 0)} 0p`);
   const outputResets = table.outputColumns.map((name) => `SET ${name}:0 0p`);
   const measures = table.outputColumns.map((name) => `MEASURE -I ${name}:0`);
@@ -219,6 +221,7 @@ export const synthesizeProtocolFromTruthTable = (
   ].join('\n');
 };
 
+// Guided gates are inserted before measurement/returns so the user's requested edit affects observable outputs.
 const insertGuidedGates = (source: string, gates: GuidedGateSpec[]) => {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const anchor = lines.findIndex((line) => /^\s*(MEASURE|RETURNVALS)\b/i.test(line));

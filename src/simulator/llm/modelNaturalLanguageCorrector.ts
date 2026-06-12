@@ -17,6 +17,7 @@ function toStrictBoolean(value: unknown): boolean {
   return false;
 }
 
+// The prompt repeats the UI context and allowed schema so remote models act as parsers, not free-form editors.
 const buildPrompt = (message: string, context: NlCorrectionContext): string => `
 You are a strict JSON intent parser for a QPU circuit correction tool.
 Return JSON only.

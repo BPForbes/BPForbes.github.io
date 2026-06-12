@@ -7,6 +7,7 @@ import { isTruthCellValue, type TruthCellValue, type TruthTable } from '../truth
 
 export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './intentTypes';
 
+// Aliases collapse prose and protocol spellings into the small gate vocabulary the corrector can synthesize safely.
 const GATE_ALIASES: Record<string, GatePreference> = {
   cnot: 'CNOT',
   controllednot: 'CNOT',
@@ -167,6 +168,7 @@ const extractGateSpecs = (message: string, context: NlCorrectionContext): Guided
   return specs;
 };
 
+// Preferences bias later synthesis without changing the circuit immediately.
 const extractPreferredGates = (message: string): GatePreference[] => {
   const preferred: GatePreference[] = [];
   const preferPattern = /prefer(?:red|ring)?\s+([\w\s,-]+?)(?:\s+gates?)?(?:\.|$)/i;
@@ -181,6 +183,7 @@ const extractPreferredGates = (message: string): GatePreference[] => {
   return preferred;
 };
 
+// Catalog open requests are parsed separately from correction requests so loading examples does not trigger edits.
 const parseCatalogOpenTarget = (message: string) => {
   const match = message.match(
     /\b(?:load|open|use)\s+(?:the\s+)?(?<target>[\w.-]+(?:\.qpucir)?)\b/i,
@@ -337,6 +340,7 @@ const detectGateAddressClarification = (message: string, context: NlCorrectionCo
   return null;
 };
 
+// Partial gate commands with multiple possible outputs become clarification prompts instead of ambiguous guided edits.
 const detectPartialGateCommand = (message: string, context: NlCorrectionContext) => {
   if (context.outputColumns.length <= 1) return null;
   const normalized = message.replace(/\s+/g, ' ').trim();

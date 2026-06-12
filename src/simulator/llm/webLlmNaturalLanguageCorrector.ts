@@ -18,6 +18,7 @@ export function isBrowserModelReady(modelId: string = DEFAULT_BROWSER_MODEL): bo
   return (enginePromise !== null && loadedModelId === modelId) || getCachedBrowserModelId() === modelId;
 }
 
+// Preload is an explicit user action because first-run browser model downloads are large.
 export async function preloadBrowserModel(
   modelId: string = DEFAULT_BROWSER_MODEL,
   onProgress?: (text: string) => void,
@@ -28,6 +29,7 @@ export async function preloadBrowserModel(
   return true;
 }
 
+// Clearing resets both the in-memory engine and WebLLM's persisted model files.
 export async function clearBrowserModel(
   modelId: string = DEFAULT_BROWSER_MODEL,
   onProgress?: (text: string) => void,
@@ -70,6 +72,7 @@ export async function parseNaturalLanguageWithWebLlm(
 }
 
 async function getEngine(modelId: string, onProgress?: (text: string) => void): Promise<MLCEngine> {
+  // Switching models discards the singleton promise so progress and cache state match the selected model.
   if (enginePromise && loadedModelId !== modelId) {
     enginePromise = null;
     loadedModelId = null;
@@ -97,6 +100,7 @@ async function getEngine(modelId: string, onProgress?: (text: string) => void): 
   return enginePromise;
 }
 
+// Browser and Ollama prompts share schema expectations so both backends feed the same sanitizer.
 function buildSystemPrompt(context: NlCorrectionContext): string {
   return `
 The system converts natural-language QPU circuit correction requests into strict JSON.

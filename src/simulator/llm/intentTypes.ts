@@ -42,6 +42,7 @@ export type ModelCorrectionIntent = {
   clarification?: PendingClarification;
 };
 
+// Context is a serializable snapshot of UI/compiler state; executors decide how to apply any returned intent.
 export type NlCorrectionContext = {
   source: string;
   truthTable: TruthTable | null;

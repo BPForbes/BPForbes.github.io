@@ -13,6 +13,7 @@ export const DEFAULT_BROWSER_MODEL = import.meta.env.VITE_WEBLLM_MODEL ?? 'Llama
 const DEFAULT_OLLAMA_URL = import.meta.env.VITE_OLLAMA_URL ?? 'http://localhost:11434/api/generate';
 const DEFAULT_OLLAMA_MODEL = import.meta.env.VITE_OLLAMA_MODEL ?? 'llama3.2:1b';
 
+// Browser choices stay small/quantized so users can trade download size against parsing quality.
 export const BROWSER_MODEL_OPTIONS = [
   'SmolLM2-360M-Instruct-q4f16_1-MLC',
   'Llama-3.2-1B-Instruct-q4f16_1-MLC',
@@ -68,6 +69,7 @@ export const loadLlmSettings = (): LlmSettings => {
   }
 };
 
+// This flag records the selected cached model; the model bytes themselves remain in WebLLM's cache.
 const BROWSER_CACHE_KEY = 'qpu-browser-model-cached';
 
 export const getCachedBrowserModelId = (): string | null => {
@@ -85,6 +87,7 @@ export const clearBrowserModelCache = () => {
   sessionStorage.removeItem(BROWSER_CACHE_KEY);
 };
 
+// Settings persistence stores backend preferences only, not prompts or user circuit content.
 export const saveLlmSettings = (settings: LlmSettings) => {
   if (typeof localStorage === 'undefined') return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
