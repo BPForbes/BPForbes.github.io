@@ -1,4 +1,4 @@
-// QPU protocol compiler: parse PARAMS/MAIN-PROCESS source into a flat CircuitGate list and I/O wire map.
+// QPU protocol compiler: child processes and cycles expand into flat gates so the simulator and UI share one execution model.
 import { assertGateArity } from './gates/arity';
 import { astDerivedGateIds, astPrimitiveGateIds } from './gates/metadata';
 import { CircuitGate, GateType, QpuOperation } from './types';
@@ -98,7 +98,7 @@ const parseRationalRotation = (value: string) => {
   return numerator / denominator;
 };
 
-// PHASE rotations accept degrees (Nd), pi multiples (pi, 2*pi/3), or plain rationals in radians.
+// Authors write PHASE angles in degrees or pi fractions in protocol text; the compiler normalizes to simulator radians.
 const parseRotationParameter = (value: string, gate: string) => {
   const normalized = value.trim().toLowerCase();
 
@@ -140,7 +140,7 @@ export const readProtocolLines = (source: string): string[] => {
   });
   if (buffer.trim()) joined.push(buffer);
 
-  // Block comments may span lines; line comments use # and are stripped per physical line.
+  // Annotated protocol files must still round-trip; comment stripping runs after continuation joining so gate rows stay intact.
   let inBlockComment = false;
   return joined
     .map((raw) => {
@@ -179,7 +179,7 @@ export const parseParameters = (line: string): ProtocolProcess['params'] => {
     });
 };
 
-// Gate operands live between -I/-O flags; the next flag token ends the current operand list.
+// Wrong -I/-O spans would mis-wire controls onto outputs, so each flag list ends at the next flag token.
 const splitFlagArgs = (tokens: string[], flag: '-I' | '-O') => {
   const upper = tokens.map((token) => token.toUpperCase());
   const start = upper.indexOf(flag);
@@ -434,7 +434,7 @@ const executeProcess = (
     }
 
     if (command.op === 'CREATETOKEN') {
-      // Reserve simulator wires for internal registers before gates reference them.
+      // CREATETOKEN must claim wires up front so later gate rows resolve stable indices during the same compile pass.
       command.inputs.forEach((token) => {
         ensureQubit(state, scopedName(frame, token, parentFrame));
       });
@@ -501,7 +501,7 @@ const executeProcess = (
     }
 
     if (command.op === 'MEASURE') {
-      // Bare MEASURE (no -I) collapses every allocated wire in the current process scope.
+      // Protocols omit -I on MEASURE to collapse all wires before RETURNVALS reads classical bits.
       if (command.inputs.length) {
         command.inputs.forEach((token) => emitGate(state, 'MEASURE', [resolveInputQubit(state, frame, token, parentFrame)], [], line));
       } else {
