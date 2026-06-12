@@ -1,4 +1,4 @@
-import { getGateDefinition, gateLabels } from '../simulator/gates/registry';
+import { getGateDefinition } from '../simulator/gates/registry';
 import { GateType } from '../simulator/types';
 
 type GateBlockProps = {
@@ -16,8 +16,7 @@ const fallbackLabels: Record<string, string> = {
 
 export function GateBlock({ type, draggable = false, selected = false, compact = false, onClick, onDragStart }: GateBlockProps) {
   const definition = getGateDefinition(type);
-  const labels = gateLabels();
-  const label = definition?.label ?? labels[type] ?? fallbackLabels[type] ?? type;
+  const label = definition?.label ?? fallbackLabels[type] ?? type;
   const cssClass = definition?.cssClass ?? `gate-${String(type).toLowerCase()}`;
   const customStyle = definition?.color ? { background: definition.color } : undefined;
 
