@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseNaturalLanguageWithModel, sanitizeIntent } from '../llm/modelNaturalLanguageCorrector';
+import { parseNaturalLanguageWithModel, sanitizeIntent } from '../modelNaturalLanguageCorrector';
 const context = {
   source: 'PARAMS: A:state B:state Cin:state',
   truthTable: null,
