@@ -250,6 +250,7 @@ function App() {
     setParticleTransitions([]);
   };
 
+  // Gate placement always appends at the next available step so re-ordering is explicit via drag, not implicit.
   const addGate = (type: GateType, target: number, controls?: number[]) => {
     const step = gates.length === 0 ? 0 : Math.max(...gates.map((gate) => gate.step)) + 1;
     const swapPartner = getGateDefinition(type)?.controlKind === 'swap'
@@ -267,6 +268,7 @@ function App() {
     resetRuntime();
   };
 
+  // Steps are renumbered after removal so the canvas column layout stays contiguous.
   const removeGate = (gateId: string) => {
     const nextGates = gates.filter((gate) => gate.id !== gateId).map((gate, step) => ({ ...gate, step }));
     setGates(nextGates);
@@ -334,6 +336,7 @@ function App() {
     resetRuntime(simulationQubitCount, `Set ${resolvedParamName} start state to ${value}.`, nextStartStates);
   };
 
+  // Full site reset clears catalog state, protocol text, and UI selections back to the default builder configuration.
   const resetSite = () => {
     setQubitCount(QUBIT_COUNT);
     setSimulationQubitCount(QUBIT_COUNT);
@@ -357,6 +360,7 @@ function App() {
     resetRuntime(QUBIT_COUNT, undefined, defaultStartStates);
   };
 
+  // Bulk measurement collapses all unmeasured qubits at once; individual qubit measure is handled by measureSelectedQubit.
   const measure = () => {
     const result = measureAll(state, simulationQubitCount, measurements);
     setState(result.state);
@@ -544,6 +548,7 @@ function App() {
     }
   };
 
+  // Compile wraps compileProtocolSource so the UI button does not surface raw errors that are already in the log.
   const compileProtocol = () => {
     try {
       compileProtocolSource(protocolSource);

@@ -32,6 +32,7 @@ export type CircuitCorrectionResult = {
 
 const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0];
 
+// Minterm rows are the input combinations where a given output column is '1p'; synthesis gates target exactly these.
 const mintermInputRows = (
   outputColumnIndex: number,
   rows: TruthTable['rows'],
@@ -40,6 +41,7 @@ const mintermInputRows = (
   .filter((row) => row[inputWidth + outputColumnIndex] === '1p')
   .map((row) => row.slice(0, inputWidth));
 
+// Controls pair each input name with a boolean so appendMintermGate can flip zero-valued inputs before the gate fires.
 const mintermControlsFromInputs = (inputs: TruthTable['rows'][number], inputNames: string[]) =>
   inputNames.map((name, index) => ({
     name,
@@ -80,6 +82,7 @@ RETURNVALS ${cout} ${sum}
 `;
 };
 
+// XOR parity detection lets synthesis emit a compact CNOT chain instead of one gate per minterm.
 const isXorParityOutput = (
   inputNames: string[],
   rows: TruthTable['rows'],
@@ -91,6 +94,7 @@ const isXorParityOutput = (
   return row[inputWidth + outputColumnIndex] === expected;
 });
 
+// Majority detection recognizes the carry-out pattern for 3-input adders and maps it to three CCNOT pairs.
 const isPairwiseMajorityOutput = (
   inputNames: string[],
   rows: TruthTable['rows'],
@@ -135,6 +139,7 @@ const appendMintermGate = (
   });
 };
 
+// Output synthesis selects the most compact gate pattern available before falling back to a full minterm expansion.
 const synthesizeOutputGates = (
   inputNames: string[],
   outputName: string,
@@ -238,6 +243,7 @@ const insertGuidedGates = (source: string, gates: GuidedGateSpec[]) => {
   return lines.join('\n');
 };
 
+// Full-adder identity check avoids minterm synthesis for the most common binary adder truth table.
 const matchesFullAdder = (table: TruthTable) => truthTablesEqual(table, singleBitFullAdderTruthTable());
 
 export const correctCircuit = (
@@ -278,6 +284,7 @@ export const correctCircuit = (
       continue;
     }
 
+    // Without autonomous mode the caller applies guided gates manually and decides whether to escalate further.
     if (!autonomous) {
       break;
     }
@@ -295,6 +302,7 @@ export const correctCircuit = (
   return { corrected: testResult.passed, source: current, steps, testResult };
 };
 
+// Process name is preserved across correction passes so synthesized circuits keep the user's original label.
 const extractProcessNameFromSource = (source: string) => {
   const line = source.replace(/\r\n/g, '\n').split('\n').find((candidate) => /^\s*MAIN-PROCESS\s+/i.test(candidate));
   return line?.split(/\s+/)[1] ?? 'CorrectedCircuit';
