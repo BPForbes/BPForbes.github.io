@@ -1,3 +1,10 @@
+/**
+ * Low-level state-vector operations shared by gate definitions.
+ *
+ * These functions perform the index arithmetic, measurement collapse, and qubit
+ * padding used by higher-level gates; centralizing that work reduces the chance
+ * of subtly different behavior across built-ins.
+ */
 import { add, Complex, magnitudeSquared, mul, ONE, scale, ZERO } from '../complex';
 import { MATRIX_H, MATRIX_X } from './matrices';
 

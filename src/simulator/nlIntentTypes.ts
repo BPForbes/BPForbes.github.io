@@ -1,3 +1,9 @@
+/**
+ * Shared types for natural-language correction requests and responses.
+ *
+ * Keeping model-facing intent shapes explicit helps the rule parser, WebLLM
+ * adapter, and UI clarification flow reject unsupported edits consistently.
+ */
 import type { CorrectionGuidance } from './circuitCorrector';
 import type { TruthTable, TruthTableTestResult } from './truthTable';
 

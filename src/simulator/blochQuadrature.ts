@@ -1,3 +1,10 @@
+/**
+ * Fast quadrature approximations for Bloch-ball expectation values.
+ *
+ * The routines collapse noisy angular/radial integrations into deterministic
+ * one-dimensional estimates suitable for UI feedback rather than research-grade
+ * numerical simulation. Background: https://en.wikipedia.org/wiki/Bloch_sphere
+ */
 /** Fixed-order Gauss–Legendre nodes/weights on [-1, 1] (n = 10). */
 const GL_NODES = [
   -0.973906528517172, -0.865063366688985, -0.679409568299024, -0.43388843412695, -0.148874338981631,

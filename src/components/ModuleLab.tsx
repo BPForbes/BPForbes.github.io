@@ -1,3 +1,11 @@
+/**
+ * Catalog and correction workspace for QPU process modules.
+ *
+ * The lab ties together uploads, protected truth-table handling, natural
+ * language correction, compatibility checks, and artifact downloads. The dense
+ * state in this component reflects that it is the orchestration point for
+ * multi-file process workflows rather than a simple presentational panel.
+ */
 import { ChangeEvent, FormEvent, memo, useCallback, useMemo, useState } from 'react';
 import {
   buildProcessCatalogSummaries,

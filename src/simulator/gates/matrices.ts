@@ -1,3 +1,10 @@
+/**
+ * Standard single-qubit matrices used by preconfigured quantum gates.
+ *
+ * Matrix definitions are isolated from application code so gate behavior can be
+ * reviewed against conventional quantum-computing notation. Reference:
+ * https://en.wikipedia.org/wiki/Quantum_logic_gate
+ */
 import { complex, ONE, ZERO } from '../complex';
 
 const INV_SQRT2 = 1 / Math.sqrt(2);

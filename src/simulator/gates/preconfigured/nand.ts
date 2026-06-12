@@ -1,3 +1,6 @@
+/**
+ * Derived NAND gate shares AND wiring but inverts the target to model NAND truth-table semantics.
+ */
 import { createControlledXFamilyGate } from '../factories';
 
 export const nandGate = createControlledXFamilyGate({

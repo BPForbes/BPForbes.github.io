@@ -1,3 +1,6 @@
+/**
+ * Controlled-Z gate adds a phase flip without swapping population between basis states.
+ */
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { applyControlledZ } from '../operations';

@@ -1,3 +1,10 @@
+/**
+ * Truth-table validation, simulation, and comparison utilities.
+ *
+ * The module bridges textual `.qpuio` metadata and executable `.qpucir` source,
+ * including partial-table support where unspecified rows should not fail an
+ * otherwise compatible process.
+ */
 import { compileQpuProtocol, getReturnValTokens, parseProtocol } from './qpuAst';
 import { getProtocolParameterEntries } from './qpuFormat';
 import { measureAll, runCircuit } from './engine';

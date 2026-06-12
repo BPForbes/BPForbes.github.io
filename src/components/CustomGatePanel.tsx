@@ -1,3 +1,10 @@
+/**
+ * Form controls for turning cataloged `.qpucir` processes into reusable canvas
+ * gates.
+ *
+ * This panel validates user-supplied labels and source before registering a
+ * custom gate, so the palette only receives processes the simulator can compile.
+ */
 import { useMemo, useState } from 'react';
 import { buildProcessCatalogSummaries, getCatalogEntry, getCatalogLibrarySources } from '../data/processCatalog';
 import {

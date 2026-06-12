@@ -1,3 +1,6 @@
+/**
+ * SWAP exchanges two target qubits without introducing measurement.
+ */
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { applySwap } from '../operations';

@@ -1,3 +1,10 @@
+/**
+ * Core simulator and protocol type definitions.
+ *
+ * These exported shapes are intentionally colocated so React components, gate
+ * definitions, protocol parsing, and tests share the same vocabulary for gates,
+ * measurements, particles, and QPU operations.
+ */
 import { Complex } from './complex';
 
 export type PreconfiguredGateType =

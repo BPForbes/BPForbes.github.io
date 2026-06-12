@@ -1,3 +1,9 @@
+/**
+ * Vite/Vitest configuration for the React QPU application.
+ *
+ * The WebLLM package is excluded from dependency pre-bundling because it is
+ * loaded dynamically only when browser-based correction assistance is used.
+ */
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 

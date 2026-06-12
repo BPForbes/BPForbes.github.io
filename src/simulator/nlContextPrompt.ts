@@ -1,3 +1,10 @@
+/**
+ * Prompt-context builder for model-assisted circuit correction.
+ *
+ * The context is assembled in sections so browser and remote model callers can
+ * share one concise description of the active protocol, truth table, and catalog
+ * without duplicating prompt text.
+ */
 import { buildAgentRulesPrompt } from '../data/agentRules';
 import { formatCatalogForPrompt, formatTestFailuresForPrompt } from '../data/processCatalog';
 import { isProtectedQpuioProcess } from '../data/protectedQpuio';

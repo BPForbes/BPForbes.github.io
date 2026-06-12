@@ -1,3 +1,10 @@
+/**
+ * Normalization and validation for model-produced correction intents.
+ *
+ * LLM responses are treated as untrusted JSON: this module narrows them to the
+ * small action schema accepted by correction workflows before any circuit edit
+ * can be attempted.
+ */
 import type { GatePreference } from './circuitCorrector';
 import { defaultLlmSettings } from './llmConfig';
 

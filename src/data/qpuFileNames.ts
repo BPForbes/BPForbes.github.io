@@ -1,3 +1,10 @@
+/**
+ * File-name conventions for QPU protocol and truth-table artifacts.
+ *
+ * Centralizing companion-name logic keeps upload validation, downloads, and
+ * restrictive file-picker fallbacks aligned for `.qpucir`, `.qpuio`, and tagged
+ * `.txt` variants.
+ */
 /** Canonical types remain .qpucir / .qpuio; tagged .txt names are an additive alias for file pickers that mishandle custom extensions. */
 export const QPUCIR_TXT_MARKER = '-qpucir';
 export const QPUIO_TXT_MARKER = '-qpuio';

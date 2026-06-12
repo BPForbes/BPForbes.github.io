@@ -1,3 +1,10 @@
+/**
+ * Parser and serializer for `.qpuio` truth-table metadata.
+ *
+ * QPU truth tables accept both canonical whitespace-delimited rows and CSV-like
+ * user input; this module owns that leniency while returning a strict structure
+ * for validation and simulation checks.
+ */
 import { getProtocolParameterEntries } from '../simulator/qpuFormat';
 import { getReturnValTokens } from '../simulator/qpuAst';
 import type { TruthCellValue, TruthTable } from '../simulator/truthTable';

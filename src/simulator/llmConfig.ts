@@ -1,3 +1,9 @@
+/**
+ * Browser-model configuration and cache markers for correction assistance.
+ *
+ * The selected WebLLM model is centralized here so preload, readiness checks,
+ * and cache-clearing workflows agree on the same default browser runtime.
+ */
 export type LlmMode = 'browser' | 'ollama';
 
 export type LlmSettings = {

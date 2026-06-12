@@ -1,3 +1,10 @@
+/**
+ * Session-backed registry for user-defined custom gates.
+ *
+ * Custom gates are stored as source processes and compiled on demand, which
+ * keeps persisted data human-readable while letting the normal gate registry
+ * execute them like built-in operations.
+ */
 import { compileQpuProtocol } from '../qpuAst';
 import type { CircuitGate, ExecutionResult, MeasurementMap } from '../types';
 import type { GateDefinition } from './types';

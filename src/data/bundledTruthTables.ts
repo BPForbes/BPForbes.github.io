@@ -1,3 +1,10 @@
+/**
+ * Canonical truth-table builders for bundled demonstration processes.
+ *
+ * These functions intentionally generate metadata in code rather than mutating
+ * `.qpuio` fixtures, which keeps protected example expectations reproducible
+ * across tests, downloads, and catalog initialization.
+ */
 import type { TruthCellValue, TruthTable } from '../simulator/truthTable';
 import { indexToInputRow } from '../simulator/truthTable';
 

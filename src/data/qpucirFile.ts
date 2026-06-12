@@ -1,3 +1,9 @@
+/**
+ * Parsing and download helpers for QPU circuit protocol files.
+ *
+ * The helpers normalize uploaded source, derive process-aware file names, and
+ * emit browser downloads without coupling the UI to DOM blob mechanics.
+ */
 import { compileQpuProtocol } from '../simulator/qpuAst';
 import { qpucirTxtFileNameForProcess } from './qpuFileNames';
 import { extractMainProcessName, qpucirFileNameForSource } from '../simulator/qpuFormat';

@@ -1,3 +1,10 @@
+/**
+ * WebLLM-backed natural-language correction adapter.
+ *
+ * The model engine is loaded lazily because browser model downloads are large
+ * and require WebGPU; deterministic parsers remain available when this adapter
+ * cannot initialize. WebLLM reference: https://github.com/mlc-ai/web-llm
+ */
 import type { MLCEngine } from '@mlc-ai/web-llm';
 import { DEFAULT_BROWSER_MODEL, getCachedBrowserModelId, markBrowserModelCached, clearBrowserModelCache } from './llmConfig';
 import { buildNlContextSections } from './nlContextPrompt';

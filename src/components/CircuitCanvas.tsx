@@ -1,3 +1,9 @@
+/**
+ * Interactive wire grid used by the visual circuit builder.
+ *
+ * The canvas translates drag-and-drop or tap placement into gate-placement
+ * callbacks while leaving simulation semantics to the engine and gate registry.
+ */
 import { isKnownGateType } from '../simulator/gates/registry';
 import { CircuitGate, GateType } from '../simulator/types';
 import { GateBlock } from './GateBlock';

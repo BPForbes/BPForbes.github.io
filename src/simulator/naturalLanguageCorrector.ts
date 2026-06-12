@@ -1,3 +1,10 @@
+/**
+ * Rule-based natural-language parser for common correction requests.
+ *
+ * These deterministic patterns cover frequent edits quickly and provide a safe
+ * fallback when browser LLM support is unavailable or a model response is not
+ * trusted.
+ */
 import { findCatalogCandidates } from '../data/processCatalog';
 import { formatAddressLabel, resolveWireAddress, resolveWireAddressOr } from './addressResolution';
 import { buildClarificationIntent } from './clarification';

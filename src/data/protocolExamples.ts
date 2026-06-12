@@ -1,3 +1,9 @@
+/**
+ * Bundled `.qpucir` process sources loaded into the catalog at startup.
+ *
+ * The browser imports these raw files through Vite so the examples used by the
+ * UI, simulator, and downloads remain identical to the checked-in fixtures.
+ */
 import fourBitFullAdderQpucir from './processes/four-bit-full-adder.qpucir?raw';
 import fourBitFullAdderQpuio from './processes/four-bit-full-adder.qpuio?raw';
 import phaseDemoQpucir from './processes/phase-demo.qpucir?raw';

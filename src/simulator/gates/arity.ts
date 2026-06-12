@@ -1,3 +1,10 @@
+/**
+ * Gate arity validation for AST commands and custom gate registration.
+ *
+ * The checks produce user-facing diagnostics instead of raw parser failures,
+ * which helps correction guidance explain whether a command needs more inputs,
+ * fewer outputs, or a different gate form.
+ */
 import { preconfiguredGateMap } from './preconfigured';
 import type { GateDefinition, GateIoArity } from './types';
 

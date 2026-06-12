@@ -1,3 +1,6 @@
+/**
+ * Pauli-Y gate flips the target and applies the imaginary phase convention.
+ */
 import { createSingleQubitMatrixGate } from '../factories';
 import { MATRIX_Y } from '../matrices';
 

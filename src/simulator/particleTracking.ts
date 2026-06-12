@@ -1,3 +1,10 @@
+/**
+ * Snapshot and transition helpers for particle-level visualization.
+ *
+ * The simulator can run without tracking; when enabled, this module derives
+ * display-friendly particle states from the same amplitudes and measurements
+ * used by normal circuit execution.
+ */
 import { blochBallRhoExpectationFast } from './blochQuadrature';
 import { complex, formatComplex, magnitudeSquared, type Complex } from './complex';
 import { hasBit } from './gates/operations';

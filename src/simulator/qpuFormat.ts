@@ -1,3 +1,10 @@
+/**
+ * Formatting utilities for reading and writing `.qpucir` protocol text.
+ *
+ * These helpers preserve source-level concepts such as PARAMS and initial state
+ * declarations while allowing the UI to update qubit counts, start states, and
+ * serialized gate lists safely.
+ */
 import { CircuitGate, ParticleStartState } from './types';
 
 export type ProtocolParamEntry = { name: string; type: string };

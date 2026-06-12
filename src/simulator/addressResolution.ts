@@ -1,3 +1,10 @@
+/**
+ * Natural-language wire resolver for correction requests.
+ *
+ * Users often refer to registers by names, aliases, or partial addresses. This
+ * module turns those phrases into concrete protocol wire addresses or explicit
+ * clarification prompts when a safe single target cannot be inferred.
+ */
 import type { NlCorrectionContext } from './nlIntentTypes';
 
 const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0].trim();

@@ -1,3 +1,6 @@
+/**
+ * Controlled-Y gate applies the Pauli-Y matrix only when all controls are active.
+ */
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { applyControlledSingleQubit } from '../operations';

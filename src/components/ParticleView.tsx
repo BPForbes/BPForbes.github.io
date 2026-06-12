@@ -1,3 +1,10 @@
+/**
+ * Particle-centric visualization for circuit state and per-gate transitions.
+ *
+ * The renderer assigns stable, perceptually distinct colors to physical qubits
+ * and then overlays snapshots from the simulator's optional tracking mode.
+ * Color conversion follows the Oklab model: https://bottosson.github.io/posts/oklab/
+ */
 import { getGateDefinition } from '../simulator/gates/registry';
 import { resolvedArity } from '../simulator/gates/arity';
 import type { OperationTransition, ParticleSnapshot } from '../simulator/particleTracking';

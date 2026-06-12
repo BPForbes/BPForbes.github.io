@@ -1,3 +1,9 @@
+/**
+ * Shared policy text for the correction assistant.
+ *
+ * Keeping these rules in data lets prompts, tests, and UI copy reference the
+ * same protected-asset policy without hard-coding it in multiple workflows.
+ */
 import agentsMd from '../../AGENTS.md?raw';
 
 const PROTECTED_QPUIO_LINE = /never edit bundled .*\.qpuio/i;

@@ -1,3 +1,10 @@
+/**
+ * Gate-definition contracts used by the registry and preconfigured gates.
+ *
+ * The metadata here describes both UI placement and execution semantics so a
+ * registered gate can be rendered, parsed from AST source, and applied by the
+ * simulator through one shape.
+ */
 import type { Complex } from '../complex';
 import type { CircuitGate, ExecutionResult, MeasurementMap } from '../types';
 

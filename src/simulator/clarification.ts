@@ -1,3 +1,10 @@
+/**
+ * Helpers for presenting and retrying ambiguous correction requests.
+ *
+ * Correction flows use these messages when user language maps to multiple
+ * possible wires or actions, allowing the UI to ask a targeted follow-up rather
+ * than applying a risky edit.
+ */
 import type { ClarificationOption, PendingClarification } from './nlIntentTypes';
 
 export const formatClarificationPrompt = (

@@ -1,3 +1,10 @@
+/**
+ * Guardrails for bundled truth-table assets that should not be rewritten by
+ * correction flows.
+ *
+ * The protected list is centralized here so upload handling, catalog writes,
+ * tests, and assistant prompts all enforce the same canonical metadata policy.
+ */
 import {
   fourBitFullAdderTruthTable,
   phaseDemoTruthTable,

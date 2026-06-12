@@ -1,3 +1,9 @@
+/**
+ * Programmatic API for running module truth-table checks.
+ *
+ * Keeping this thin layer outside the React lab allows tests, correction flows,
+ * and UI actions to share the same process execution path.
+ */
 export type {
   TruthCellValue,
   TruthTable,

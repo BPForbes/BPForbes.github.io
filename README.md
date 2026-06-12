@@ -13,6 +13,14 @@ A mobile-first static React/TypeScript quantum circuit playground for GitHub Pag
 - Browser-side QPU AST parser/compiler for `-I`, `-O`, `-$R`, cycle tokens, process/control operations, memory/register operations, and child process examples.
 - Starter examples: Bell state, CNOT demo, CCNOT demo, PHASE demo, and nested full-adder AST protocols.
 
+
+## Source organization
+
+- `src/components/` contains React UI panels and visual building blocks.
+- `src/data/` contains bundled protocol metadata, upload/download helpers, catalog policy, and `src/data/tests/` for data-layer regressions.
+- `src/simulator/` contains protocol parsing, circuit execution, correction logic, truth-table validation, and `src/simulator/tests/` for simulator-level regressions.
+- `src/simulator/gates/` contains gate definitions, state-vector operations, registry metadata, and `src/simulator/gates/tests/` for gate-specific regressions.
+
 ## Local development
 
 ```bash

@@ -1,3 +1,10 @@
+/**
+ * Lightweight parser for structured correction intents.
+ *
+ * This parser handles deterministic command-like input before model-backed
+ * natural-language parsing is attempted, giving tests and power users a stable
+ * path for repeatable correction requests.
+ */
 import type { LlmSettings } from './llmConfig';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 import {

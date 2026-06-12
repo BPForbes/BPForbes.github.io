@@ -1,3 +1,6 @@
+/**
+ * S gate applies the standard quarter-turn phase rotation.
+ */
 import { createFixedPhaseGate } from '../factories';
 import { PHASE_PI_2 } from '../matrices';
 
