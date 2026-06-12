@@ -1,3 +1,4 @@
+// Ollama-backed NL parser: same JSON intent schema as the browser model, with a short timeout fallback.
 import type { GatePreference } from '../circuitCorrector';
 import { defaultLlmSettings } from './config';
 import { buildNlContextSections } from './contextPrompt';
@@ -7,6 +8,7 @@ export type LlmEndpointConfig = { url: string; model: string };
 const ALLOWED_GATES = new Set<GatePreference>(['CNOT', 'CCNOT', 'X', 'H', 'NOT', 'AND', 'OR', 'XOR']);
 const OLLAMA_TIMEOUT_MS = 8_000;
 
+// Remote models often emit "true"/"1" strings instead of JSON booleans.
 function toStrictBoolean(value: unknown): boolean {
   if (value === true || value === 1) return true;
   if (typeof value === 'string') {
@@ -101,6 +103,7 @@ export const sanitizeIntent = (raw: unknown): ModelCorrectionIntent | null => {
     }
   }
 
+  // Omitting reply still yields a user-visible string so the chat panel never shows empty model output.
   const intent: ModelCorrectionIntent = {
     reply: typeof record.reply === 'string'
       ? record.reply
@@ -145,6 +148,7 @@ export const parseNaturalLanguageWithModel = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: controller.signal,
+        // format: 'json' asks Ollama to constrain output; sanitizeIntent still validates every field.
         body: JSON.stringify({
           model: endpoint.model,
           prompt,

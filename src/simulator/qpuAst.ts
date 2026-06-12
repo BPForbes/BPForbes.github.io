@@ -1,3 +1,4 @@
+// QPU protocol compiler: parse PARAMS/MAIN-PROCESS source into a flat CircuitGate list and I/O wire map.
 import { assertGateArity } from './gates/arity';
 import { astDerivedGateIds, astPrimitiveGateIds } from './gates/metadata';
 import { CircuitGate, GateType, QpuOperation } from './types';
@@ -97,6 +98,7 @@ const parseRationalRotation = (value: string) => {
   return numerator / denominator;
 };
 
+// PHASE rotations accept degrees (Nd), pi multiples (pi, 2*pi/3), or plain rationals in radians.
 const parseRotationParameter = (value: string, gate: string) => {
   const normalized = value.trim().toLowerCase();
 
@@ -138,6 +140,7 @@ export const readProtocolLines = (source: string): string[] => {
   });
   if (buffer.trim()) joined.push(buffer);
 
+  // Block comments may span lines; line comments use # and are stripped per physical line.
   let inBlockComment = false;
   return joined
     .map((raw) => {
@@ -176,6 +179,7 @@ export const parseParameters = (line: string): ProtocolProcess['params'] => {
     });
 };
 
+// Gate operands live between -I/-O flags; the next flag token ends the current operand list.
 const splitFlagArgs = (tokens: string[], flag: '-I' | '-O') => {
   const upper = tokens.map((token) => token.toUpperCase());
   const start = upper.indexOf(flag);
@@ -390,6 +394,7 @@ const executeProcess = (
     state.parsed.push(command);
 
     if (command.op === 'MAIN-PROCESS') {
+      // Body entry marker only; compilation already started from parseProtocol's MAIN-PROCESS name.
       state.log.push(`Main process '${command.args[0]}' started.`);
       continue;
     }
@@ -429,6 +434,7 @@ const executeProcess = (
     }
 
     if (command.op === 'CREATETOKEN') {
+      // Reserve simulator wires for internal registers before gates reference them.
       command.inputs.forEach((token) => {
         ensureQubit(state, scopedName(frame, token, parentFrame));
       });
@@ -437,11 +443,13 @@ const executeProcess = (
     }
 
     if (command.op === 'DELETETOKEN' || command.op === 'FREE') {
+      // Lifetime hints are logged for parity; compaction drops unused wires after expansion.
       state.log.push(`${command.op} acknowledged for ${command.inputs.join(', ')}.`);
       continue;
     }
 
     if (command.op === 'DECLARECHILD') {
+      // Child bodies resolve from librarySources at RUNCHILD/CALL time, not inline in the parent file.
       state.log.push(`Declared child '${command.args[0]}'.`);
       continue;
     }
@@ -477,6 +485,7 @@ const executeProcess = (
     }
 
     if (command.op === 'ACCEPTVALS') {
+      // Wire the most recent child RETURNVALS into local aliases without another RUNCHILD expansion.
       command.args.forEach((local, index) => {
         const returned = state.lastReturns[index];
         if (returned) frame.aliases.set(stripCycle(local), returned);
@@ -492,6 +501,7 @@ const executeProcess = (
     }
 
     if (command.op === 'MEASURE') {
+      // Bare MEASURE (no -I) collapses every allocated wire in the current process scope.
       if (command.inputs.length) {
         command.inputs.forEach((token) => emitGate(state, 'MEASURE', [resolveInputQubit(state, frame, token, parentFrame)], [], line));
       } else {
@@ -501,6 +511,7 @@ const executeProcess = (
     }
 
     if (command.op === 'SAVE_STATE' || command.op === 'LOAD_STATE' || command.op === 'MASTERVAL' || command.op === 'COMPILEPROCESS') {
+      // Checkpoint/process-control opcodes are accepted for source fidelity but not lowered to gates yet.
       state.log.push(`${command.op} parsed: ${command.args.join(' ')}.`);
       continue;
     }
@@ -536,6 +547,7 @@ const executeProcess = (
       const target = resolveInputQubit(state, frame, targetToken, parentFrame);
       const controls = command.inputs
         .map((input) => resolveInputQubit(state, frame, input, parentFrame))
+        // When -O names the mutated wire, drop it from the control list so self-controlled ops do not deadlock.
         .filter((qubit) => qubit !== target);
       emitGate(state, command.op as GateType, [target], controls, line, command.op === 'PHASE' ? command.phase ?? 0 : undefined);
       continue;
@@ -601,6 +613,7 @@ const compactQubitLayout = (
 export const compileQpuProtocol = (source: string, librarySources: Record<string, string> = {}): CompileResult => {
   const main = parseProtocol(source);
   const library = processLibraryFromSources(librarySources);
+  // The file being compiled is always addressable as a child of itself (e.g. recursive RUNCHILD tests).
   library.set(main.name, main);
   const state: CompilerState = {
     gates: [],
@@ -637,6 +650,7 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     processParams,
   );
 
+  // RETURNVALS names may be bare or scoped after child expansion; match by suffix when compacting.
   const returnValues: ReturnValue[] = returnRegistersForProcess(main).flatMap((name) => {
     const entry = Object.entries(compacted.tokenMap).find(([token]) => token === name || token.endsWith(`/${name}`));
     if (entry === undefined) return [];
@@ -646,6 +660,7 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
   return {
     gates: compacted.gates,
     qubitCount: compacted.qubitCount,
+    // UI qubit rail prefers RETURNVALS width, then PARAMS width, then full simulator width.
     logicalQubitCount: returnValues.length > 0 ? returnValues.length : compacted.processParams.length > 0
       ? compacted.processParams.length
       : compacted.qubitCount,

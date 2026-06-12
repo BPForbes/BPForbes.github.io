@@ -1,3 +1,4 @@
+// Correct descendant processes leaf-first so parent RUNCHILD calls see compatible child sources.
 import { correctCircuit, type CorrectionGuidance } from './circuitCorrector';
 import type { TruthTable, TruthTableTestResult } from './truthTable';
 import { testCircuitAgainstTruthTable } from './truthTable';
@@ -11,6 +12,7 @@ export type ChildCorrectionResult = {
 
 const CHILD_REFERENCE_PATTERN = /^\s*(?:DECLARECHILD|RUNCHILD|CALL)\s+(\S+)/i;
 
+// Lightweight line scan — child names appear on DECLARECHILD, RUNCHILD, and CALL rows.
 export const getReferencedChildProcesses = (source: string): string[] => {
   const children = new Set<string>();
   source.replace(/\r\n/g, '\n').split('\n').forEach((line) => {
@@ -33,6 +35,7 @@ export const collectDescendantProcesses = (
     visited.add(name);
     const source = librarySources[name];
     if (!source) return;
+    // Post-order accumulation: deeper children are listed before their callers.
     getReferencedChildProcesses(source).forEach((childName) => {
       visit(childName);
       if (!descendants.includes(childName)) {
@@ -69,6 +72,7 @@ export const orderProcessesLeafFirst = (
   return ordered;
 };
 
+// Run truth-table tests per descendant; on failure invoke circuitCorrector and mutate the working library in place.
 export const correctChildProcessesForCompatibility = (
   parentProcessName: string,
   librarySources: Record<string, string>,
@@ -92,6 +96,7 @@ export const correctChildProcessesForCompatibility = (
     let corrected = false;
 
     if (!testResult.passed) {
+      // Autonomous mode lets the corrector synthesize gates; guided mode only applies explicit guidance specs.
       const correction = correctCircuit(
         currentSource,
         truthTable,
