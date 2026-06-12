@@ -162,9 +162,11 @@ export const parseNaturalLanguageWithModel = async (
     const data = await response.json() as { response?: string };
     if (!data.response) return null;
 
+    // Ollama returns free-form JSON text; sanitizeIntent is the only path that may mutate circuit state.
     const raw = JSON.parse(data.response) as unknown;
     return sanitizeIntent(raw);
   } catch {
+    // Timeouts and transport errors fall back to the regex parser in correctionIntentParser.
     return null;
   }
 };

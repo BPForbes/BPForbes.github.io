@@ -291,6 +291,7 @@ const scopedName = (frame: Frame, token: string, parentFrame?: Frame) => {
   return `${frame.scope}/${base}`;
 };
 
+// Symbolic tokens lazily claim the next simulator wire; constants share keyed slots so 0p/1p/sp init once.
 const ensureQubit = (state: CompilerState, canonical: string) => {
   const key = isConstant(canonical) ? `const/${canonical.toLowerCase()}` : canonical;
   const existing = state.tokenToQubit.get(key);
@@ -366,6 +367,7 @@ const executeProcess = (
   process.params.forEach((param, index) => {
     const provided = passedParams[index];
     let resolved: string;
+    // RUNCHILD -I tokens re-scope through the parent frame; top-level PARAMS keep their declared names.
     if (provided !== undefined && parentFrame) {
       resolved = scopedName(parentFrame, provided, parentFrame);
     } else {
@@ -382,6 +384,7 @@ const executeProcess = (
 
   state.log.push(`MAIN-PROCESS ${process.name} compiled in scope ${scope}.`);
 
+  // Line dispatch is ordered: workspace/cycle ops run before gates so pending RESETs flush at INCREASECYCLE and primitives.
   for (const line of process.lines) {
     const command = parseCommand(line);
     state.parsed.push(command);
@@ -538,6 +541,7 @@ const executeProcess = (
       continue;
     }
 
+    // Derived gates share the same -I/-O lowering as primitives but never carry PHASE metadata.
     if (derivedGates.has(command.op)) {
       flushCycleZeros(state, `prepare workspace before gate at cycle ${state.currentCycle}`);
       const target = resolveInputQubit(state, frame, command.outputs[0], parentFrame);
@@ -571,6 +575,7 @@ const compactQubitLayout = (
     return { gates, tokenMap, processParams, qubitCount: 0 };
   }
 
+  // Remap compacts holes left by unused symbolic registers while preserving gate step order.
   const remap = new Map(sorted.map((old, index) => [old, index]));
   return {
     gates: gates.map((gate) => ({
@@ -617,6 +622,7 @@ export const compileQpuProtocol = (source: string, librarySources: Record<string
     tokenMap[token] = qubit;
   });
 
+  // Exposed PARAMS omit numeric-only registers and any wire used only as a cycle RESET target.
   const processParams: ProcessParam[] = main.params.flatMap((param) => {
     const qubitIndex = tokenMap[param.name];
     if (qubitIndex === undefined) return [];
