@@ -34,13 +34,16 @@ const toTruthCellValue = (raw: string): TruthCellValue | null => {
   return isTruthCellValue(normalized) ? normalized : null;
 };
 
+// Address lookup uses the full resolver so register names, wire tokens, and $-prefixed refs all match.
 const findRegister = (name: string, context: NlCorrectionContext) => resolveWireAddressOr(name, context);
 
+// Space-collapsed and space-free spellings both match so "controlled not" and "controllednot" resolve identically.
 const parseGateName = (raw: string): GatePreference | undefined => (
   GATE_ALIASES[raw.toLowerCase().replace(/\s+/g, ' ').trim()]
   ?? GATE_ALIASES[raw.toLowerCase().replace(/\s+/g, '')]
 );
 
+// Connective words like "and", "with", and "from" are stripped so "A and B" tokenizes to ["A", "B"].
 const parseTokenList = (raw: string, context: NlCorrectionContext) => (
   raw
     .replace(/\s+and\s+/gi, ' ')
@@ -51,10 +54,11 @@ const parseTokenList = (raw: string, context: NlCorrectionContext) => (
     .map((token) => findRegister(token, context))
 );
 
+// Silent no-ops on incomplete specs let partial pattern matches accumulate without throwing.
 const pushGateSpec = (
   specs: GuidedGateSpec[],
   gate: GatePreference | undefined,
-  inputs: string[],
+
   output: string | undefined,
 ) => {
   if (!gate || inputs.length === 0 || !output) return;
