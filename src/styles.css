@@ -82,7 +82,7 @@ button { font: inherit; }
 .particle-card { min-height: 8rem; display: grid; place-items: center; gap: .35rem; border-radius: 1rem; background: linear-gradient(180deg, rgba(30,41,59,.85), rgba(15,23,42,.92)); border: 1px solid rgba(148,163,184,.22); transition: transform .35s ease; }
 .particle-card.collapsed { transform: translateY(2px); }
 .particle-ket { margin-top: .2rem; }
-.particle-ket code { display: block; padding: .35rem .45rem; border-radius: .55rem; background: rgba(2,6,23,.72); color: #bef264; font-size: .62rem; line-height: 1.35; overflow-wrap: anywhere; word-wrap: break-word; }
+.particle-ket code { display: block; padding: .35rem .45rem; border-radius: .55rem; background: rgba(2,6,23,.72); color: #bef264; font-size: .62rem; line-height: 1.35; overflow-wrap: anywhere; }
 .particle-coords,
 .particle-bloch,
 .particle-mixed,

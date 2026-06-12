@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { magnitudeSquared } from '../complex';
 import { createInitialState } from '../engine';
 import type { CircuitGate } from '../types';
 import {
@@ -61,10 +62,18 @@ describe('customGateEngine', () => {
       id: 'Macro',
       source: 'PARAMS: Q0:1\nMAIN-PROCESS Macro\nH -I Q0:0 -O Q0:0\nRETURNVALS Q0',
     });
-    const gate: CircuitGate = { id: 'macro-0', type: 'Macro', step: 0, targets: [0], controls: [0] };
-    const result = applyCustomGateProcess(createInitialState(1), 1, gate, {}, record);
+    const gate: CircuitGate = { id: 'macro-0', type: 'Macro', step: 0, targets: [0], controls: [1] };
+    const initial = createInitialState(2);
+    expect(magnitudeSquared(initial[2])).toBeCloseTo(0, 10);
+    expect(magnitudeSquared(initial[3])).toBeCloseTo(0, 10);
+    expect(magnitudeSquared(initial[1])).toBeCloseTo(0, 10);
+
+    const result = applyCustomGateProcess(initial, 2, gate, {}, record);
+
     expect(result.log.some((entry) => /executing/i.test(entry))).toBe(true);
-    expect(result.state.some((amplitude) => Math.abs(amplitude.re) > 1e-6 || Math.abs(amplitude.im) > 1e-6)).toBe(true);
+    expect(magnitudeSquared(result.state[2])).toBeGreaterThan(0.1);
+    expect(magnitudeSquared(result.state[3])).toBeCloseTo(0, 10);
+    expect(magnitudeSquared(result.state[1])).toBeCloseTo(0, 10);
   });
 
   it('re-registers the same custom id by replacing the stored record', () => {

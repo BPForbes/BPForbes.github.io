@@ -90,10 +90,23 @@ export type ApplyGateOptions = {
   trackParticles?: boolean;
 };
 
+const isExecutionOptions = (
+  input: Record<string, string> | ApplyGateOptions | RunCircuitOptions,
+): boolean => {
+  const candidate = input as { trackParticles?: unknown; librarySources?: unknown };
+  return typeof candidate.trackParticles === 'boolean'
+    || (
+      candidate.librarySources !== undefined
+      && candidate.librarySources !== null
+      && typeof candidate.librarySources === 'object'
+      && !Array.isArray(candidate.librarySources)
+    );
+};
+
 const normalizeApplyGateOptions = (
   input: Record<string, string> | ApplyGateOptions = {},
 ): ApplyGateOptions => {
-  if ('trackParticles' in input || 'librarySources' in input) {
+  if (isExecutionOptions(input)) {
     return input as ApplyGateOptions;
   }
   return { librarySources: input as Record<string, string>, trackParticles: false };
@@ -152,7 +165,7 @@ export type RunCircuitOptions = {
 const normalizeRunCircuitOptions = (
   input: Record<string, string> | RunCircuitOptions = {},
 ): RunCircuitOptions => {
-  if ('trackParticles' in input || 'librarySources' in input) {
+  if (isExecutionOptions(input)) {
     return input as RunCircuitOptions;
   }
   return { librarySources: input as Record<string, string>, trackParticles: false };
