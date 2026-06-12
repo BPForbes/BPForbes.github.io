@@ -1,10 +1,3 @@
-/**
- * Formatting utilities for reading and writing `.qpucir` protocol text.
- *
- * These helpers preserve source-level concepts such as PARAMS and initial state
- * declarations while allowing the UI to update qubit counts, start states, and
- * serialized gate lists safely.
- */
 import { CircuitGate, ParticleStartState } from './types';
 
 export type ProtocolParamEntry = { name: string; type: string };
@@ -35,6 +28,7 @@ const isSetLine = (line: string) => /^\s*SET\s+/i.test(line);
 const isCreateTokenLine = (line: string) => /^\s*CREATETOKEN\b/i.test(line);
 type ProtocolLineBlock = { start: number; end: number; logicalLine: string };
 
+// Continued-line blocks let PARAMS and generated gate rows round-trip without losing source formatting.
 const findContinuedLineBlock = (lines: string[], start: number): ProtocolLineBlock => {
   let logicalLine = '';
   let end = start;
@@ -162,6 +156,7 @@ const syncProtocolOutputRegisters = (source: string, outputColumns: string[]) =>
   return lines.join(newline);
 };
 
+// Truth-table sync adjusts PARAMS/RETURNVALS around table columns without rewriting unrelated protocol commands.
 export const syncProtocolToTruthTable = (source: string, inputColumns: string[], outputColumns: string[]) => {
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
   let next = updateProtocolParameterCount(source, inputColumns.length);
@@ -178,6 +173,7 @@ export const syncProtocolToTruthTable = (source: string, inputColumns: string[],
   return updateProtocolReturnValTokens(next, outputTokens);
 };
 
+// Parameter-count edits preserve existing names/types where possible so UI resizing does not discard user labels.
 export const updateProtocolParameterCount = (source: string, paramCount: number) => {
   const newline = source.includes('\r\n') ? '\r\n' : '\n';
   const lines = source.replace(/\r\n/g, '\n').split('\n');
@@ -235,6 +231,7 @@ export const updateProtocolStartStateSet = (source: string, paramName: string, s
 
 const canvasParamRef = (qubit: number) => `$Q${qubit}`;
 
+// Canvas serialization emits a minimal MAIN-PROCESS that the parser/compiler can immediately load again.
 export const serializeCircuitToQpuProtocol = (
   gates: CircuitGate[],
   qubitCount: number,

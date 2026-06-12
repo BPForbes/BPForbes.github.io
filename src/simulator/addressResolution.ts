@@ -1,10 +1,3 @@
-/**
- * Natural-language wire resolver for correction requests.
- *
- * Users often refer to registers by names, aliases, or partial addresses. This
- * module turns those phrases into concrete protocol wire addresses or explicit
- * clarification prompts when a safe single target cannot be inferred.
- */
 import type { NlCorrectionContext } from './llm/intentTypes';
 
 const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0].trim();
@@ -27,6 +20,7 @@ const registerForAddress = (address: string, context: NlCorrectionContext): stri
     ?? null;
 };
 
+// Canonical keys let the correction chat dedupe aliases such as a register name and its SET wire.
 const canonicalWireKey = (address: string, context: NlCorrectionContext): string => {
   const bare = address.replace(/^\$/, '');
   const register = registerForAddress(address, context);
@@ -71,6 +65,7 @@ export const formatAddressLabel = (address: string, context: NlCorrectionContext
   return address;
 };
 
+// Candidate search is intentionally broad so prose, register names, and literal wire addresses can all resolve.
 export const getAddressCandidates = (name: string, context: NlCorrectionContext): string[] => {
   const candidates: string[] = [];
   const add = (value: string) => {
@@ -119,6 +114,7 @@ export type WireAddressResolution =
   | { status: 'resolved'; address: string }
   | { status: 'clarify'; token: string; prompt: string; candidates: string[] };
 
+// Ambiguous matches surface as clarification options instead of guessing which circuit binding to edit.
 export const resolveWireAddress = (name: string, context: NlCorrectionContext): WireAddressResolution => {
   const raw = name.trim();
   const bare = raw.replace(/^\$/, '');

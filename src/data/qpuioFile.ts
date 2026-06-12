@@ -1,10 +1,3 @@
-/**
- * Parser and serializer for `.qpuio` truth-table metadata.
- *
- * QPU truth tables accept both canonical whitespace-delimited rows and CSV-like
- * user input; this module owns that leniency while returning a strict structure
- * for validation and simulation checks.
- */
 import { getProtocolParameterEntries } from '../simulator/qpuFormat';
 import { getReturnValTokens } from '../simulator/qpuAst';
 import type { TruthCellValue, TruthTable } from '../simulator/truthTable';
@@ -46,6 +39,7 @@ const splitColumnNames = (line: string): string[] => {
   return cells;
 };
 
+// Text QPUIO headers may omit explicit input/output groups, so pair them with protocol metadata when available.
 const resolveColumnGroups = (
   columnNames: string[],
   options: { protocolSource?: string; declaredInputs?: string[]; declaredOutputs?: string[] },
@@ -73,6 +67,7 @@ const resolveColumnGroups = (
   );
 };
 
+// The text parser accepts whitespace or CSV-style rows but normalizes both into strict truth-table cells.
 const parseTextQpuio = (contents: string, protocolSource?: string): ParsedQpuio => {
   const lines = contents
     .replace(/\r\n/g, '\n')
@@ -212,6 +207,7 @@ const parseJsonRows = (
   });
 };
 
+// JSON envelopes are stricter than text uploads and validate the declared format/version before row parsing.
 const parseJsonQpuio = (parsed: Partial<QpuioPayload>): ParsedQpuio => {
   if (parsed.format !== 'qpuio' || parsed.version !== 1) {
     throw new Error('JSON QPUIO envelope must set format to "qpuio" and version to 1.');
@@ -259,6 +255,7 @@ export const createQpuioPayload = (
   rows: truthTable.rows,
 });
 
+// Serialization keeps the row index column explicit because the text parser uses it to catch reordered tables.
 export const serializeQpuioText = (
   processName: string,
   truthTable: TruthTable,

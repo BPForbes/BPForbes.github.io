@@ -1,10 +1,3 @@
-/**
- * Truth-table validation, simulation, and comparison utilities.
- *
- * The module bridges textual `.qpuio` metadata and executable `.qpucir` source,
- * including partial-table support where unspecified rows should not fail an
- * otherwise compatible process.
- */
 import { compileQpuProtocol, getReturnValTokens, parseProtocol } from './qpuAst';
 import { getProtocolParameterEntries } from './qpuFormat';
 import { measureAll, runCircuit } from './engine';
@@ -20,6 +13,7 @@ export type TruthTable = {
 
 export const cloneTruthTable = (table: TruthTable): TruthTable => structuredClone(table);
 
+// Dimensions track both the combinatorial protocol space and the rows actually listed for partial tables.
 export type TruthTableDimensions = {
   /** Full combinatorial row count from PARAMS (2^n), or 1/0 when there are no state inputs. */
   rowCount: number;
@@ -73,6 +67,7 @@ const readMeasuredBit = (
   name: string,
 ): TruthCellValue => (measurements[tokenQubit(tokenMap, name)] === 1 ? '1p' : '0p');
 
+// Dimension inference reads protocol params/returns so partial tables can report what fraction of cases they cover.
 export const inferTruthTableDimensions = (source: string): TruthTableDimensions => {
   const params = getProtocolParameterEntries(source).filter((param) => param.type === 'state');
   const outputs = getReturnValTokens(source);
@@ -232,6 +227,7 @@ export const truthTablesEqual = (left: TruthTable, right: TruthTable) => {
   });
 };
 
+// Validation is intentionally structural; source-aware checks only compare declared PARAMS/RETURNVALS columns.
 export const validateTruthTable = (table: TruthTable, source?: string): string[] => {
   const errors: string[] = [];
   const expected = source ? inferTruthTableDimensions(source) : null;
@@ -315,6 +311,7 @@ export const simulateTruthTableOutputs = (
   return { inputColumns, outputColumns, rows };
 };
 
+// Inference preserves the selected table's input rows when present, otherwise the simulator enumerates all inputs.
 export const fillTruthTableFromCircuit = (
   source: string,
   table: TruthTable,
@@ -332,6 +329,7 @@ export const fillTruthTableFromCircuit = (
   };
 };
 
+// Test execution maps each row onto compiled input qubits, runs the circuit, and compares only declared outputs.
 export const testCircuitAgainstTruthTable = (
   source: string,
   table: TruthTable,

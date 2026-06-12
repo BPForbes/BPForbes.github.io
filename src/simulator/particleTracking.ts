@@ -1,10 +1,3 @@
-/**
- * Snapshot and transition helpers for particle-level visualization.
- *
- * The simulator can run without tracking; when enabled, this module derives
- * display-friendly particle states from the same amplitudes and measurements
- * used by normal circuit execution.
- */
 import { blochBallRhoExpectationFast } from './blochQuadrature';
 import { complex, formatComplex, magnitudeSquared, type Complex } from './complex';
 import { hasBit } from './gates/operations';
@@ -82,6 +75,7 @@ const PURE_TOLERANCE = 1e-6;
 
 const bitMask = (qubit: number, qubitCount: number) => 1 << (qubitCount - qubit - 1);
 
+// Per-qubit reduced density matrices drive particle labels even when the full state is entangled.
 const marginalRho = (state: Complex[], qubitCount: number, qubit: number) => {
   const mask = bitMask(qubit, qubitCount);
   let rho00 = 0;
@@ -179,6 +173,7 @@ export const blochVectorForQubit = (
 /** @deprecated Use sphericalFromBlochCartesian */
 export const sphericalFromBloch = sphericalFromBlochCartesian;
 
+// Snapshot extraction classifies each displayed qubit from its Bloch vector plus any recorded measurement.
 export const snapshotParticle = (
   state: Complex[],
   qubitCount: number,
@@ -231,6 +226,7 @@ export const particleDelta = (before: ParticleSnapshot, after: ParticleSnapshot)
 export const computeParticleDeltas = (before: ParticleSnapshot[], after: ParticleSnapshot[]): ParticleDelta[] =>
   before.map((snapshot, index) => particleDelta(snapshot, after[index] ?? snapshot));
 
+// Transition records compare pre/post snapshots so the visualizer can explain what each gate changed.
 export const buildOperationTransition = (
   gate: CircuitGate,
   stateBefore: Complex[],

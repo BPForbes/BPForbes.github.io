@@ -1,10 +1,3 @@
-/**
- * Low-level state-vector operations shared by gate definitions.
- *
- * These functions perform the index arithmetic, measurement collapse, and qubit
- * padding used by higher-level gates; centralizing that work reduces the chance
- * of subtly different behavior across built-ins.
- */
 import { add, Complex, magnitudeSquared, mul, ONE, scale, ZERO } from '../complex';
 import { MATRIX_H, MATRIX_X } from './matrices';
 
@@ -13,6 +6,7 @@ const bitMask = (qubit: number, qubitCount: number) => 1 << (qubitCount - qubit 
 export const hasBit = (basisIndex: number, qubit: number, qubitCount: number) =>
   (basisIndex & bitMask(qubit, qubitCount)) !== 0;
 
+// Matrix application walks zero/one basis pairs once, preserving amplitudes outside the target pair.
 export const applySingleQubitGate = (
   state: Complex[],
   qubitCount: number,
@@ -45,6 +39,7 @@ export const controlsHaveParity = (basisIndex: number, qubitCount: number, contr
 export const anyControlIsActive = (basisIndex: number, qubitCount: number, controls: number[]) =>
   controls.some((control) => hasBit(basisIndex, control, qubitCount));
 
+// Predicate-controlled X is shared by AND/OR/XOR-style derived gates whose controls are not all-active checks.
 export const applyControlledPredicateX = (
   state: Complex[],
   qubitCount: number,
@@ -125,6 +120,7 @@ export const applySwap = (state: Complex[], qubitCount: number, qubitA: number, 
   return next;
 };
 
+// RESET projects onto |0⟩ when possible, but recovers a valid zero state if the branch had no amplitude.
 export const prepareZeroQubit = (state: Complex[], qubitCount: number, qubit: number): Complex[] => {
   const mask = bitMask(qubit, qubitCount);
   const next = [...state];
@@ -156,6 +152,7 @@ export const prepareZeroQubit = (state: Complex[], qubitCount: number, qubit: nu
   return next.map((amplitude) => scale(amplitude, normalizer));
 };
 
+// Measurements collapse and renormalize the vector while accepting an injectable random value for deterministic tests.
 export const measureQubit = (
   state: Complex[],
   qubitCount: number,

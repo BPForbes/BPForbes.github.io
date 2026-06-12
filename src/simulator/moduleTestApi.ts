@@ -1,9 +1,4 @@
-/**
- * Programmatic API for running module truth-table checks.
- *
- * Keeping this thin layer outside the React lab allows tests, correction flows,
- * and UI actions to share the same process execution path.
- */
+// Re-export truth-table and correction primitives from one API so UI actions and tests use identical contracts.
 export type {
   TruthCellValue,
   TruthTable,
@@ -96,6 +91,7 @@ export type ModuleTestResponse = {
   librarySources?: Record<string, string>;
 };
 
+// Module tests compile the active source with catalog/library children before comparing against the selected table.
 export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse => {
   const truthTable = request.truthTable ?? createEmptyTruthTable(request.source);
   const dimensions = describeTruthTableDimensions(request.source, truthTable);
@@ -143,6 +139,7 @@ export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse =>
   };
 };
 
+// Probing reuses truth-table inference without applying correction steps.
 export const probeModuleOutputs = (
   source: string,
   truthTable: TruthTable,

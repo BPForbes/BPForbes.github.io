@@ -1,10 +1,3 @@
-/**
- * Session-backed registry for user-defined custom gates.
- *
- * Custom gates are stored as source processes and compiled on demand, which
- * keeps persisted data human-readable while letting the normal gate registry
- * execute them like built-in operations.
- */
 import { compileQpuProtocol } from '../qpuAst';
 import type { CircuitGate, ExecutionResult, MeasurementMap } from '../types';
 import type { GateDefinition } from './types';
@@ -45,6 +38,7 @@ const randomCustomColor = (usedColors: Set<string>) => {
   return `linear-gradient(135deg, hsl(${hue} 78% 58%), hsl(${(hue + 36) % 360} 72% 42%))`;
 };
 
+// Custom gates are session-scoped so experiments survive reloads without becoming bundled catalog metadata.
 const readStore = (): CustomGateRecord[] => {
   if (typeof sessionStorage === 'undefined') return [];
   try {
@@ -81,6 +75,7 @@ export type RegisterCustomGateInput = {
   label?: string;
 };
 
+// Registration compiles once up front to validate arity and capture any library sources needed by child processes.
 export const registerCustomGate = ({
   id,
   source,
@@ -118,6 +113,7 @@ export const registerCustomGate = ({
   return record;
 };
 
+// Remapping binds public controls/targets to compiled process params/returns while reserving fresh wires for internals.
 const buildQubitRemap = (
   compiled: ReturnType<typeof compileQpuProtocol>,
   gate: CircuitGate,
@@ -178,6 +174,7 @@ const remapInnerGate = (gate: CircuitGate, remap: Map<number, number>): CircuitG
   controls: gate.controls.map((qubit) => remap.get(qubit) ?? qubit),
 });
 
+// Applying a custom gate expands the saved protocol into ordinary registered gates at runtime.
 export const applyCustomGateProcess = (
   state: import('../complex').Complex[],
   qubitCount: number,
