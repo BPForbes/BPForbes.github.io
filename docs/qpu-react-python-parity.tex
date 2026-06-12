@@ -1029,12 +1029,69 @@ Policy: \textbf{AGENTS.md} and \texttt{src/data/catalog/agentRules.ts} govern pr
 
 \subsection{Cycle interpreter: sections and clock}
 
-\textbf{Section hooks} (Python \texttt{SECTION\_MAP} in \texttt{ast.py}): parse and execute in order:
+\textbf{Section hooks} partition a \texttt{.qpucir} process into lifecycle regions (Python \texttt{SECTION\_MAP} + \texttt{split\_sections} in \texttt{ast.py}). Lines before any hook belong to the implicit \texttt{body}. \texttt{ENDWRAPUP} returns parsing to \texttt{body}.
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{3.4cm}p{10.8cm}@{}}
+\toprule
+Hook & Semantics (when this code runs) \\
+\midrule
+\texttt{GLOBALPROLOGUE:} &
+\textbf{Global prolog} --- declarations and setup that apply to the whole compiled process \emph{before any gate work}: tokens, registers, constants, \texttt{COMPILEPROCESS} targets, shared \texttt{CREATETOKEN}/\texttt{SET} prep. ``Everything is declared'' here (pre-gate / pre-main). \\
+\texttt{MAINPROLOGUE:} &
+\textbf{Main prolog} --- run immediately \textbf{before the main process body} begins (after global prolog): finalize inputs, zero workspace, seed \texttt{0p}/\texttt{1p}/\texttt{sp}, initial \texttt{INCREASECYCLE} if needed. \\
+\texttt{CHILDPROLOGUE:} &
+\textbf{Children prolog} --- run \textbf{before each child process} when the parent \texttt{RUNCHILD}s: bind parent tokens, prepare child inputs, snapshot parent state if required. \\
+\texttt{CHILDRENWRAPUP:} &
+\textbf{Children wrap-up} --- run \textbf{after a child process completes}: accept \texttt{RETURNVALS}, merge updated tokens back to parent aliases, unlock child-scoped registers. \\
+\texttt{MAINWRAPUP:} &
+\textbf{Main wrap-up} --- run \textbf{after the main process body} finishes: final \texttt{MEASURE}, \texttt{RETURNVALS}, cleanup \texttt{FREE}, optional \texttt{SAVE\_STATE}. \\
+\texttt{(body)} &
+Gate/cycle program between hooks: the executable circuit proper. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Execution order} (must match Python \texttt{run\_single\_process} / \texttt{run\_child}):
+\begin{itemize}[noitemsep]
+  \item \textbf{Top-level / parent run:}
+    \texttt{global\_prologue} $\rightarrow$ \texttt{main\_prologue} $\rightarrow$ \texttt{body} $\rightarrow$ \texttt{main\_wrapup}.
+  \item \textbf{Each \texttt{RUNCHILD}:}
+    \texttt{child\_prologue} $\rightarrow$ \texttt{child body} $\rightarrow$ \texttt{children\_wrapup}
+    (child file still has its own \texttt{global}/\texttt{main} sections when compiled standalone).
+\end{itemize}
+
+\textbf{Example skeleton:}
 \begin{lstlisting}[style=protocol]
-GLOBALPROLOGUE:  MAINPROLOGUE:  CHILDPROLOGUE:
-CHILDRENWRAPUP:  MAINWRAPUP:
+PARAMS: A:state B:state
+MAIN-PROCESS Example
+
+GLOBALPROLOGUE:
+CREATETOKEN -I Sum Cout
+SET Sum:0 0p
+
+MAINPROLOGUE:
+SET A:0 $A
+SET B:0 $B
+
+# --- body (gates) ---
+H -I A:0
+CNOT -I A:0 -O Sum:0
+INCREASECYCLE
+
+CHILDPROLOGUE:
+SET Cin:0 0p
+
+CHILDRENWRAPUP:
+ACCEPTVALS Sum
+
+MAINWRAPUP:
+MEASURE -I Sum
+RETURNVALS Sum
 \end{lstlisting}
-Compiler stores per-process sections; \texttt{RUNCHILD} concatenates \texttt{child\_prologue + body + children\_wrapup}; top-level runs \texttt{global + main + body + main\_wrapup}.
+
+The cycle compiler stores all six buckets per process; the circuit builder shows prologue/wrap-up lanes when \texttt{executionMode=cycle}.
 
 \textbf{ClockFrame stack:} \texttt{type ClockFrame = \{ name, base, local \}}; absolute cycle $c=\mathrm{base}+\mathrm{local}$. Push on \texttt{RUNCHILD}, pop on return. \texttt{hilbert.output(r,c,\cdot)} and $M_c$ always use absolute $c$.
 
