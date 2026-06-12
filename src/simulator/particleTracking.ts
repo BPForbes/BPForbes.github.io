@@ -2,8 +2,6 @@ import { blochBallRhoExpectationFast } from './blochQuadrature';
 import { complex, formatComplex, magnitudeSquared, type Complex } from './complex';
 import { hasBit } from './gates/operations';
 import type { CircuitGate, MeasurementMap } from './types';
-// Simulator support for particleTracking.
-
 /** Bloch-vector Cartesian components: x = r sinθ cosφ, y = r sinθ sinφ, z = r cosθ. */
 export type BlochVector = {
   x: number;

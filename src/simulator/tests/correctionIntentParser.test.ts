@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseCorrectionIntent } from '../correctionIntentParser';
-// Regression coverage for correctionIntentParser behavior.
-
 const context = {
   source: 'PARAMS: A:state B:state Cin:state',
   truthTable: null,

@@ -2,7 +2,6 @@ import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { correctCircuit, runModuleTest, synthesizeProtocolFromTruthTable } from '../moduleTestApi';
 import {
-// Regression coverage for moduleTest behavior.
   createEmptyTruthTable,
   describeTruthTableDimensions,
   formatTruthTableRowSummary,

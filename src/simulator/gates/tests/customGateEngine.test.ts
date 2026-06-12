@@ -3,7 +3,6 @@ import { magnitudeSquared } from '../../complex';
 import { createInitialState } from '../../engine';
 import type { CircuitGate } from '../types';
 import {
-// Regression coverage for customGateEngine behavior.
   applyCustomGateProcess,
   getCustomGateRecord,
   listCustomGateRecords,
@@ -89,5 +88,4 @@ describe('customGateEngine', () => {
     expect(getCustomGateRecord('mygate')?.source).toBe(updatedSource);
     removeCustomGateRecord('MyGate');
   });
-// Keeps customGateEngine.test wiring explicit for maintainers.
 });

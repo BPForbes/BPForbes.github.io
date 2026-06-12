@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-// Regression coverage for processCatalog behavior.
   getCatalogEntries,
   getCatalogEntry,
   persistCatalogArtifacts,

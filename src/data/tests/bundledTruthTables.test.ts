@@ -4,8 +4,6 @@ import { fourBitFullAdderTruthTable, phaseDemoTruthTable, twoBitFullAdderTruthTa
 import { parseQpuioPayload } from '../qpuioFile';
 import { simulateTruthTableOutputs, truthTablesEqual, validateTruthTable } from '../../simulator/truthTable';
 // Validates bundled adder truth-table fixtures.
-// Regression coverage for bundledTruthTables behavior.
-
 const readProcess = (fileName: string) => readFileSync(new URL(`../processes/${fileName}`, import.meta.url), 'utf8');
 
 describe('bundledTruthTables', () => {

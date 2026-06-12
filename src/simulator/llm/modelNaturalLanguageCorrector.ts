@@ -4,11 +4,7 @@ import { buildNlContextSections } from './contextPrompt';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './intentTypes';
 
 export type LlmEndpointConfig = { url: string; model: string };
-// LLM correction path for modelNaturalLanguageCorrector.
-
-// Internal helper: ALLOWED_GATES.
 const ALLOWED_GATES = new Set<GatePreference>(['CNOT', 'CCNOT', 'X', 'H', 'NOT', 'AND', 'OR', 'XOR']);
-// Internal helper: OLLAMA_TIMEOUT_MS.
 const OLLAMA_TIMEOUT_MS = 8_000;
 
 function toStrictBoolean(value: unknown): boolean {

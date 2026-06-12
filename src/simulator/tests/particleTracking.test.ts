@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState, runCircuit } from '../engine';
 import {
-// Regression coverage for particleTracking behavior.
   blochCartesianFromSpherical,
   blochVectorForQubit,
   blochBallRhoExpectation,

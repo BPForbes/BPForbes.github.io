@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-// Regression coverage for qpuFileNames behavior.
   companionQpucirFileName,
   companionQpuioFileName,
   isQpucirFileName,

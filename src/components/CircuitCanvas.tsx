@@ -1,8 +1,6 @@
 import { isKnownGateType } from '../simulator/gates/registry';
 import { CircuitGate, GateType } from '../simulator/types';
 import { GateBlock } from './GateBlock';
-// UI surface for CircuitCanvas in the circuit builder shell.
-
 type CircuitCanvasProps = {
   qubitCount: number;
   gates: CircuitGate[];
@@ -13,7 +11,6 @@ type CircuitCanvasProps = {
   onRemoveGate: (gateId: string) => void;
 };
 
-// Internal helper: gateTouchesQubit.
 const gateTouchesQubit = (gate: CircuitGate, qubit: number) => gate.targets.includes(qubit) || gate.controls.includes(qubit);
 
 export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, qubitColors, onDropGate, onRemoveGate }: CircuitCanvasProps) {
@@ -88,5 +85,4 @@ export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, qub
       <p className="canvas-tip">Tip: each q-line gets a particle color; mixed control/target operations are connected across the colored wires.</p>
     </section>
   );
-// Keeps CircuitCanvas wiring explicit for maintainers.
 }

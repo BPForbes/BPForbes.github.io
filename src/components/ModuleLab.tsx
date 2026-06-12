@@ -1,6 +1,6 @@
+// Correction Lab: catalog + uploads, editable truth tables, circuit test/correct, and NL chat share one workflow state.
 import { ChangeEvent, FormEvent, memo, useCallback, useMemo, useState } from 'react';
 import {
-// UI surface for ModuleLab in the circuit builder shell.
   buildProcessCatalogSummaries,
   getCatalogEntries,
   getCatalogEntry,
@@ -23,7 +23,6 @@ import {
   companionQpucirFileName,
   isLooseQpucirUpload,
   isQpuioFileName,
-// Section 1: ModuleLab implementation detail.
   isQpucirFileName,
   processStemFromQpuioFileName,
   QPU_FILE_UPLOAD_ACCEPT,
@@ -49,7 +48,6 @@ import {
   loadLlmSettings,
   saveLlmSettings,
   type LlmSettings,
-// Section 2: ModuleLab implementation detail.
 } from '../simulator/llm/config';
 import { getCachedBrowserModelId } from '../simulator/llm/config';
 import { hasWebGpu } from '../simulator/webGpu';
@@ -75,20 +73,14 @@ import {
 
 type ChatMessage = {
   id: string;
-// Section 3: ModuleLab implementation detail.
   role: 'user' | 'assistant';
   text: string;
 };
 
-// Internal helper: DEFAULT_INPUTS.
 const DEFAULT_INPUTS = ['A', 'B'];
-// Internal helper: DEFAULT_OUTPUTS.
 const DEFAULT_OUTPUTS = ['Y'];
-// Internal helper: cellOptions.
 const cellOptions: TruthCellValue[] = ['0p', '1p', 'sp'];
-// Internal helper: MAX_INPUT_COUNT.
 const MAX_INPUT_COUNT = 6;
-// Internal helper: MAX_OUTPUT_COUNT.
 const MAX_OUTPUT_COUNT = 4;
 
 const generateId = () => {
@@ -98,20 +90,17 @@ const generateId = () => {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 };
 
-// Internal helper: welcomeMessage.
 const welcomeMessage = `Welcome to the Circuit Correction Lab. Pick a cataloged process or upload a .qpucir module (or -qpucir.txt on devices that hide custom extensions), shape the truth table, then chat to test and correct circuits.
 Commands like "test the circuit" or "fix automatically" use the fast built-in parser. For free-form questions, enable AI below — the browser model downloads once and is cached for later visits.
-// Section 4: ModuleLab implementation detail.
 Try: "open SingleBitFullAdder", "test the circuit", or "fix the circuit automatically".`;
 
-// Internal helper: createInitialTruthTable.
 const createInitialTruthTable = () => createTruthTableFromColumns(DEFAULT_INPUTS, DEFAULT_OUTPUTS);
 
-// Internal helper: nextColumnNames.
 const nextColumnNames = (prefix: string, count: number, existing: string[] = []) => (
   Array.from({ length: count }, (_, index) => existing[index] ?? `${prefix}${index}`)
 );
 
+// Memoized row editor so large truth tables do not re-render the full grid on every cell change.
 type TruthTableRowProps = {
   rowIndex: number;
   row: TruthCellValue[];
@@ -127,7 +116,6 @@ const TruthTableRow = memo(({
   failed,
   passed,
   readOnly,
-// Section 5: ModuleLab implementation detail.
   onCellChange,
 }: TruthTableRowProps) => (
   <tr className={failed ? 'truth-row-fail' : passed ? 'truth-row-pass' : undefined}>
@@ -152,8 +140,8 @@ const TruthTableRow = memo(({
 TruthTableRow.displayName = 'TruthTableRow';
 
 export const ModuleLab = () => {
+  // Workspace state: protocol text, truth table, last test, catalog selection, and chat/LLM preferences.
   const [source, setSource] = useState(() => createBlankProtocol(DEFAULT_INPUTS, DEFAULT_OUTPUTS));
-// Section 6: ModuleLab implementation detail.
   const [truthTable, setTruthTable] = useState<TruthTable>(() => createInitialTruthTable());
   const [lastTestResult, setLastTestResult] = useState<TruthTableTestResult | null>(null);
   const [selectedCatalogId, setSelectedCatalogId] = useState('');
@@ -179,7 +167,6 @@ export const ModuleLab = () => {
   const processCatalog = useMemo(() => buildProcessCatalogSummaries(), [catalogRefresh]);
   const activeProcessName = extractMainProcessName(source);
   const truthTableProtected = isCatalogTruthTableProtected(activeProcessName ?? '');
-// Section 7: ModuleLab implementation detail.
 
   const dimensions = useMemo(() => {
     if (!truthTable) return null;
@@ -205,7 +192,6 @@ export const ModuleLab = () => {
 
   const refreshCatalog = useCallback(() => {
     setCatalogRefresh(getCatalogVersion());
-// Section 8: ModuleLab implementation detail.
   }, []);
 
   const pushMessage = useCallback((role: ChatMessage['role'], text: string) => {
@@ -227,11 +213,11 @@ export const ModuleLab = () => {
     pendingClarification: clarification,
   }), [source, truthTable, activeProcessName, processCatalog, lastTestResult, librarySources, pendingClarification]);
 
+  // All table writes pass through protected-process enforcement so bundled .qpuio metadata cannot be edited away.
   const commitTruthTable = useCallback((
     processName: string | null | undefined,
     attempted: TruthTable,
     reason?: string,
-// Section 9: ModuleLab implementation detail.
   ) => {
     const enforced = enforceProtectedTruthTable(processName, attempted);
     if (!enforced) {
@@ -257,7 +243,6 @@ export const ModuleLab = () => {
     setLastTestResult(null);
     if (resetTable) {
       if (options?.truthTable) {
-// Section 10: ModuleLab implementation detail.
         commitTruthTable(processName, options.truthTable);
       } else {
         try {
@@ -283,7 +268,6 @@ export const ModuleLab = () => {
     });
     if (!options?.silent) {
       const tableNote = catalogTable
-// Section 11: ModuleLab implementation detail.
         ? ` Loaded bundled truth table (${catalogTable.rows.length} rows).`
         : ' Say "infer truth table" or "test the circuit" to continue.';
       pushMessage('assistant', `Loaded ${entry.name} from the process catalog.${tableNote}`);
@@ -309,7 +293,6 @@ export const ModuleLab = () => {
     if (!truthTable) return;
     if (truthTableProtected) {
       warnProtectedTruthTable(activeProcessName ?? 'this process', 'Truth-table dimensions cannot be changed for protected bundled processes.');
-// Section 12: ModuleLab implementation detail.
       return;
     }
     const inputColumns = nextColumnNames('A', count, truthTable.inputColumns);
@@ -332,10 +315,10 @@ export const ModuleLab = () => {
     setLastTestResult(null);
   };
 
+  // Upload pairing: .qpucir drives protocol registration; companion .qpuio loads or updates the truth table.
   const ingestUploadedFiles = async (input: FileList | File[]) => {
     const fileList = Array.from(input);
     fileList.forEach((file) => validateUploadFileName(file.name));
-// Section 13: ModuleLab implementation detail.
     const qpucirFiles = fileList.filter((file) => isQpucirFileName(file.name)
       || (isLooseQpucirUpload(file.name) && !isQpuioFileName(file.name) && !file.name.endsWith('.json')));
     const qpuioFiles = fileList.filter((file) => isQpuioFileName(file.name));
@@ -361,7 +344,6 @@ export const ModuleLab = () => {
       });
       refreshCatalog();
       if (registration.reverted) {
-// Section 14: ModuleLab implementation detail.
         warnProtectedTruthTable(parsed.processName, `Uploaded ${file.name} cannot replace protected site metadata.`);
       }
       const entry = registration.entry;
@@ -387,7 +369,6 @@ export const ModuleLab = () => {
     let truthTableFileName: string | undefined;
     if (companion) {
       const qpuioContents = await companion.text();
-// Section 15: ModuleLab implementation detail.
       const qpuioParsed = parseQpuioPayload(qpuioContents, parsed.source);
       if (qpuioParsed.processName !== parsed.name) {
         throw new Error(
@@ -413,7 +394,6 @@ export const ModuleLab = () => {
     });
     refreshCatalog();
     setSelectedCatalogId('');
-// Section 16: ModuleLab implementation detail.
     applySource(parsed.source, `Loaded ${primary.name}.`, { truthTable: registration.truthTable });
     const tableNote = registration.truthTable
       ? ` Truth table loaded${companion && isProtectedQpuioProcess(parsed.name) ? ' (protected default restored)' : ` from ${truthTableFileName}`}.`
@@ -439,7 +419,6 @@ export const ModuleLab = () => {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-// Section 17: ModuleLab implementation detail.
       await ingestUploadedFiles([file]);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -465,7 +444,6 @@ export const ModuleLab = () => {
     const result = persistCatalogArtifacts({
       processName,
       source: workflowSource,
-// Section 18: ModuleLab implementation detail.
       truthTable: table,
       updateQpuio: options?.updateQpuio,
       updateQpucir: options?.updateQpucir,
@@ -491,7 +469,6 @@ export const ModuleLab = () => {
     commitTruthTable(processName, table);
     setLastTestResult(null);
     const inferredDimensions = describeTruthTableDimensions(inferSource, table);
-// Section 19: ModuleLab implementation detail.
     setStatus(`Inferred ${formatTruthTableRowSummary(inferredDimensions)} × ${inferredDimensions.columnCount} columns.`);
     return table;
   }, [source, commitTruthTable]);
@@ -517,7 +494,6 @@ export const ModuleLab = () => {
       guidance,
       autonomous,
       correct: true,
-// Section 20: ModuleLab implementation detail.
       propagateToChildren: true,
       processName: extractMainProcessName(testSource) ?? activeProcessName ?? undefined,
       getTruthTable: getCatalogTruthTable,
@@ -543,7 +519,6 @@ export const ModuleLab = () => {
     commitTruthTable(processName, table);
 
     const persist = response.correctedSource
-// Section 21: ModuleLab implementation detail.
       ? persistActiveArtifacts(finalSource, table, {
         updateQpuio: false,
         updateQpucir: true,
@@ -571,7 +546,6 @@ export const ModuleLab = () => {
 
   // Every parsed intent flows through this gate so protected truth tables are enforced before any correction is applied.
   const applyParsedIntent = async (intent: ModelCorrectionIntent) => {
-// Section 22: ModuleLab implementation detail.
     if (intent.clarification) {
       setPendingClarification(intent.clarification);
       pushMessage('assistant', intent.reply);
@@ -597,7 +571,6 @@ export const ModuleLab = () => {
       intent.loadFullAdderTable
       || intent.inferTable
       || intent.truthTable
-// Section 23: ModuleLab implementation detail.
       || intent.probeOutputs
       || intent.runTest
       || intent.updateQpuio
@@ -623,7 +596,6 @@ export const ModuleLab = () => {
       }
     }
 
-// Section 24: ModuleLab implementation detail.
     const isCircuitCorrection = Boolean(
       intent.runTest && (intent.autonomous || (intent.guidance?.gates?.length ?? 0) > 0),
     );
@@ -649,7 +621,6 @@ export const ModuleLab = () => {
         setTruthTable(table);
       }
       setLastTestResult(null);
-// Section 25: ModuleLab implementation detail.
     }
 
     if (intent.probeOutputs && !isCircuitCorrection) {
@@ -675,7 +646,6 @@ export const ModuleLab = () => {
         return;
       }
       const persist = persistCatalogArtifacts({
-// Section 26: ModuleLab implementation detail.
         processName: extractMainProcessName(currentSource) ?? activeProcessName ?? 'UntitledCircuit',
         source: currentSource,
         truthTable: table,
@@ -701,7 +671,6 @@ export const ModuleLab = () => {
           pushMessage('assistant', `${intent.reply}\n\n${summary}`);
           if (intent.autonomous) setPendingGuidance({});
         } else {
-// Section 27: ModuleLab implementation detail.
           const { summary } = runTestOnly(table, currentSource);
           pushMessage('assistant', `${intent.reply}\n\n${summary}`);
         }
@@ -727,7 +696,6 @@ export const ModuleLab = () => {
       const selected = resolveClarificationResponse(text, pendingClarification);
       if (selected) {
         setPendingClarification(null);
-// Section 28: ModuleLab implementation detail.
         await handleIntent(selected.command);
         return;
       }
@@ -753,7 +721,6 @@ export const ModuleLab = () => {
         setPendingClarification(null);
         await applyParsedIntent(intent);
         return;
-// Section 29: ModuleLab implementation detail.
       }
 
       pushMessage('assistant', formatClarificationRetry(pendingClarification));
@@ -779,7 +746,6 @@ export const ModuleLab = () => {
       await handleIntent(text);
     } catch (err) {
       console.error('handleIntent failed', err);
-// Section 30: ModuleLab implementation detail.
       pushMessage('assistant', 'Sorry, something went wrong while processing your message.');
     } finally {
       setChatBusy(false);
@@ -805,7 +771,6 @@ export const ModuleLab = () => {
       setStatus(`Test error: ${message}`);
     }
   };
-// Section 31: ModuleLab implementation detail.
 
   const downloadTruthTable = () => {
     if (!truthTable) return;
@@ -831,7 +796,6 @@ export const ModuleLab = () => {
 
   const downloadCircuit = (asTxt = false) => {
     try {
-// Section 32: ModuleLab implementation detail.
       const fallbackName = activeProcessName ?? 'CorrectedCircuit';
       if (asTxt) {
         downloadQpucirTxtSource(source, fallbackName);
@@ -857,7 +821,6 @@ export const ModuleLab = () => {
     });
     if (patch.browserModel) {
       setModelReady(getCachedBrowserModelId() === patch.browserModel);
-// Section 33: ModuleLab implementation detail.
     }
   };
 
@@ -883,7 +846,6 @@ export const ModuleLab = () => {
       setModelLoading(false);
     }
   };
-// Section 34: ModuleLab implementation detail.
 
   const handleClearBrowserModel = async () => {
     setCacheClearing(true);
@@ -901,6 +863,7 @@ export const ModuleLab = () => {
     }
   };
 
+  // Left column: protocol/table workspace. Right column: regex-first chat with optional browser/Ollama parser.
   return (
     <div className="module-lab-shell">
       <header className="module-lab-hero panel">
@@ -909,7 +872,6 @@ export const ModuleLab = () => {
           <h1>Test modules and fix circuits with natural language.</h1>
           <p>Choose a cataloged process or upload a .qpucir file (optionally with a companion .qpuio truth table). Tagged -qpucir.txt and -qpuio.txt names are also accepted when a device file picker cannot see custom extensions.</p>
         </div>
-// Section 35: ModuleLab implementation detail.
       </header>
 
       <div className="module-lab-layout">
@@ -935,7 +897,6 @@ export const ModuleLab = () => {
             <label className="upload-card">
               <strong>Catalog process</strong>
               <span>Recently compiled, uploaded, and bundled processes.</span>
-// Section 36: ModuleLab implementation detail.
               <select
                 onChange={(event) => {
                   const value = event.target.value;
@@ -961,7 +922,6 @@ export const ModuleLab = () => {
               <button onClick={() => { commitTruthTable('SingleBitFullAdder', singleBitFullAdderTruthTable()); setLastTestResult(null); pushMessage('assistant', 'Loaded canonical full-adder truth table.'); }} type="button">Full-adder table</button>
               <button
                 disabled={!truthTable}
-// Section 37: ModuleLab implementation detail.
                 onClick={() => {
                   if (!truthTable) return;
                   if (truthTableProtected) {
@@ -987,7 +947,6 @@ export const ModuleLab = () => {
           <div className="truth-table-dimensions">
             <label>
               Input columns
-// Section 38: ModuleLab implementation detail.
               <input
                 disabled={truthTableProtected}
                 max={MAX_INPUT_COUNT}
@@ -1013,7 +972,6 @@ export const ModuleLab = () => {
           {dimensions && (
             <p className="canvas-tip">
               Table size: {formatTruthTableRowSummary(dimensions)} × {dimensions.columnCount} columns.
-// Section 39: ModuleLab implementation detail.
               {dimensions.isPartial ? ' Only listed rows are tested and corrected.' : ''}
               {activeProcessName ? ` Active process: ${activeProcessName}.` : ''}
               {truthTableProtected ? ' Protected bundled truth table (edits are reverted).' : ''}
@@ -1039,7 +997,6 @@ export const ModuleLab = () => {
                     <th>#</th>
                     {allColumns.map((column, index) => (
                       <th key={column} className={index < truthTable.inputColumns.length ? 'input-col' : 'output-col'}>
-// Section 40: ModuleLab implementation detail.
                         {column}
                       </th>
                     ))}
@@ -1065,7 +1022,6 @@ export const ModuleLab = () => {
           <div className="module-tester-actions">
             <button disabled={!truthTable} onClick={() => runManualTest(false)} type="button">Test circuit</button>
             <button disabled={!truthTable} onClick={() => runManualTest(true)} type="button">Correct autonomously</button>
-// Section 41: ModuleLab implementation detail.
           </div>
 
           <p className="file-status">{displayStatus}</p>
@@ -1091,7 +1047,6 @@ export const ModuleLab = () => {
                 Browser model (downloads once, cached locally)
               </label>
               <label>
-// Section 42: ModuleLab implementation detail.
                 <input
                   checked={llmSettings.mode === 'ollama'}
                   name="llm-mode"
@@ -1117,7 +1072,6 @@ export const ModuleLab = () => {
                   >
                     {BROWSER_MODEL_OPTIONS.map((model) => (
                       <option key={model} value={model}>{model}</option>
-// Section 43: ModuleLab implementation detail.
                     ))}
                   </select>
                 </label>
@@ -1143,7 +1097,6 @@ export const ModuleLab = () => {
                     value={llmSettings.ollamaUrl}
                   />
                 </label>
-// Section 44: ModuleLab implementation detail.
                 <label>
                   Model name
                   <input
@@ -1169,7 +1122,6 @@ export const ModuleLab = () => {
               }}
               type="checkbox"
             />
-// Section 45: ModuleLab implementation detail.
             <span>Use AI for unrecognized messages (regex handles common commands instantly)</span>
           </label>
 

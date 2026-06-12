@@ -18,8 +18,6 @@ import { nandGate } from './nand';
 import { orGate } from './or';
 import { xorGate } from './xor';
 import type { GateDefinition } from '../types';
-// PRECONFIGURED gate palette entry and apply hook for the shared registry.
-
 // Ordered palette list consumed by registry.ts.
 export const preconfiguredGates: GateDefinition[] = [
   xGate,
@@ -43,7 +41,6 @@ export const preconfiguredGates: GateDefinition[] = [
   xorGate,
 ];
 
-// Public API: preconfiguredGateMap.
 export const preconfiguredGateMap = Object.fromEntries(
   preconfiguredGates.map((gate) => [gate.id, gate]),
 ) as Record<string, GateDefinition>;

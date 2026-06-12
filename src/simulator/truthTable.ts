@@ -6,13 +6,11 @@ import type { ParticleStartState } from './types';
 export type TruthCellValue = '0p' | '1p' | 'sp';
 
 export type TruthTable = {
-// Simulator support for truthTable.
   inputColumns: string[];
   outputColumns: string[];
   rows: TruthCellValue[][];
 };
 
-// Public API: cloneTruthTable.
 export const cloneTruthTable = (table: TruthTable): TruthTable => structuredClone(table);
 
 // Dimensions cover full combinatorial row counts plus optional listed-row metadata for partial tables.
@@ -41,10 +39,8 @@ export type TruthTableTestResult = {
   dimensions: TruthTableDimensions;
 };
 
-// Internal helper: VALID_CELLS.
 const VALID_CELLS = new Set<TruthCellValue>(['0p', '1p', 'sp']);
 
-// Public API: isTruthCellValue.
 export const isTruthCellValue = (value: string): value is TruthCellValue => VALID_CELLS.has(value as TruthCellValue);
 
 const tokenQubit = (tokenMap: Record<string, number>, name: string) => {
@@ -53,7 +49,6 @@ const tokenQubit = (tokenMap: Record<string, number>, name: string) => {
   return entry[1];
 };
 
-// Internal helper: setToken.
 const setToken = (
   tokenMap: Record<string, number>,
   startStates: ParticleStartState[],
@@ -63,7 +58,6 @@ const setToken = (
   startStates[tokenQubit(tokenMap, name)] = value;
 };
 
-// Internal helper: readMeasuredBit.
 const readMeasuredBit = (
   tokenMap: Record<string, number>,
   measurements: Record<number, 0 | 1>,
@@ -84,7 +78,6 @@ export const inferTruthTableDimensions = (source: string): TruthTableDimensions 
   };
 };
 
-// Public API: describeTruthTableDimensions.
 export const describeTruthTableDimensions = (
   source: string,
   table?: TruthTable | null,
@@ -142,7 +135,6 @@ const remapTruthTableRow = (
   return previousIndex >= 0 ? (previous[previousIndex] ?? cell) : cell;
 });
 
-// Public API: resizeTruthTable.
 export const resizeTruthTable = (
   table: TruthTable,
   inputColumns: string[],
@@ -290,7 +282,6 @@ export const validateTruthTable = (table: TruthTable, source?: string): string[]
   return errors;
 };
 
-// Public API: simulateTruthTableOutputs.
 export const simulateTruthTableOutputs = (
   source: string,
   librarySources: Record<string, string> = {},
@@ -404,8 +395,6 @@ export const parseTruthTableJson = (raw: string): TruthTable => {
   };
 };
 
-// Public API: serializeTruthTableJson.
 export const serializeTruthTableJson = (table: TruthTable) => JSON.stringify(table, null, 2);
 
-// Public API: extractProcessName.
 export const extractProcessName = (source: string) => parseProtocol(source).name;

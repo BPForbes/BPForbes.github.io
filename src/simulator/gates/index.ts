@@ -1,4 +1,3 @@
-// Gate-module helper for gates.
 export * from './matrices';
 export * from './operations';
 export * from './types';

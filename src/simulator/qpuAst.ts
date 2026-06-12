@@ -3,7 +3,6 @@ import { astDerivedGateIds, astPrimitiveGateIds } from './gates/metadata';
 import { CircuitGate, GateType, QpuOperation } from './types';
 
 export type ParsedCommand = {
-// Simulator support for qpuAst.
   op: QpuOperation;
   raw: string;
   inputs: string[];
@@ -43,15 +42,11 @@ export type CompileResult = {
   returnValues: ReturnValue[];
 };
 
-// Internal helper: NUMERIC_PARAM_TYPES.
 const NUMERIC_PARAM_TYPES = ['int', 'float'] as const;
 
-// Internal helper: primitiveGates.
 const primitiveGates = new Set(astPrimitiveGateIds());
-// Internal helper: derivedGates.
 const derivedGates = new Set(astDerivedGateIds());
 
-// Public API: supportedQpuOperations.
 export const supportedQpuOperations: QpuOperation[] = [
   'INCREASECYCLE',
   'COMPILEPROCESS',
@@ -90,9 +85,7 @@ export const supportedQpuOperations: QpuOperation[] = [
   'PHASE',
 ];
 
-// Internal helper: rationalPattern.
 const rationalPattern = /^([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:\/([+-]?(?:\d+(?:\.\d+)?|\.\d+)))?$/;
-// Internal helper: piPattern.
 const piPattern = /^([+-])?(?:(\d+)\*?)?pi(?:\/(\d+))?$/;
 
 const parseRationalRotation = (value: string) => {
@@ -126,9 +119,7 @@ const parseRotationParameter = (value: string, gate: string) => {
   throw new Error(`Invalid ${gate} parameter '${value}'`);
 };
 
-// Internal helper: stripCycle.
 const stripCycle = (token: string) => token.replace(/^\$/, '').split(':')[0];
-// Internal helper: isConstant.
 const isConstant = (token: string) => /^(0p|1p|sp)(?:_dim\d+)?$/i.test(token.replace(/^\$/, ''));
 
 // Continuation-aware line reading keeps multi-line gate commands parseable without changing the protocol format.
@@ -221,7 +212,6 @@ export const parseCommand = (line: string): ParsedCommand => {
 
   if (normalized.includes('=')) {
     const [gate, value] = normalized.split('=', 2);
-// Section 1: qpuAst implementation detail.
     normalized = gate;
     phase = parseRotationParameter(value, gate);
     if (reverse && normalized === 'PHASE') phase *= -1;
@@ -289,7 +279,6 @@ const processLibraryFromSources = (sources: Record<string, string>) => {
   return library;
 };
 
-// Internal helper: childWorkspaceKey.
 const childWorkspaceKey = (parentFrame: Frame, base: string) => `${parentFrame.scope}/ws/${base}`;
 
 // Scoped token names keep child-process registers isolated, except PARAMS, aliases, constants, and numeric workspace wires.
@@ -339,7 +328,6 @@ const flushCycleZeros = (state: CompilerState, source: string) => {
   emitGate(state, 'RESET', targets, [], source);
 };
 
-// Internal helper: resolveInputQubit.
 const resolveInputQubit = (state: CompilerState, frame: Frame, token: string, parentFrame?: Frame) =>
   ensureQubit(state, scopedName(frame, token, parentFrame));
 
@@ -355,7 +343,6 @@ const returnRegistersForProcess = (process: ProtocolProcess): string[] => {
   return [];
 };
 
-// Public API: getReturnValTokens.
 export const getReturnValTokens = (source: string): string[] => returnRegistersForProcess(parseProtocol(source));
 
 export const getReturnValToken = (source: string, index: number): string => {
@@ -445,7 +432,6 @@ const executeProcess = (
       command.inputs.forEach((token) => {
         ensureQubit(state, scopedName(frame, token, parentFrame));
       });
-// Section 2: qpuAst implementation detail.
       state.log.push(`CREATETOKEN created ${command.inputs.join(', ')}.`);
       continue;
     }

@@ -5,8 +5,6 @@ import { getProtocolParameterEntries, serializeCircuitToQpuProtocol, updateProto
 import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from '../engine';
 import { complex, magnitudeSquared } from '../complex';
 import type { ParticleStartState } from '../types';
-// Regression coverage for childProcess behavior.
-
 const readProcess = (fileName: string) => readFileSync(new URL(`../../data/processes/${fileName}`, import.meta.url), 'utf8');
 
 const protocolLibrary = {

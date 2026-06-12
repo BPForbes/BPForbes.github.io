@@ -2,8 +2,6 @@ import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { companionQpuioFileName, createQpuioPayload, parseQpuioPayload, serializeQpuioText } from '../qpuioFile';
 import { singleBitFullAdderTruthTable, truthTablesEqual } from '../../simulator/truthTable';
-// Regression coverage for qpuioFile behavior.
-
 const readProcess = (fileName: string) => readFileSync(new URL(`../processes/${fileName}`, import.meta.url), 'utf8');
 
 describe('qpuioFile', () => {

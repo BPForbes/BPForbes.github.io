@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ONE, scale, ZERO } from '../complex';
 import { measureQubit, padStateVector, prepareZeroQubit } from '../gates/operations';
-// Regression coverage for operations behavior.
-
 describe('operations', () => {
   it('pads state vectors by shifting indices for appended |0⟩ wires', () => {
     const twoQubit = [ONE, ZERO, ZERO, ONE];

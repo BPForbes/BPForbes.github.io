@@ -1,7 +1,6 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import {
-// Regression coverage for childProcessCorrection behavior.
   collectDescendantProcesses,
   correctChildProcessesForCompatibility,
   getReferencedChildProcesses,

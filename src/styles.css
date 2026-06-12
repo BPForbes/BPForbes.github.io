@@ -33,7 +33,6 @@ button { font: inherit; }
 
 .palette { display: grid; grid-template-columns: repeat(5, minmax(3.25rem, 1fr)); gap: .65rem; }
 .gate { min-height: 3.4rem; border: 0; border-radius: 1rem; color: white; font-weight: 900; cursor: grab; touch-action: manipulation; box-shadow: inset 0 -6px 16px rgba(0,0,0,.2), 0 12px 24px rgba(0,0,0,.2); transition: transform .2s ease, outline .2s ease; }
-/* Section 1: styles implementation detail. */
 .gate:active { cursor: grabbing; transform: scale(.96); }
 .gate.selected { outline: 3px solid #facc15; outline-offset: 2px; }
 .gate.compact { width: 2.35rem; height: 2.35rem; min-height: 2.35rem; border-radius: .7rem; font-size: .78rem; cursor: pointer; }
@@ -69,7 +68,6 @@ button { font: inherit; }
 .wire-row { display: grid; grid-template-columns: 3rem 1fr; align-items: center; gap: .5rem; }
 .wire-label { color: #cbd5e1; font-weight: 800; }
 .wire-lane { position: relative; height: 4.25rem; display: block; width: 100%; border: 1px dashed rgba(148,163,184,.28); border-radius: 1rem; background: rgba(30,41,59,.52); cursor: copy; }
-/* Section 2: styles implementation detail. */
 .wire-lane.ready { border-color: rgba(250,204,21,.65); }
 .wire-line { position: absolute; left: .8rem; right: .8rem; top: 50%; height: 3px; background: linear-gradient(90deg, transparent, #94a3b8, transparent); transform: translateY(-50%); }
 .placed-gate { position: absolute; top: 50%; left: calc(var(--step) * 4.1rem); transform: translate(-50%, -50%); z-index: 2; }
@@ -105,7 +103,6 @@ button { font: inherit; }
 
 .measurements { display: flex; flex-wrap: wrap; gap: .5rem; }
 .measurement-pill { padding: .45rem .65rem; border-radius: 999px; background: rgba(14,165,233,.16); border: 1px solid rgba(125,211,252,.26); color: #e0f2fe; font-weight: 800; }
-/* Section 3: styles implementation detail. */
 .output h3 { margin: 1rem 0 .5rem; font-size: .95rem; color: #cbd5e1; }
 .state-vector { display: grid; gap: .45rem; max-height: 12rem; overflow: auto; }
 .state-vector code { padding: .55rem; border-radius: .6rem; background: rgba(2,6,23,.7); color: #bef264; }
@@ -141,7 +138,6 @@ button { font: inherit; }
 @media (max-width: 520px) {
   .palette { grid-template-columns: repeat(4, minmax(3.25rem, 1fr)); }
   .particle-grid { grid-template-columns: repeat(2, 1fr); }
-/* Section 4: styles implementation detail. */
 }
 @media (min-width: 521px) {
   .particle-grid { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
@@ -177,7 +173,6 @@ button { font: inherit; }
 .hamburger-button span { display: block; width: 1.35rem; height: .18rem; border-radius: 999px; background: #e0f2fe; }
 .site-menu { position: fixed; z-index: 50; top: 0; left: 0; width: min(21rem, 86vw); min-height: 100vh; display: flex; flex-direction: column; gap: .5rem; padding: 1rem; background: linear-gradient(180deg, rgba(15,23,42,.98), rgba(30,41,59,.98)); border-right: 1px solid rgba(148,163,184,.24); box-shadow: 24px 0 80px rgba(0,0,0,.4); transform: translateX(-105%); transition: transform .24s ease; }
 .site-menu.open { transform: translateX(0); }
-/* Section 5: styles implementation detail. */
 .menu-backdrop { position: fixed; inset: 0; z-index: 45; border: 0; background: rgba(2,6,23,.58); cursor: pointer; }
 .menu-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .5rem; color: #f8fafc; }
 .menu-heading button,
@@ -213,7 +208,6 @@ button { font: inherit; }
 .module-tester-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
 .module-tester-actions button { border: 1px solid rgba(125,211,252,.28); color: #082f49; background: linear-gradient(135deg, #67e8f9, #38bdf8); border-radius: .8rem; padding: .7rem .85rem; font-weight: 900; cursor: pointer; }
 .module-tester-actions button:disabled { opacity: .45; cursor: not-allowed; }
-/* Section 6: styles implementation detail. */
 .module-source-editor { width: 100%; min-height: 14rem; resize: vertical; border-radius: 1rem; border: 1px solid rgba(148,163,184,.3); background: rgba(2,6,23,.78); color: #dbeafe; padding: 1rem; font-family: SFMono-Regular, Consolas, monospace; font-size: .86rem; line-height: 1.45; margin: .75rem 0; }
 .truth-table-editor-wrap { overflow: auto; border: 1px solid rgba(148,163,184,.22); border-radius: .9rem; margin: .75rem 0; }
 .truth-table-editor { width: 100%; border-collapse: collapse; font-size: .84rem; }
@@ -249,7 +243,6 @@ button { font: inherit; }
   .module-tester-grid { grid-template-columns: 1fr 1fr; align-items: start; }
   .guided-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .module-lab-layout { grid-template-columns: minmax(0, 1.2fr) minmax(18rem, .8fr); align-items: start; }
-/* Section 7: styles implementation detail. */
 }
 .docs-grid { display: grid; gap: 1rem; }
 .docs-grid article { border: 1px solid rgba(148,163,184,.18); border-radius: 1rem; padding: 1rem; background: rgba(2,6,23,.36); }
@@ -285,7 +278,6 @@ button { font: inherit; }
 .wire-line { background: linear-gradient(90deg, transparent, var(--particle-color), transparent); box-shadow: 0 0 18px color-mix(in srgb, var(--particle-color), transparent 35%); }
 .placed-gate.done .gate,
 .placed-gate.done .control-dot { filter: saturate(.7); opacity: .82; }
-/* Section 8: styles implementation detail. */
 .placed-gate.active .gate,
 .placed-gate.active .control-dot { animation: pulse-gate .8s ease-in-out infinite alternate; }
 .control-dot { background: var(--gate-color, #f8fafc); }

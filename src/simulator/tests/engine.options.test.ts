@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { createInitialState, runCircuit } from '../engine';
 import type { CircuitGate } from '../types';
 // Guards execution-option normalization edge cases.
-// Regression coverage for engine.options behavior.
-
 const gate = (type: string, step: number, targets: number[]): CircuitGate => ({
   id: `${type}-${step}`,
   type,

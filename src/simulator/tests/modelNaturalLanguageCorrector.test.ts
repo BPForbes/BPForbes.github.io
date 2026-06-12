@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseNaturalLanguageWithModel, sanitizeIntent } from '../llm/modelNaturalLanguageCorrector';
-// Regression coverage for modelNaturalLanguageCorrector behavior.
-
 const context = {
   source: 'PARAMS: A:state B:state Cin:state',
   truthTable: null,
@@ -89,5 +87,4 @@ describe('parseNaturalLanguageWithModel', () => {
       guidance: undefined,
     });
   });
-// Keeps modelNaturalLanguageCorrector.test wiring explicit for maintainers.
 });

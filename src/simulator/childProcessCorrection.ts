@@ -3,14 +3,12 @@ import type { TruthTable, TruthTableTestResult } from './truthTable';
 import { testCircuitAgainstTruthTable } from './truthTable';
 
 export type ChildCorrectionResult = {
-// Simulator support for childProcessCorrection.
   processName: string;
   corrected: boolean;
   source: string;
   testResult: TruthTableTestResult;
 };
 
-// Internal helper: CHILD_REFERENCE_PATTERN.
 const CHILD_REFERENCE_PATTERN = /^\s*(?:DECLARECHILD|RUNCHILD|CALL)\s+(\S+)/i;
 
 export const getReferencedChildProcesses = (source: string): string[] => {
@@ -71,7 +69,6 @@ export const orderProcessesLeafFirst = (
   return ordered;
 };
 
-// Public API: correctChildProcessesForCompatibility.
 export const correctChildProcessesForCompatibility = (
   parentProcessName: string,
   librarySources: Record<string, string>,

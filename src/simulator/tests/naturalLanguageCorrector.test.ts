@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { buildProcessCatalogSummaries } from '../../data/processCatalog';
 import { parseNaturalLanguageCorrection } from '../llm/naturalLanguageCorrector';
 import { singleBitFullAdderTruthTable } from '../truthTable';
-// Regression coverage for naturalLanguageCorrector behavior.
-
 const singleBitSource = readFileSync(new URL('../../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');
 const twoBitSource = readFileSync(new URL('../../data/processes/two-bit-full-adder.qpucir', import.meta.url), 'utf8');
 
@@ -131,5 +129,4 @@ describe('parseNaturalLanguageCorrection', () => {
     const row = intent.truthTable!.rows.find((candidate) => candidate[0] === '1p' && candidate[1] === '1p' && candidate[2] === '0p');
     expect(row).toEqual(['1p', '1p', '0p', '1p', '0p']);
   });
-// Keeps naturalLanguageCorrector.test wiring explicit for maintainers.
 });

@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-// Regression coverage for webLlmNaturalLanguageCorrector behavior.
   clearBrowserModel,
   parseNaturalLanguageWithWebLlm,
   preloadBrowserModel,
@@ -132,5 +131,4 @@ describe('hasWebGpu', () => {
     vi.stubGlobal('navigator', { gpu: {} });
     expect(hasWebGpu()).toBe(true);
   });
-// Keeps webLlmNaturalLanguageCorrector.test wiring explicit for maintainers.
 });

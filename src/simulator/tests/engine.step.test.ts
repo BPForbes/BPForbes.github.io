@@ -3,8 +3,6 @@ import { createInitialState, stepCircuitGate } from '../engine';
 import type { CircuitGate } from '../types';
 import { registerCustomGate } from '../gates/customGateEngine';
 import { refreshCustomGateRegistry } from '../gates/registry';
-// Regression coverage for engine.step behavior.
-
 const gate = (type: string, step: number, targets: number[], controls: number[] = []): CircuitGate => ({
   id: `${type}-${step}`,
   type,
@@ -48,5 +46,4 @@ describe('stepCircuitGate', () => {
     const followUp = stepCircuitGate(state, qubitCount, gate('H', 1, [0]), {});
     expect(followUp.result.state.some((amplitude) => Math.abs(amplitude.re) > 1e-6 || Math.abs(amplitude.im) > 1e-6)).toBe(true);
   });
-// Keeps engine.step.test wiring explicit for maintainers.
 });

@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { angularPeakedIntegral, blochBallRhoExpectationFast, radialPeakedIntegral } from '../blochQuadrature';
-// Regression coverage for blochQuadrature behavior.
-
 /** Legacy O(n³) reference integrator for regression checks only. */
 const blochBallRhoExpectationGrid = (
   r0: number,
