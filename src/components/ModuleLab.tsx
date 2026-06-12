@@ -1,11 +1,3 @@
-/**
- * Catalog and correction workspace for QPU process modules.
- *
- * The lab ties together uploads, protected truth-table handling, natural
- * language correction, compatibility checks, and artifact downloads. The dense
- * state in this component reflects that it is the orchestration point for
- * multi-file process workflows rather than a simple presentational panel.
- */
 import { ChangeEvent, FormEvent, memo, useCallback, useMemo, useState } from 'react';
 import {
   buildProcessCatalogSummaries,
@@ -49,14 +41,14 @@ import {
   resolveClarificationResponse,
 } from '../simulator/clarification';
 import { parseCorrectionIntent } from '../simulator/correctionIntentParser';
-import type { ModelCorrectionIntent, PendingClarification } from '../simulator/nlIntentTypes';
+import type { ModelCorrectionIntent, PendingClarification } from '../simulator/llm/intentTypes';
 import {
   BROWSER_MODEL_OPTIONS,
   loadLlmSettings,
   saveLlmSettings,
   type LlmSettings,
-} from '../simulator/llmConfig';
-import { getCachedBrowserModelId } from '../simulator/llmConfig';
+} from '../simulator/llm/config';
+import { getCachedBrowserModelId } from '../simulator/llm/config';
 import { hasWebGpu } from '../simulator/webGpu';
 import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/qpuFormat';
 import {
@@ -547,6 +539,7 @@ export const ModuleLab = () => {
     return { response, summary, persist };
   }, [source, librarySources, activeProcessName, refreshCatalog, persistActiveArtifacts, commitTruthTable]);
 
+  // Every parsed intent flows through this gate so protected truth tables are enforced before any correction is applied.
   const applyParsedIntent = async (intent: ModelCorrectionIntent) => {
     if (intent.clarification) {
       setPendingClarification(intent.clarification);
@@ -686,6 +679,7 @@ export const ModuleLab = () => {
     pushMessage('assistant', intent.reply);
   };
 
+  // Clarification replies are resolved before invoking the parser again, avoiding a loop of ambiguous model prompts.
   const handleIntent = async (text: string) => {
     if (pendingClarification) {
       if (/^cancel$/i.test(text.trim())) {
@@ -825,6 +819,7 @@ export const ModuleLab = () => {
     }
   };
 
+  // Browser model downloads are explicit: the regex parser stays available while WebLLM assets are cached or cleared.
   const loadBrowserModel = async () => {
     if (!webGpuAvailable) {
       setStatus('WebGPU is not available in this browser. Use Ollama mode or a WebGPU-capable browser.');
@@ -832,7 +827,7 @@ export const ModuleLab = () => {
     }
     setModelLoading(true);
     try {
-      const { preloadBrowserModel } = await import('../simulator/webLlmNaturalLanguageCorrector');
+      const { preloadBrowserModel } = await import('../simulator/llm/webLlmNaturalLanguageCorrector');
       const ok = await preloadBrowserModel(llmSettings.browserModel, (progress) => setStatus(progress));
       setModelReady(ok);
       setStatus(ok
@@ -850,7 +845,7 @@ export const ModuleLab = () => {
   const handleClearBrowserModel = async () => {
     setCacheClearing(true);
     try {
-      const { clearBrowserModel } = await import('../simulator/webLlmNaturalLanguageCorrector');
+      const { clearBrowserModel } = await import('../simulator/llm/webLlmNaturalLanguageCorrector');
       await clearBrowserModel(llmSettings.browserModel, (progress) => setStatus(progress));
       setModelReady(false);
       setStatus(`Cleared browser cache for ${llmSettings.browserModel}. Download again before using AI mode.`);

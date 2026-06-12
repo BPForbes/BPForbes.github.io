@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { buildProcessCatalogSummaries } from '../../data/processCatalog';
-import { parseNaturalLanguageCorrection } from '../naturalLanguageCorrector';
+import { parseNaturalLanguageCorrection } from '../llm/naturalLanguageCorrector';
 import { singleBitFullAdderTruthTable } from '../truthTable';
 
 const singleBitSource = readFileSync(new URL('../../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');

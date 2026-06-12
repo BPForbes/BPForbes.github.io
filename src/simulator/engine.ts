@@ -1,12 +1,3 @@
-/**
- * Runtime execution engine for compiled QPU circuits.
- *
- * The engine owns state-vector initialization, per-gate dispatch, measurement
- * bookkeeping, optional particle-transition snapshots, and dynamic state-vector
- * widening for gates that touch newly introduced wires. Gate-specific quantum
- * math lives under `simulator/gates`; this file stitches those operations into
- * complete circuit runs used by the UI and tests.
- */
 import { Complex, magnitudeSquared, ONE, ZERO } from './complex';
 import { applyGate as applyRegisteredGate } from './gates/registry';
 import { applyStartState, hasBit, measureQubit, padStateVector } from './gates/operations';
@@ -55,6 +46,7 @@ const resolveParamQubitIndices = (
   return Array.from({ length: Math.min(qubitCount, startStates.length) }, (_, qubit) => qubit);
 };
 
+// Start-state preparation applies only to logical parameter qubits; compiler-created ancilla stay initialized to |0⟩.
 export const createInitialState = (
   qubitCount: number,
   startStates: ParticleStartState[] = [],
@@ -121,6 +113,7 @@ const normalizeApplyGateOptions = (
   return { librarySources: input as Record<string, string>, trackParticles: false };
 };
 
+// Gate application pads the state vector on demand because compiled child processes may introduce workspace qubits.
 export const applyGate = (
   state: Complex[],
   qubitCount: number,
@@ -180,6 +173,7 @@ const normalizeRunCircuitOptions = (
   return { librarySources: input as Record<string, string>, trackParticles: false };
 };
 
+// Full-circuit runs share the stepping path so logs, measurements, and particle transitions stay consistent.
 export const runCircuit = (
   qubitCount: number,
   gates: CircuitGate[],

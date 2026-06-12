@@ -1,17 +1,11 @@
-/**
- * Prompt-context builder for model-assisted circuit correction.
- *
- * The context is assembled in sections so browser and remote model callers can
- * share one concise description of the active protocol, truth table, and catalog
- * without duplicating prompt text.
- */
-import { buildAgentRulesPrompt } from '../data/agentRules';
-import { formatCatalogForPrompt, formatTestFailuresForPrompt } from '../data/processCatalog';
-import { isProtectedQpuioProcess } from '../data/protectedQpuio';
-import { extractMainProcessName } from './qpuFormat';
-import type { NlCorrectionContext } from './nlIntentTypes';
-import { describeTruthTableDimensions, formatTruthTableRowSummary } from './truthTable';
+import { buildAgentRulesPrompt } from '../../data/agentRules';
+import { formatCatalogForPrompt, formatTestFailuresForPrompt } from '../../data/processCatalog';
+import { isProtectedQpuioProcess } from '../../data/protectedQpuio';
+import { extractMainProcessName } from '../qpuFormat';
+import type { NlCorrectionContext } from './intentTypes';
+import { describeTruthTableDimensions, formatTruthTableRowSummary } from '../truthTable';
 
+// Prompt sections mirror the correction UI state: active protocol, protections, catalog, and latest test failures.
 export const buildNlContextSections = (context: NlCorrectionContext) => {
   const activeName = context.activeProcessName ?? extractMainProcessName(context.source) ?? 'UntitledCircuit';
   const catalog = context.processCatalog?.length

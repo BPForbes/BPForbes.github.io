@@ -1,18 +1,11 @@
-/**
- * Rule-based natural-language parser for common correction requests.
- *
- * These deterministic patterns cover frequent edits quickly and provide a safe
- * fallback when browser LLM support is unavailable or a model response is not
- * trusted.
- */
-import { findCatalogCandidates } from '../data/processCatalog';
-import { formatAddressLabel, resolveWireAddress, resolveWireAddressOr } from './addressResolution';
-import { buildClarificationIntent } from './clarification';
-import type { GatePreference, GuidedGateSpec } from './circuitCorrector';
-import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
-import { isTruthCellValue, type TruthCellValue, type TruthTable } from './truthTable';
+import { findCatalogCandidates } from '../../data/processCatalog';
+import { formatAddressLabel, resolveWireAddress, resolveWireAddressOr } from '../addressResolution';
+import { buildClarificationIntent } from '../clarification';
+import type { GatePreference, GuidedGateSpec } from '../circuitCorrector';
+import type { ModelCorrectionIntent, NlCorrectionContext } from './intentTypes';
+import { isTruthCellValue, type TruthCellValue, type TruthTable } from '../truthTable';
 
-export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './nlIntentTypes';
+export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './intentTypes';
 
 const GATE_ALIASES: Record<string, GatePreference> = {
   cnot: 'CNOT',
@@ -67,6 +60,7 @@ const pushGateSpec = (
   specs.push({ gate, inputs, output });
 };
 
+// Gate extraction accepts both protocol-style flags and prose so common fixes avoid model latency entirely.
 const extractGateSpecs = (message: string, context: NlCorrectionContext): GuidedGateSpec[] => {
   const specs: GuidedGateSpec[] = [];
   const normalized = message.replace(/\s+/g, ' ').trim();
@@ -407,6 +401,7 @@ const parseTruthTableRowHint = (message: string, context: NlCorrectionContext): 
   return { ...context.truthTable, rows: nextRows };
 };
 
+// The rule parser is the first line of defense before optional LLM parsing is considered by the caller.
 export const parseNaturalLanguageCorrection = (
   message: string,
   context: NlCorrectionContext,

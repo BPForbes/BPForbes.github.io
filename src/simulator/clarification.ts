@@ -5,7 +5,7 @@
  * possible wires or actions, allowing the UI to ask a targeted follow-up rather
  * than applying a risky edit.
  */
-import type { ClarificationOption, PendingClarification } from './nlIntentTypes';
+import type { ClarificationOption, PendingClarification } from './llm/intentTypes';
 
 export const formatClarificationPrompt = (
   prompt: string,

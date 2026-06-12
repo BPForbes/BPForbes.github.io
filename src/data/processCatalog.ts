@@ -1,13 +1,3 @@
-/**
- * In-browser process catalog for bundled, uploaded, compiled, and corrected
- * QPU protocols.
- *
- * The catalog is the bridge between source files and higher-level workflows:
- * it caches process summaries for correction prompts, exposes a library of
- * protocol sources for RUNCHILD compilation, persists user uploads in
- * localStorage, and enforces protected truth-table metadata for bundled
- * examples.
- */
 import { configuredProcesses } from './protocolExamples';
 import {
   enforceProtectedTruthTable,
@@ -21,7 +11,7 @@ import { describeTruthTableDimensions, formatTruthTableRowSummary, inferTruthTab
 import { getProtocolParameterEntries } from '../simulator/qpuFormat';
 import { getReturnValTokens } from '../simulator/qpuAst';
 import type { TruthTable, TruthTableDimensions, TruthTableTestResult } from '../simulator/truthTable';
-import type { ProcessCatalogSummary } from '../simulator/nlIntentTypes';
+import type { ProcessCatalogSummary } from '../simulator/llm/intentTypes';
 
 export type ProcessCatalogOrigin = 'bundled' | 'compiled' | 'uploaded' | 'corrected';
 
@@ -46,6 +36,7 @@ let catalogVersion = 0;
 let summariesCache: ProcessCatalogSummary[] | null = null;
 let libraryCache: Record<string, string> | null = null;
 
+// Summaries and library maps are derived views; invalidate them whenever source or truth-table metadata changes.
 const invalidateCatalogCache = () => {
   catalogVersion += 1;
   summariesCache = null;
@@ -129,6 +120,7 @@ const catalogAliases = (entry: ProcessCatalogEntry): string[] => {
   return Array.from(aliases);
 };
 
+// Bundled examples seed the catalog first so uploads can inherit or override compatible user-owned entries later.
 const seedBundledProcesses = () => {
   configuredProcesses.forEach((process) => {
     const name = process.name;
@@ -151,6 +143,7 @@ const seedBundledProcesses = () => {
 seedBundledProcesses();
 restoreCatalog();
 
+// Registration preserves compatible truth tables but re-applies protected metadata for canonical bundled processes.
 export const registerCatalogProcess = (input: {
   name: string;
   source: string;
@@ -297,6 +290,7 @@ export const getCatalogLibrarySources = (): Record<string, string> => {
   return libraryCache;
 };
 
+// Prompt summaries are cached because correction chat refreshes them frequently while the catalog is unchanged.
 export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
   if (summariesCache) return summariesCache;
   summariesCache = getCatalogEntries().map((entry) => {

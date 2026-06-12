@@ -1,12 +1,3 @@
-/**
- * Parser and compiler for the text-based `.qpucir` protocol language.
- *
- * The compiler turns human-readable commands such as PARAMS, RUNCHILD, and
- * RETURNVALS into simulator-ready `CircuitGate` records. It also tracks the
- * mapping from symbolic protocol tokens (`$A:0`, child return values, etc.) to
- * physical qubit indices so UI labels, truth-table checks, and child-process
- * composition all describe the same wires.
- */
 import { assertGateArity } from './gates/arity';
 import { astDerivedGateIds, astPrimitiveGateIds } from './gates/metadata';
 import { CircuitGate, GateType, QpuOperation } from './types';
@@ -134,6 +125,7 @@ const parseRotationParameter = (value: string, gate: string) => {
 const stripCycle = (token: string) => token.replace(/^\$/, '').split(':')[0];
 const isConstant = (token: string) => /^(0p|1p|sp)(?:_dim\d+)?$/i.test(token.replace(/^\$/, ''));
 
+// Continuation-aware line reading keeps multi-line gate commands parseable without changing the protocol format.
 export const readProtocolLines = (source: string): string[] => {
   const joined: string[] = [];
   let buffer = '';
@@ -358,6 +350,7 @@ export const getReturnValToken = (source: string, index: number): string => {
   return token;
 };
 
+// Process execution expands child calls into a flat gate list while preserving scoped token names for descendants.
 const executeProcess = (
   process: ProtocolProcess,
   state: CompilerState,
@@ -595,6 +588,7 @@ const compactQubitLayout = (
   };
 };
 
+// The compiler returns both renderable gates and logical I/O mappings so the UI can display only process-facing qubits.
 export const compileQpuProtocol = (source: string, librarySources: Record<string, string> = {}): CompileResult => {
   const main = parseProtocol(source);
   const library = processLibraryFromSources(librarySources);

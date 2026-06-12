@@ -1,9 +1,3 @@
-/**
- * Browser-model configuration and cache markers for correction assistance.
- *
- * The selected WebLLM model is centralized here so preload, readiness checks,
- * and cache-clearing workflows agree on the same default browser runtime.
- */
 export type LlmMode = 'browser' | 'ollama';
 
 export type LlmSettings = {
@@ -32,6 +26,7 @@ export const defaultLlmSettings = (): LlmSettings => ({
   ollamaModel: DEFAULT_OLLAMA_MODEL,
 });
 
+// Preserve older Ollama-only preferences when users first open the browser-model capable UI.
 const migrateLegacyConfig = (): LlmSettings | null => {
   if (typeof localStorage === 'undefined') return null;
   try {
@@ -49,6 +44,7 @@ const migrateLegacyConfig = (): LlmSettings | null => {
   }
 };
 
+// Storage reads are guarded so tests and SSR-like environments can import this module safely.
 export const loadLlmSettings = (): LlmSettings => {
   if (typeof localStorage === 'undefined') return defaultLlmSettings();
   try {

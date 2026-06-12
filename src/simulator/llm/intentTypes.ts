@@ -1,11 +1,5 @@
-/**
- * Shared types for natural-language correction requests and responses.
- *
- * Keeping model-facing intent shapes explicit helps the rule parser, WebLLM
- * adapter, and UI clarification flow reject unsupported edits consistently.
- */
-import type { CorrectionGuidance } from './circuitCorrector';
-import type { TruthTable, TruthTableTestResult } from './truthTable';
+import type { CorrectionGuidance } from '../circuitCorrector';
+import type { TruthTable, TruthTableTestResult } from '../truthTable';
 
 export type ProcessCatalogSummary = {
   name: string;
@@ -32,6 +26,7 @@ export type PendingClarification = {
   options: ClarificationOption[];
 };
 
+// Intent flags are additive so a reply can request a table load, correction run, and persistence step together.
 export type ModelCorrectionIntent = {
   reply: string;
   loadFullAdderTable?: boolean;

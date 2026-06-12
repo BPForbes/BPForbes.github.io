@@ -1,12 +1,3 @@
-/**
- * Top-level React shell for the QPU Circuit Builder.
- *
- * This component keeps the project-wide UI state in one place: uploaded
- * protocols/truth tables, palette selection, simulation results, and the
- * active documentation or lab view. The lower-level components focus on
- * rendering individual panels while this file coordinates data flow between
- * the catalog, parser, simulator, and download helpers.
- */
 import { ChangeEvent, useMemo, useState } from 'react';
 import { CircuitCanvas } from './components/CircuitCanvas';
 import { CustomGatePanel } from './components/CustomGatePanel';
@@ -71,6 +62,7 @@ const newGate = (
 };
 
 function App() {
+  // Builder state lives here because uploads, compiled protocol metadata, simulation output, and view selection all need to stay in sync.
   const [qubitCount, setQubitCount] = useState(QUBIT_COUNT);
   const [simulationQubitCount, setSimulationQubitCount] = useState(QUBIT_COUNT);
   const [runtimeQubitCount, setRuntimeQubitCount] = useState(QUBIT_COUNT);
@@ -494,6 +486,7 @@ function App() {
     resetRuntime(example.qubitCount, `Loaded ${example.name}.`, nextStartStates);
   };
 
+  // Compilation is the handoff point between text protocols, visual gates, catalog entries, and simulator runtime sizing.
   const compileProtocolSource = (
     source: string,
     label = 'QPU AST protocol',

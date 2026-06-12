@@ -1,18 +1,11 @@
-/**
- * Lightweight parser for structured correction intents.
- *
- * This parser handles deterministic command-like input before model-backed
- * natural-language parsing is attempted, giving tests and power users a stable
- * path for repeatable correction requests.
- */
-import type { LlmSettings } from './llmConfig';
-import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
+import type { LlmSettings } from './llm/config';
+import type { ModelCorrectionIntent, NlCorrectionContext } from './llm/intentTypes';
 import {
   isClarificationIntent,
   isRegexFallbackIntent,
   parseNaturalLanguageCorrection,
-} from './naturalLanguageCorrector';
-import { parseNaturalLanguageWithModel } from './modelNaturalLanguageCorrector';
+} from './llm/naturalLanguageCorrector';
+import { parseNaturalLanguageWithModel } from './llm/modelNaturalLanguageCorrector';
 
 export type CorrectionIntentParseOptions = {
   useLlm?: boolean;
@@ -41,7 +34,7 @@ export const parseCorrectionIntent = async (
   }
 
   options.onProgress?.('Using cached browser model…');
-  const { parseNaturalLanguageWithWebLlm } = await import('./webLlmNaturalLanguageCorrector');
+  const { parseNaturalLanguageWithWebLlm } = await import('./llm/webLlmNaturalLanguageCorrector');
   return await parseNaturalLanguageWithWebLlm(message, context, {
     modelId: settings?.browserModel,
     onProgress: options.onProgress,

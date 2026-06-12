@@ -1,10 +1,3 @@
-/**
- * Compatibility layer for correcting process hierarchies.
- *
- * When a child process changes, ancestor truth tables can become stale; these
- * helpers discover descendants, order repairs leaf-first, and keep protected
- * bundled expectations out of automated rewrites.
- */
 import { correctCircuit, type CorrectionGuidance } from './circuitCorrector';
 import type { TruthTable, TruthTableTestResult } from './truthTable';
 import { testCircuitAgainstTruthTable } from './truthTable';

@@ -1,10 +1,3 @@
-/**
- * Gate-level correction engine for reconciling circuits with truth tables.
- *
- * The corrector searches small, explainable edit candidates instead of opaque
- * rewrites so the UI can show actionable fixes and preserve existing protocol
- * structure wherever possible.
- */
 import {
   TruthTable,
   singleBitFullAdderTruthTable,

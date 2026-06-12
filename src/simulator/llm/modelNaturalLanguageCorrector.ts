@@ -1,16 +1,9 @@
-/**
- * Normalization and validation for model-produced correction intents.
- *
- * LLM responses are treated as untrusted JSON: this module narrows them to the
- * small action schema accepted by correction workflows before any circuit edit
- * can be attempted.
- */
-import type { GatePreference } from './circuitCorrector';
-import { defaultLlmSettings } from './llmConfig';
+import type { GatePreference } from '../circuitCorrector';
+import { defaultLlmSettings } from './config';
+import { buildNlContextSections } from './contextPrompt';
+import type { ModelCorrectionIntent, NlCorrectionContext } from './intentTypes';
 
 export type LlmEndpointConfig = { url: string; model: string };
-import { buildNlContextSections } from './nlContextPrompt';
-import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
 
 const ALLOWED_GATES = new Set<GatePreference>(['CNOT', 'CCNOT', 'X', 'H', 'NOT', 'AND', 'OR', 'XOR']);
 const OLLAMA_TIMEOUT_MS = 8_000;
@@ -68,6 +61,7 @@ User message:
 ${message}
 `.trim();
 
+// Model output is untrusted JSON; only the explicit correction-action schema is allowed through.
 export const sanitizeIntent = (raw: unknown): ModelCorrectionIntent | null => {
   if (!raw || typeof raw !== 'object') return null;
 
@@ -131,6 +125,7 @@ export const sanitizeIntent = (raw: unknown): ModelCorrectionIntent | null => {
   return intent;
 };
 
+// Remote model calls use the same prompt/context path as browser models but timeout quickly to preserve the deterministic fallback.
 export const parseNaturalLanguageWithModel = async (
   message: string,
   context: NlCorrectionContext,

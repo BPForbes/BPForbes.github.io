@@ -1,17 +1,11 @@
-/**
- * WebLLM-backed natural-language correction adapter.
- *
- * The model engine is loaded lazily because browser model downloads are large
- * and require WebGPU; deterministic parsers remain available when this adapter
- * cannot initialize. WebLLM reference: https://github.com/mlc-ai/web-llm
- */
 import type { MLCEngine } from '@mlc-ai/web-llm';
-import { DEFAULT_BROWSER_MODEL, getCachedBrowserModelId, markBrowserModelCached, clearBrowserModelCache } from './llmConfig';
-import { buildNlContextSections } from './nlContextPrompt';
-import type { ModelCorrectionIntent, NlCorrectionContext } from './nlIntentTypes';
+import { DEFAULT_BROWSER_MODEL, getCachedBrowserModelId, markBrowserModelCached, clearBrowserModelCache } from './config';
+import { buildNlContextSections } from './contextPrompt';
+import type { ModelCorrectionIntent, NlCorrectionContext } from './intentTypes';
 import { sanitizeIntent } from './modelNaturalLanguageCorrector';
-import { hasWebGpu } from './webGpu';
+import { hasWebGpu } from '../webGpu';
 
+// Keep the large WebLLM engine lazy and singleton-scoped so normal rule parsing does not trigger a download.
 let enginePromise: Promise<MLCEngine> | null = null;
 let loadedModelId: string | null = null;
 
@@ -45,6 +39,7 @@ export async function clearBrowserModel(
   await deleteModelInCache(modelId);
 }
 
+// Browser inference returns sanitized intents only; parse failures fall back to regex/Ollama paths upstream.
 export async function parseNaturalLanguageWithWebLlm(
   message: string,
   context: NlCorrectionContext,

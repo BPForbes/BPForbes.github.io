@@ -5,7 +5,7 @@ import {
   getAddressCandidates,
   resolveWireAddress,
 } from '../addressResolution';
-import type { NlCorrectionContext } from '../nlIntentTypes';
+import type { NlCorrectionContext } from '../llm/intentTypes';
 
 const singleBitSource = readFileSync(new URL('../../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');
 const twoBitSource = readFileSync(new URL('../../data/processes/two-bit-full-adder.qpucir', import.meta.url), 'utf8');

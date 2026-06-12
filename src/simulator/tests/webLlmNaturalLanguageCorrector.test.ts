@@ -4,8 +4,8 @@ import {
   parseNaturalLanguageWithWebLlm,
   preloadBrowserModel,
   resetWebLlmEngineForTests,
-} from '../webLlmNaturalLanguageCorrector';
-import { getCachedBrowserModelId } from '../llmConfig';
+} from '../llm/webLlmNaturalLanguageCorrector';
+import { getCachedBrowserModelId } from '../llm/config';
 import { hasWebGpu } from '../webGpu';
 
 const context = {

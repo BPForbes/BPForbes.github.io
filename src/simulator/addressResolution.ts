@@ -5,7 +5,7 @@
  * module turns those phrases into concrete protocol wire addresses or explicit
  * clarification prompts when a safe single target cannot be inferred.
  */
-import type { NlCorrectionContext } from './nlIntentTypes';
+import type { NlCorrectionContext } from './llm/intentTypes';
 
 const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0].trim();
 
