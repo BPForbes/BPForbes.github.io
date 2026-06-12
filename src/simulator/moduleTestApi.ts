@@ -49,8 +49,8 @@ export {
   getReferencedChildProcesses,
 } from './correction';
 
-export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './llm/intentTypes';
-export { parseNaturalLanguageCorrection } from './llm/naturalLanguageCorrector';
+export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './llm';
+export { parseNaturalLanguageCorrection } from './llm';
 import type { CorrectionGuidance } from './correction';
 import { correctCircuit } from './correction';
 import {

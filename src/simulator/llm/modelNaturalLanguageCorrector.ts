@@ -1,10 +1,8 @@
 // Ollama-backed NL parser: same JSON intent schema as the browser model, with a short timeout fallback.
 import type { GatePreference } from '../correction/circuitCorrector';
-import { defaultLlmSettings } from './config';
+import { defaultLlmSettings, type LlmEndpointConfig } from './config';
 import { buildNlContextSections } from './contextPrompt';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './intentTypes';
-
-export type LlmEndpointConfig = { url: string; model: string };
 const ALLOWED_GATES = new Set<GatePreference>(['CNOT', 'CCNOT', 'X', 'H', 'NOT', 'AND', 'OR', 'XOR']);
 const OLLAMA_TIMEOUT_MS = 8_000;
 
