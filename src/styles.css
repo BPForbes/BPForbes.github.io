@@ -29,10 +29,31 @@ button { font: inherit; }
 .gate.selected { outline: 3px solid #facc15; outline-offset: 2px; }
 .gate.compact { width: 2.35rem; height: 2.35rem; min-height: 2.35rem; border-radius: .7rem; font-size: .78rem; cursor: pointer; }
 .gate-x { background: linear-gradient(135deg, #ef4444, #f97316); }
+.gate-y { background: linear-gradient(135deg, #f43f5e, #db2777); }
+.gate-z { background: linear-gradient(135deg, #64748b, #334155); }
 .gate-h { background: linear-gradient(135deg, #06b6d4, #3b82f6); }
+.gate-s { background: linear-gradient(135deg, #2dd4bf, #0d9488); }
+.gate-t { background: linear-gradient(135deg, #fbbf24, #d97706); }
 .gate-cnot { background: linear-gradient(135deg, #8b5cf6, #6366f1); }
 .gate-ccnot { background: linear-gradient(135deg, #d946ef, #8b5cf6); }
+.gate-cz { background: linear-gradient(135deg, #818cf8, #4f46e5); }
+.gate-cy { background: linear-gradient(135deg, #f472b6, #be185d); }
+.gate-swap { background: linear-gradient(135deg, #fb923c, #ea580c); }
 .gate-measure { background: linear-gradient(135deg, #22c55e, #14b8a6); }
+.gate-reset { background: linear-gradient(135deg, #94a3b8, #475569); }
+.palette-sections { display: grid; gap: 1rem; }
+.palette-section-title { margin: 0 0 .5rem; font-size: .82rem; color: #cbd5e1; text-transform: uppercase; letter-spacing: .08em; }
+.palette-empty { margin: 0; color: #94a3b8; font-size: .88rem; }
+.palette-custom { grid-template-columns: repeat(auto-fit, minmax(3.25rem, 1fr)); }
+.custom-gate-panel { grid-column: 1 / -1; }
+.custom-gate-form { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
+.custom-gate-form label { display: grid; gap: .35rem; color: #cbd5e1; font-size: .86rem; font-weight: 800; }
+.custom-gate-form input,
+.custom-gate-form select { border: 1px solid rgba(148,163,184,.35); border-radius: .8rem; color: #f8fafc; background: rgba(2,6,23,.72); padding: .7rem .8rem; font-weight: 700; }
+.custom-gate-form button { border: 1px solid rgba(148,163,184,.24); color: #f8fafc; background: rgba(51,65,85,.9); border-radius: 1rem; padding: .9rem 1rem; min-height: 3rem; font-weight: 800; cursor: pointer; }
+.custom-gate-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .55rem; }
+.custom-gate-list li { display: grid; grid-template-columns: auto 1fr auto; gap: .65rem; align-items: center; padding: .65rem .75rem; border-radius: .85rem; background: rgba(30,41,59,.55); border: 1px solid rgba(148,163,184,.2); }
+.custom-gate-swatch { width: 1.25rem; height: 1.25rem; border-radius: .35rem; border: 1px solid rgba(255,255,255,.25); }
 
 .canvas-scroll { overflow-x: auto; padding-bottom: .5rem; }
 .circuit-grid { min-width: calc(var(--columns) * 4.25rem + 4rem); display: grid; gap: .7rem; }
@@ -60,6 +81,14 @@ button { font: inherit; }
 .particle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
 .particle-card { min-height: 8rem; display: grid; place-items: center; gap: .35rem; border-radius: 1rem; background: linear-gradient(180deg, rgba(30,41,59,.85), rgba(15,23,42,.92)); border: 1px solid rgba(148,163,184,.22); transition: transform .35s ease; }
 .particle-card.collapsed { transform: translateY(2px); }
+.particle-ket { margin-top: .2rem; }
+.particle-ket code { display: block; padding: .35rem .45rem; border-radius: .55rem; background: rgba(2,6,23,.72); color: #bef264; font-size: .62rem; line-height: 1.35; overflow-wrap: anywhere; }
+.particle-coords,
+.particle-bloch,
+.particle-mixed,
+.particle-delta { display: flex; flex-wrap: wrap; gap: .35rem; justify-content: center; font-size: .68rem; font-weight: 800; color: #cbd5e1; }
+.particle-mixed { color: #fda4af; }
+.particle-delta { color: #fde68a; }
 .qubit-label { font-weight: 900; color: #cbd5e1; }
 .sphere { width: 4rem; height: 4rem; border-radius: 50%; background: radial-gradient(circle at 30% 24%, #fff 0 8%, #67e8f9 18%, #2563eb 56%, #111827 100%); box-shadow: inset -14px -18px 28px rgba(0,0,0,.36), 0 0 32px rgba(103,232,249,.48); animation: float 2.4s ease-in-out infinite; }
 .state-card { width: 4rem; height: 3.1rem; display: grid; place-items: center; border-radius: .7rem; color: #111827; background: #facc15; font-size: 2rem; font-weight: 950; animation: collapse .42s ease both; }

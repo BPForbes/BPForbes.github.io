@@ -1,3 +1,4 @@
+import { getGateDefinition } from '../simulator/gates/registry';
 import { GateType } from '../simulator/types';
 
 type GateBlockProps = {
@@ -9,35 +10,30 @@ type GateBlockProps = {
   onDragStart?: (gate: GateType) => void;
 };
 
-export const gateLabels: Record<GateType, string> = {
-  X: 'X',
-  H: 'H',
-  CNOT: 'CX',
-  CCNOT: 'CCX',
-  PHASE: 'P',
-  NOT: '¬',
-  AND: 'AND',
-  NAND: 'NAND',
-  OR: 'OR',
-  XOR: 'XOR',
-  MEASURE: 'M',
+const fallbackLabels: Record<string, string> = {
   RESET: 'R',
 };
 
 export function GateBlock({ type, draggable = false, selected = false, compact = false, onClick, onDragStart }: GateBlockProps) {
+  const definition = getGateDefinition(type);
+  const label = definition?.label ?? fallbackLabels[type] ?? type;
+  const cssClass = definition?.cssClass ?? `gate-${String(type).toLowerCase()}`;
+  const customStyle = definition?.color ? { background: definition.color } : undefined;
+
   return (
     <button
-      className={`gate gate-${type.toLowerCase()} ${selected ? 'selected' : ''} ${compact ? 'compact' : ''}`}
+      className={`gate ${cssClass} ${selected ? 'selected' : ''} ${compact ? 'compact' : ''}`}
       draggable={draggable}
       onClick={onClick}
       onDragStart={(event) => {
         event.dataTransfer.setData('text/plain', type);
         onDragStart?.(type);
       }}
+      style={customStyle}
       type="button"
       aria-label={`${type} gate`}
     >
-      <span>{gateLabels[type]}</span>
+      <span>{label}</span>
     </button>
   );
 }

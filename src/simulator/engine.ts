@@ -1,32 +1,17 @@
-import { add, Complex, complex, magnitudeSquared, mul, ONE, scale, ZERO } from './complex';
-import { CircuitGate, ExecutionResult, MeasurementMap, ParticleStartState } from './types';
+import { Complex, magnitudeSquared, ONE, ZERO } from './complex';
+import { applyGate as applyRegisteredGate } from './gates/registry';
+import { applyStartState, hasBit, measureQubit, padStateVector } from './gates/operations';
+import { buildOperationTransition, snapshotAllParticles } from './particleTracking';
+import { CircuitGate, ExecutionResult, MeasurementMap, OperationTransition, ParticleStartState } from './types';
 
-const INV_SQRT2 = 1 / Math.sqrt(2);
-const X = [[ZERO, ONE], [ONE, ZERO]];
-const H = [[complex(INV_SQRT2), complex(INV_SQRT2)], [complex(INV_SQRT2), complex(-INV_SQRT2)]];
-const phaseMatrix = (angle: number) => [[ONE, ZERO], [ZERO, complex(Math.cos(angle), Math.sin(angle))]];
-
-export const createInitialState = (
-  qubitCount: number,
-  startStates: ParticleStartState[] = [],
-  paramQubitIndices?: number[],
-): Complex[] => {
-  let state = Array.from({ length: 2 ** qubitCount }, () => ZERO);
-  state[0] = ONE;
-
-  const indices = paramQubitIndices ?? Array.from({ length: Math.min(qubitCount, startStates.length) }, (_, qubit) => qubit);
-  const invalid = indices.filter((qubit) => qubit < 0 || qubit >= qubitCount);
-  if (invalid.length > 0) {
-    throw new RangeError(`Invalid qubit indices: ${invalid.join(', ')} (qubitCount=${qubitCount})`);
-  }
-  indices.forEach((qubit) => {
-    const startState = startStates[qubit] ?? '0p';
-    if (startState === '1p') state = applySingleQubitGate(state, qubitCount, qubit, X);
-    if (startState === 'sp') state = applySingleQubitGate(state, qubitCount, qubit, H);
-  });
-
-  return state;
-};
+export {
+  applySingleQubitGate,
+  applyControlledX,
+  applyControlledPredicateX,
+  hasBit,
+  measureQubit,
+  prepareZeroQubit,
+} from './gates/operations';
 
 export const basisLabel = (index: number, qubitCount: number): string => index.toString(2).padStart(qubitCount, '0');
 
@@ -49,102 +34,82 @@ export const projectStateOntoQubits = (
     probabilities[targetIndex] += probability;
   });
 
-  return probabilities.map((probability) => (probability > 0 ? complex(Math.sqrt(probability), 0) : ZERO));
+  return probabilities.map((probability) => (probability > 0 ? { re: Math.sqrt(probability), im: 0 } : ZERO));
 };
 
-const bitMask = (qubit: number, qubitCount: number) => 1 << (qubitCount - qubit - 1);
-const hasBit = (basisIndex: number, qubit: number, qubitCount: number) => (basisIndex & bitMask(qubit, qubitCount)) !== 0;
-
-export const applySingleQubitGate = (state: Complex[], qubitCount: number, target: number, matrix: Complex[][]): Complex[] => {
-  const next = [...state];
-  const mask = bitMask(target, qubitCount);
-
-  for (let index = 0; index < state.length; index += 1) {
-    if ((index & mask) === 0) {
-      const zeroIndex = index;
-      const oneIndex = index | mask;
-      const zeroAmplitude = state[zeroIndex];
-      const oneAmplitude = state[oneIndex];
-      next[zeroIndex] = add(mul(matrix[0][0], zeroAmplitude), mul(matrix[0][1], oneAmplitude));
-      next[oneIndex] = add(mul(matrix[1][0], zeroAmplitude), mul(matrix[1][1], oneAmplitude));
-    }
-  }
-
-  return next;
-};
-
-const controlsAreActive = (basisIndex: number, qubitCount: number, controls: number[]) =>
-  controls.every((control) => hasBit(basisIndex, control, qubitCount));
-
-const controlsHaveParity = (basisIndex: number, qubitCount: number, controls: number[]) =>
-  controls.filter((control) => hasBit(basisIndex, control, qubitCount)).length % 2 === 1;
-
-const anyControlIsActive = (basisIndex: number, qubitCount: number, controls: number[]) =>
-  controls.some((control) => hasBit(basisIndex, control, qubitCount));
-
-export const applyControlledX = (state: Complex[], qubitCount: number, controls: number[], target: number): Complex[] => {
-  return applyControlledPredicateX(state, qubitCount, controls, target, controlsAreActive);
-};
-
-export const applyControlledPredicateX = (
-  state: Complex[],
+const resolveParamQubitIndices = (
   qubitCount: number,
-  controls: number[],
-  target: number,
-  predicate: (basisIndex: number, qubitCount: number, controls: number[]) => boolean,
+  startStates: ParticleStartState[],
+  paramQubitIndices?: number[],
+): number[] => {
+  if (Array.isArray(paramQubitIndices)) return paramQubitIndices;
+  return Array.from({ length: Math.min(qubitCount, startStates.length) }, (_, qubit) => qubit);
+};
+
+export const createInitialState = (
+  qubitCount: number,
+  startStates: ParticleStartState[] = [],
+  paramQubitIndices?: number[],
 ): Complex[] => {
-  const next = [...state];
-  const mask = bitMask(target, qubitCount);
+  let state = Array.from({ length: 2 ** qubitCount }, () => ZERO);
+  state[0] = ONE;
 
-  for (let index = 0; index < state.length; index += 1) {
-    if ((index & mask) === 0 && predicate(index, qubitCount, controls)) {
-      const pair = index | mask;
-      next[index] = state[pair];
-      next[pair] = state[index];
-    }
+  const indices = resolveParamQubitIndices(qubitCount, startStates, paramQubitIndices);
+  const invalid = indices.filter((qubit) => qubit < 0 || qubit >= qubitCount);
+  if (invalid.length > 0) {
+    throw new RangeError(`Invalid qubit indices: ${invalid.join(', ')} (qubitCount=${qubitCount})`);
   }
+  indices.forEach((qubit) => {
+    const startState = startStates[qubit] ?? '0p';
+    if (startState === '1p') state = applyStartState(state, qubitCount, qubit, '1p');
+    if (startState === 'sp') state = applyStartState(state, qubitCount, qubit, 'sp');
+  });
 
-  return next;
+  return state;
 };
 
-export const prepareZeroQubit = (state: Complex[], qubitCount: number, qubit: number): Complex[] => {
-  const mask = bitMask(qubit, qubitCount);
-  const next = [...state];
-
-  for (let index = 0; index < state.length; index += 1) {
-    if ((index & mask) === 0) continue;
-    const zeroIndex = index & ~mask;
-    next[zeroIndex] = add(next[zeroIndex], state[index]);
-    next[index] = ZERO;
+export const resolveStateQubitCount = (state: Complex[], qubitCount: number): number => {
+  const vectorWidth = Math.round(Math.log2(state.length));
+  if (Number.isFinite(vectorWidth) && vectorWidth > 0 && vectorWidth > qubitCount) {
+    return vectorWidth;
   }
-
-  const keptProbability = next.reduce((sum, amplitude) => sum + magnitudeSquared(amplitude), 0);
-  if (keptProbability < 1e-12) {
-    const zeroState = Array.from({ length: state.length }, () => ZERO);
-    zeroState[0] = ONE;
-    return zeroState;
-  }
-
-  const normalizer = 1 / Math.sqrt(keptProbability);
-  return next.map((amplitude) => scale(amplitude, normalizer));
+  return qubitCount;
 };
 
-export const measureQubit = (
-  state: Complex[],
-  qubitCount: number,
-  qubit: number,
-  random = Math.random(),
-): { state: Complex[]; value: 0 | 1; probabilityOne: number } => {
-  const probabilityOne = state.reduce((sum, amplitude, index) => sum + (hasBit(index, qubit, qubitCount) ? magnitudeSquared(amplitude) : 0), 0);
-  const value: 0 | 1 = random < probabilityOne ? 1 : 0;
-  const keptProbability = value === 1 ? probabilityOne : 1 - probabilityOne;
-  const normalizer = keptProbability > 0 ? 1 / Math.sqrt(keptProbability) : 0;
+const ensureStateWidth = (state: Complex[], qubitCount: number, gate: CircuitGate) => {
+  const touched = [...gate.targets, ...gate.controls];
+  if (touched.length === 0) return { state, qubitCount };
+  const maxWire = Math.max(...touched);
+  if (maxWire < qubitCount) return { state, qubitCount };
+  const nextCount = maxWire + 1;
+  return { state: padStateVector(state, qubitCount, nextCount), qubitCount: nextCount };
+};
 
-  const collapsed = state.map((amplitude, index) =>
-    hasBit(index, qubit, qubitCount) === Boolean(value) ? scale(amplitude, normalizer) : ZERO,
-  );
+export type ApplyGateOptions = {
+  librarySources?: Record<string, string>;
+  trackParticles?: boolean;
+};
 
-  return { state: collapsed, value, probabilityOne };
+const isExecutionOptions = (
+  input: Record<string, string> | ApplyGateOptions | RunCircuitOptions,
+): boolean => {
+  const candidate = input as { trackParticles?: unknown; librarySources?: unknown };
+  return typeof candidate.trackParticles === 'boolean'
+    || (
+      candidate.librarySources !== undefined
+      && candidate.librarySources !== null
+      && typeof candidate.librarySources === 'object'
+      && !Array.isArray(candidate.librarySources)
+    );
+};
+
+const normalizeApplyGateOptions = (
+  input: Record<string, string> | ApplyGateOptions = {},
+): ApplyGateOptions => {
+  if (isExecutionOptions(input)) {
+    return input as ApplyGateOptions;
+  }
+  return { librarySources: input as Record<string, string>, trackParticles: false };
 };
 
 export const applyGate = (
@@ -152,64 +117,58 @@ export const applyGate = (
   qubitCount: number,
   gate: CircuitGate,
   measurements: MeasurementMap,
+  librarySourcesOrOptions: Record<string, string> | ApplyGateOptions = {},
 ): ExecutionResult => {
-  const target = gate.targets[0];
-  const log: string[] = [];
+  const options = normalizeApplyGateOptions(librarySourcesOrOptions);
+  const librarySources = options.librarySources ?? {};
 
-  if (gate.type === 'X') {
-    log.push(`X flipped q${target}.`);
-    return { state: applySingleQubitGate(state, qubitCount, target, X), measurements, log };
+  if (!options.trackParticles) {
+    const result = applyRegisteredGate(state, qubitCount, gate, measurements, librarySources);
+    return result;
   }
 
-  if (gate.type === 'H') {
-    log.push(`H put q${target} into superposition.`);
-    return { state: applySingleQubitGate(state, qubitCount, target, H), measurements, log };
-  }
+  const beforeState = state;
+  const beforeMeasurements = measurements;
+  const result = applyRegisteredGate(state, qubitCount, gate, measurements, librarySources);
+  const effectiveQubitCount = resolveStateQubitCount(result.state, qubitCount);
+  const particles = snapshotAllParticles(result.state, effectiveQubitCount, result.measurements);
+  const transition = buildOperationTransition(
+    gate,
+    beforeState,
+    result.state,
+    effectiveQubitCount,
+    beforeMeasurements,
+    result.measurements,
+  );
+  return { ...result, particles, transitions: [transition] };
+};
 
-  if (gate.type === 'PHASE') {
-    const angle = gate.phase ?? 0;
-    log.push(`PHASE(${angle.toFixed(3)}) rotated q${target}.`);
-    return { state: applySingleQubitGate(state, qubitCount, target, phaseMatrix(angle)), measurements, log };
-  }
+export const stepCircuitGate = (
+  state: Complex[],
+  qubitCount: number,
+  gate: CircuitGate,
+  measurements: MeasurementMap,
+  librarySourcesOrOptions: Record<string, string> | ApplyGateOptions = {},
+): { result: ExecutionResult; qubitCount: number } => {
+  let workingQubitCount = resolveStateQubitCount(state, qubitCount);
+  const sized = ensureStateWidth(state, workingQubitCount, gate);
+  workingQubitCount = sized.qubitCount;
+  const result = applyGate(sized.state, workingQubitCount, gate, measurements, librarySourcesOrOptions);
+  return { result, qubitCount: resolveStateQubitCount(result.state, workingQubitCount) };
+};
 
-  if (gate.type === 'RESET') {
-    let nextState = state;
-    gate.targets.forEach((qubit) => {
-      nextState = prepareZeroQubit(nextState, qubitCount, qubit);
-    });
-    log.push(`Cycle workspace prepared: q${gate.targets.join(', q')} as |0⟩.`);
-    return { state: nextState, measurements, log };
-  }
+export type RunCircuitOptions = {
+  librarySources?: Record<string, string>;
+  trackParticles?: boolean;
+};
 
-  if (gate.type === 'CNOT' || gate.type === 'CCNOT' || gate.type === 'AND') {
-    log.push(`${gate.type} used q${gate.controls.join(', q')} as control${gate.controls.length > 1 ? 's' : ''} and q${target} as target.`);
-    return { state: applyControlledX(state, qubitCount, gate.controls, target), measurements, log };
+const normalizeRunCircuitOptions = (
+  input: Record<string, string> | RunCircuitOptions = {},
+): RunCircuitOptions => {
+  if (isExecutionOptions(input)) {
+    return input as RunCircuitOptions;
   }
-
-  if (gate.type === 'NOT') {
-    log.push(`NOT flipped q${target}.`);
-    return { state: applySingleQubitGate(state, qubitCount, target, X), measurements, log };
-  }
-
-  if (gate.type === 'NAND') {
-    log.push(`NAND wrote the inverted conjunction of q${gate.controls.join(', q')} into q${target}.`);
-    const andState = applyControlledX(state, qubitCount, gate.controls, target);
-    return { state: applySingleQubitGate(andState, qubitCount, target, X), measurements, log };
-  }
-
-  if (gate.type === 'OR') {
-    log.push(`OR flipped q${target} when any control was active.`);
-    return { state: applyControlledPredicateX(state, qubitCount, gate.controls, target, anyControlIsActive), measurements, log };
-  }
-
-  if (gate.type === 'XOR') {
-    log.push(`XOR flipped q${target} when controls had odd parity.`);
-    return { state: applyControlledPredicateX(state, qubitCount, gate.controls, target, controlsHaveParity), measurements, log };
-  }
-
-  const measured = measureQubit(state, qubitCount, target);
-  log.push(`Measured q${target} = ${measured.value} (P(1)=${measured.probabilityOne.toFixed(3)}).`);
-  return { state: measured.state, measurements: { ...measurements, [target]: measured.value }, log };
+  return { librarySources: input as Record<string, string>, trackParticles: false };
 };
 
 export const runCircuit = (
@@ -217,23 +176,50 @@ export const runCircuit = (
   gates: CircuitGate[],
   startStates: ParticleStartState[] = [],
   paramQubitIndices?: number[],
+  librarySourcesOrOptions: Record<string, string> | RunCircuitOptions = {},
 ): ExecutionResult => {
-  const initSummary = paramQubitIndices?.length
-    ? paramQubitIndices.map((qubit) => startStates[qubit] ?? '0p').join(' ')
+  const options = normalizeRunCircuitOptions(librarySourcesOrOptions);
+  const librarySources = options.librarySources ?? {};
+  const initSummary = Array.isArray(paramQubitIndices)
+    ? paramQubitIndices.map((qubit) => startStates[qubit] ?? '0p').join(' ') || '(no mapped params)'
     : Array.from({ length: qubitCount }, (_, index) => startStates[index] ?? '0p').join(' ');
+
+  let workingQubitCount = qubitCount;
+  let workingState = createInitialState(qubitCount, startStates, paramQubitIndices);
 
   return gates
     .slice()
     .sort((a, b) => a.step - b.step)
     .reduce<ExecutionResult>(
       (result, gate) => {
-        const next = applyGate(result.state, qubitCount, gate, result.measurements);
-        return { state: next.state, measurements: next.measurements, log: [...result.log, ...next.log] };
+        const sized = ensureStateWidth(workingState, workingQubitCount, gate);
+        workingState = sized.state;
+        workingQubitCount = sized.qubitCount;
+        const next = applyGate(workingState, workingQubitCount, gate, result.measurements, {
+          librarySources,
+          trackParticles: options.trackParticles,
+        });
+        workingState = next.state;
+        const vectorWidth = Math.round(Math.log2(workingState.length));
+        if (Number.isFinite(vectorWidth) && vectorWidth > workingQubitCount) {
+          workingQubitCount = vectorWidth;
+        }
+        return {
+          state: workingState,
+          measurements: next.measurements,
+          log: [...result.log, ...next.log],
+          particles: next.particles ?? result.particles,
+          transitions: [...(result.transitions ?? []), ...(next.transitions ?? [])],
+        };
       },
       {
-        state: createInitialState(qubitCount, startStates, paramQubitIndices),
+        state: workingState,
         measurements: {},
         log: [`Initialized ${initSummary}.`],
+        particles: options.trackParticles
+          ? snapshotAllParticles(workingState, workingQubitCount, {})
+          : undefined,
+        transitions: [],
       },
     );
 };

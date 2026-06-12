@@ -264,7 +264,22 @@ export const serializeCircuitToQpuProtocol = (
         lines.push(`MEASURE -I ${canvasParamRef(gate.targets[0])}`);
         return;
       }
-      if (gate.type === 'X' || gate.type === 'H' || gate.type === 'PHASE' || gate.type === 'NOT') {
+      if (gate.type === 'SWAP') {
+        if (gate.targets.length < 2) return;
+        const [first, second] = gate.targets;
+        lines.push(`SWAP -I ${canvasParamRef(first)}:0 ${canvasParamRef(second)}:0 -O ${canvasParamRef(first)}:0 ${canvasParamRef(second)}:0`);
+        return;
+      }
+      if (
+        gate.type === 'X'
+        || gate.type === 'Y'
+        || gate.type === 'Z'
+        || gate.type === 'H'
+        || gate.type === 'S'
+        || gate.type === 'T'
+        || gate.type === 'PHASE'
+        || gate.type === 'NOT'
+      ) {
         const op = gate.type === 'PHASE' ? `PHASE=${gate.phase ?? 0}` : gate.type;
         lines.push(`${op} -I ${target} -O ${target}`);
         return;

@@ -1,3 +1,6 @@
+import { getGateDefinition } from '../simulator/gates/registry';
+import { resolvedArity } from '../simulator/gates/arity';
+import type { OperationTransition, ParticleSnapshot } from '../simulator/particleTracking';
 import { CircuitGate, MeasurementMap, ParticleStartState } from '../simulator/types';
 
 type ParticleViewProps = {
@@ -7,6 +10,9 @@ type ParticleViewProps = {
   activeStep?: number;
   startStates?: ParticleStartState[];
   qubitLabels?: string[];
+  physicalQubitIndices?: number[];
+  particleSnapshots?: ParticleSnapshot[];
+  transitions?: OperationTransition[];
 };
 
 const seededColor = (index: number): [number, number, number] => {
@@ -54,8 +60,32 @@ const mixedColor = (qubits: number[]) => {
   return oklabToCss(average);
 };
 
-export function ParticleView({ qubitCount, measurements, gates = [], activeStep = -1, startStates = [], qubitLabels = [] }: ParticleViewProps) {
+const deg = (radians: number) => `${((radians * 180) / Math.PI).toFixed(1)}°`;
+
+const gateIoLabel = (gate: CircuitGate) => {
+  const definition = getGateDefinition(String(gate.type));
+  if (!definition) return '';
+  const { minInputs, maxInputs, minOutputs, maxOutputs } = resolvedArity(definition.ioArity);
+  const inLabel = minInputs === maxInputs ? `${minInputs}` : `${minInputs}-${maxInputs}`;
+  const outLabel = minOutputs === maxOutputs ? `${minOutputs}` : `${minOutputs}-${maxOutputs}`;
+  return `${inLabel}→${outLabel} I/O`;
+};
+
+export function ParticleView({
+  qubitCount,
+  measurements,
+  gates = [],
+  activeStep = -1,
+  startStates = [],
+  qubitLabels = [],
+  physicalQubitIndices,
+  particleSnapshots = [],
+  transitions = [],
+}: ParticleViewProps) {
   const sorted = gates.slice().sort((a, b) => a.step - b.step);
+  const activeTransition = activeStep >= 0 ? transitions.find((entry) => entry.step === activeStep) : undefined;
+  const snapshotByQubit = new Map(particleSnapshots.map((entry) => [entry.qubit, entry]));
+  const deltaByQubit = new Map((activeTransition?.deltas ?? []).map((entry) => [entry.qubit, entry]));
 
   return (
     <section className="panel particles" aria-labelledby="particles-title">
@@ -64,17 +94,50 @@ export function ParticleView({ qubitCount, measurements, gates = [], activeStep 
         <h2 id="particles-title">Qubit states and execution progress</h2>
       </div>
       <div className="particle-grid">
-        {Array.from({ length: qubitCount }, (_, qubit) => {
-          const measured = measurements[qubit];
-          const baseColor = oklabToCss(rgbToOklab(seededColor(qubit)));
+        {Array.from({ length: qubitCount }, (_, displayIndex) => {
+          const physicalQubit = physicalQubitIndices?.[displayIndex] ?? displayIndex;
+          const measured = measurements[physicalQubit];
+          const baseColor = oklabToCss(rgbToOklab(seededColor(physicalQubit)));
+          const snapshot = snapshotByQubit.get(physicalQubit);
+          const delta = deltaByQubit.get(physicalQubit);
           return (
-            <div className={`particle-card ${measured !== undefined ? 'collapsed' : ''}`} key={qubit} style={{ ['--particle-color' as string]: baseColor }}>
-              <div className="qubit-label">{qubitLabels[qubit] ?? `q${qubit}`} · {startStates[qubit] ?? '0p'}</div>
+            <div className={`particle-card ${measured !== undefined ? 'collapsed' : ''}`} key={physicalQubit} style={{ ['--particle-color' as string]: baseColor }}>
+              <div className="qubit-label">{qubitLabels[displayIndex] ?? `q${physicalQubit}`} · {startStates[displayIndex] ?? '0p'}</div>
               {measured === undefined ? (
-                <div className="sphere" aria-label={`q${qubit} unmeasured quantum sphere`} />
+                <div className="sphere" aria-label={`q${physicalQubit} unmeasured quantum sphere`} />
               ) : (
-                <div className="state-card" aria-label={`q${qubit} measured ${measured}`}>
+                <div className="state-card" aria-label={`q${physicalQubit} measured ${measured}`}>
                   {measured}
+                </div>
+              )}
+              {snapshot && (
+                <>
+                  <div className="particle-ket" aria-label={`q${physicalQubit} state ket`}>
+                    <code>{snapshot.ket.formatted}</code>
+                  </div>
+                  <div className="particle-coords" aria-label={`q${physicalQubit} spherical coordinates`}>
+                    <span>r {snapshot.spherical.r.toFixed(3)}</span>
+                    <span>θ {deg(snapshot.spherical.theta)}</span>
+                    <span>φ {deg(snapshot.spherical.phi)}</span>
+                  </div>
+                  <div className="particle-bloch" aria-label={`q${physicalQubit} Bloch coordinates`}>
+                    <span>x {snapshot.bloch.x.toFixed(3)}</span>
+                    <span>y {snapshot.bloch.y.toFixed(3)}</span>
+                    <span>z {snapshot.bloch.z.toFixed(3)}</span>
+                  </div>
+                  {!snapshot.mixed.isPure && (
+                    <div className="particle-mixed" aria-label={`q${physicalQubit} mixed-state metrics`}>
+                      <span>⟨ρ⟩ {snapshot.mixed.rhoExpectation.toFixed(3)}</span>
+                      <span>noise {snapshot.mixed.noise.toFixed(3)}</span>
+                    </div>
+                  )}
+                </>
+              )}
+              {delta && delta.displacement > 1e-4 && (
+                <div className="particle-delta" aria-label={`q${physicalQubit} change after last gate`}>
+                  <span>Δr {delta.deltaR.toFixed(3)}</span>
+                  <span>Δθ {deg(delta.deltaTheta)}</span>
+                  <span>Δφ {deg(delta.deltaPhi)}</span>
                 </div>
               )}
             </div>
@@ -85,11 +148,17 @@ export function ParticleView({ qubitCount, measurements, gates = [], activeStep 
         <div className="execution-timeline" aria-label="Circuit execution timeline">
           {sorted.map((gate) => {
             const touched = [...gate.controls, ...gate.targets];
+            const transition = transitions.find((entry) => entry.step === gate.step);
             return (
               <div className={`timeline-step ${activeStep === gate.step ? 'active' : ''} ${activeStep >= gate.step ? 'done' : ''}`} key={gate.id} style={{ ['--mix-color' as string]: mixedColor(touched.length ? touched : gate.targets) }}>
                 <span>{gate.step + 1}</span>
                 <strong>{gate.type}</strong>
-                <small>{touched.map((qubit) => `q${qubit}`).join(' + ')}</small>
+                <small>
+                  -I {transition?.inputQubits.map((qubit) => `q${qubit}`).join(', ') || gate.controls.map((qubit) => `q${qubit}`).join(', ') || gate.targets.map((qubit) => `q${qubit}`).join(', ') || '—'}
+                  {' · '}
+                  -O {transition?.outputQubits.map((qubit) => `q${qubit}`).join(', ') || gate.targets.map((qubit) => `q${qubit}`).join(', ')}
+                </small>
+                <small>{gateIoLabel(gate)}</small>
               </div>
             );
           })}

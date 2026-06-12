@@ -1,3 +1,5 @@
+import { assertGateArity } from './gates/arity';
+import { astDerivedGateIds, astPrimitiveGateIds } from './gates/metadata';
 import { CircuitGate, GateType, QpuOperation } from './types';
 
 export type ParsedCommand = {
@@ -45,20 +47,8 @@ export type CompileResult = {
 
 const NUMERIC_PARAM_TYPES = ['int', 'float'] as const;
 
-const primitiveGates = new Set(['X', 'H', 'CNOT', 'CCNOT', 'PHASE']);
-const derivedGates = new Set(['NOT', 'AND', 'NAND', 'OR', 'XOR']);
-const gateInputCounts: Partial<Record<QpuOperation, number>> = {
-  X: 1,
-  H: 1,
-  PHASE: 1,
-  CNOT: 1,
-  CCNOT: 2,
-  NOT: 1,
-  AND: 2,
-  NAND: 2,
-  OR: 2,
-  XOR: 2,
-};
+const primitiveGates = new Set(astPrimitiveGateIds());
+const derivedGates = new Set(astDerivedGateIds());
 
 export const supportedQpuOperations: QpuOperation[] = [
   'INCREASECYCLE',
@@ -85,9 +75,16 @@ export const supportedQpuOperations: QpuOperation[] = [
   'CREATETOKEN',
   'DELETETOKEN',
   'X',
+  'Y',
+  'Z',
   'H',
+  'S',
+  'T',
   'CNOT',
   'CCNOT',
+  'CZ',
+  'CY',
+  'SWAP',
   'PHASE',
 ];
 
@@ -232,9 +229,8 @@ export const parseCommand = (line: string): ParsedCommand => {
   if ((primitiveGates.has(op) || derivedGates.has(op)) && op !== 'MEASURE' && !outputs.length) {
     throw new Error(`${op} requires -O output`);
   }
-  const expectedInputs = gateInputCounts[op];
-  if (expectedInputs !== undefined && inputs.length < expectedInputs) {
-    throw new Error(`${op} requires ${expectedInputs} input${expectedInputs === 1 ? '' : 's'}`);
+  if (primitiveGates.has(op) || derivedGates.has(op)) {
+    assertGateArity(op, inputs.length, outputs.length);
   }
 
   return { op, raw: line, inputs, outputs, args: tokens.slice(1), phase, reverse, noParameterSubstitution };
@@ -509,6 +505,25 @@ const executeProcess = (
 
     if (primitiveGates.has(command.op)) {
       flushCycleZeros(state, `prepare workspace before gate at cycle ${state.currentCycle}`);
+      if (command.op === 'SWAP') {
+        const swapQubits = command.inputs
+          .slice(0, 2)
+          .map((input) => resolveInputQubit(state, frame, input, parentFrame));
+        if (swapQubits.length < 2) throw new Error('SWAP requires two input qubits.');
+        if (command.outputs.length > 0) {
+          if (command.outputs.length !== command.inputs.length) {
+            throw new Error('SWAP outputs must match inputs.');
+          }
+          const swapOutputs = command.outputs.map((output) => resolveInputQubit(state, frame, output, parentFrame));
+          swapQubits.forEach((inputQubit, index) => {
+            if (swapOutputs[index] !== inputQubit) {
+              throw new Error('SWAP outputs must match inputs.');
+            }
+          });
+        }
+        emitGate(state, 'SWAP', swapQubits, [], line);
+        continue;
+      }
       const targetToken = command.outputs[0] ?? command.inputs[0];
       const target = resolveInputQubit(state, frame, targetToken, parentFrame);
       const controls = command.inputs
