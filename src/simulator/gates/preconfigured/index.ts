@@ -18,7 +18,7 @@ import { nandGate } from './nand';
 import { orGate } from './or';
 import { xorGate } from './xor';
 import type { GateDefinition } from '../types';
-
+// Ordered palette list consumed by registry.ts.
 export const preconfiguredGates: GateDefinition[] = [
   xGate,
   yGate,

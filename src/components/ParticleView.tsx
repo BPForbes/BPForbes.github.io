@@ -1,8 +1,7 @@
 import { getGateDefinition } from '../simulator/gates/registry';
 import { resolvedArity } from '../simulator/gates/arity';
-import type { OperationTransition, ParticleSnapshot } from '../simulator/particleTracking';
+import type { OperationTransition, ParticleSnapshot } from '../simulator/physics';
 import { CircuitGate, MeasurementMap, ParticleStartState } from '../simulator/types';
-
 type ParticleViewProps = {
   qubitCount: number;
   measurements: MeasurementMap;
@@ -15,6 +14,7 @@ type ParticleViewProps = {
   transitions?: OperationTransition[];
 };
 
+// Use a golden-angle hue step so adjacent physical qubits remain visually distinct as circuits grow.
 const seededColor = (index: number): [number, number, number] => {
   const hue = ((index * 137.508) % 360) / 60;
   const chroma = 0.76;
@@ -34,6 +34,7 @@ const linearToSrgb = (value: number) => {
   return Math.round((clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * clamped ** (1 / 2.4) - 0.055) * 255);
 };
 
+// Color mixing happens in Oklab to keep entangled/multi-qubit particles perceptually balanced instead of muddy.
 const rgbToOklab = ([r, g, b]: [number, number, number]) => {
   const lr = srgbToLinear(r);
   const lg = srgbToLinear(g);

@@ -1,3 +1,10 @@
+/**
+ * Derived metadata lists for QPU AST gate support.
+ *
+ * The compiler uses these sets to distinguish primitive instructions from
+ * higher-level derived operations while keeping palette metadata in gate
+ * definitions.
+ */
 import { preconfiguredGates } from './preconfigured';
 
 export const astPrimitiveGateIds = () =>

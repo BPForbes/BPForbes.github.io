@@ -1,3 +1,12 @@
+/**
+ * Gate registry shared by the canvas palette, AST compiler, and execution
+ * engine.
+ *
+ * Preconfigured gates are loaded from `gates/preconfigured`, while user-defined
+ * custom gates are rebuilt from session storage. Keeping both sources behind
+ * this registry lets the rest of the app ask one question--"what does this
+ * gate do?"--without caring whether the answer is built in or user supplied.
+ */
 import type { CircuitGate, ExecutionResult, MeasurementMap, PreconfiguredGateType } from '../types';
 import type { Complex } from '../complex';
 import type { GateDefinition } from './types';

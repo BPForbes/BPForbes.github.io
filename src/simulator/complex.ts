@@ -1,3 +1,9 @@
+/**
+ * Minimal complex-number utilities used by the state-vector simulator.
+ *
+ * The project keeps this math layer small and dependency-free so gate operations
+ * can be audited alongside the simulator code that consumes them.
+ */
 export type Complex = Readonly<{ re: number; im: number }>;
 
 export const complex = (re = 0, im = 0): Complex => ({ re, im });

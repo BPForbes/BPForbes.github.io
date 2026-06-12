@@ -1,56 +1,55 @@
+// Correction Lab: catalog + uploads, editable truth tables, circuit test/correct, and NL chat share one workflow state.
 import { ChangeEvent, FormEvent, memo, useCallback, useMemo, useState } from 'react';
 import {
   buildProcessCatalogSummaries,
+  enforceProtectedTruthTable,
   getCatalogEntries,
   getCatalogEntry,
-  getCatalogTruthTable,
-  resolveCatalogEntry,
   getCatalogLibrarySources,
+  getCatalogTruthTable,
   getCatalogVersion,
   isCatalogTruthTableProtected,
+  isProtectedQpuioProcess,
   persistCatalogArtifacts,
   registerCatalogProcess,
   registerCatalogTruthTable,
-} from '../data/processCatalog';
-import type { ProcessCatalogOrigin } from '../data/processCatalog';
-import {
-  enforceProtectedTruthTable,
-  isProtectedQpuioProcess,
+  resolveCatalogEntry,
   warnProtectedTruthTable,
-} from '../data/protectedQpuio';
+  type ProcessCatalogOrigin,
+} from '../data/catalog';
 import {
   companionQpucirFileName,
+  companionQpuioFileName,
+  downloadQpucirSource,
+  downloadQpucirTxtSource,
+  downloadQpuioContents,
   isLooseQpucirUpload,
   isQpuioFileName,
   isQpucirFileName,
-  processStemFromQpuioFileName,
-  QPU_FILE_UPLOAD_ACCEPT,
-  validateUploadFileName,
-} from '../data/qpuFileNames';
-import {
-  companionQpuioFileName,
-  downloadQpuioContents,
+  parseQpucirPayload,
   parseQpuioPayload,
+  processStemFromQpuioFileName,
   qpuioFileNameForProcess,
   qpuioTxtFileNameForProcess,
+  QPU_FILE_UPLOAD_ACCEPT,
   serializeQpuioText,
-} from '../data/qpuioFile';
-import { downloadQpucirSource, downloadQpucirTxtSource, parseQpucirPayload } from '../data/qpucirFile';
+  validateUploadFileName,
+} from '../data/formats';
 import {
   formatClarificationRetry,
+  parseCorrectionIntent,
   resolveClarificationResponse,
-} from '../simulator/clarification';
-import { parseCorrectionIntent } from '../simulator/correctionIntentParser';
-import type { ModelCorrectionIntent, PendingClarification } from '../simulator/nlIntentTypes';
+} from '../simulator/correction';
+import type { ModelCorrectionIntent, PendingClarification } from '../simulator/llm/intentTypes';
 import {
   BROWSER_MODEL_OPTIONS,
   loadLlmSettings,
   saveLlmSettings,
   type LlmSettings,
-} from '../simulator/llmConfig';
-import { getCachedBrowserModelId } from '../simulator/llmConfig';
-import { hasWebGpu } from '../simulator/webGpu';
-import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/qpuFormat';
+} from '../simulator/llm/config';
+import { getCachedBrowserModelId } from '../simulator/llm/config';
+import { hasWebGpu } from '../simulator/physics';
+import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/compiler';
 import {
   CorrectionGuidance,
   createEmptyTruthTable,
@@ -99,6 +98,7 @@ const nextColumnNames = (prefix: string, count: number, existing: string[] = [])
   Array.from({ length: count }, (_, index) => existing[index] ?? `${prefix}${index}`)
 );
 
+// Memoized row editor so large truth tables do not re-render the full grid on every cell change.
 type TruthTableRowProps = {
   rowIndex: number;
   row: TruthCellValue[];
@@ -138,6 +138,7 @@ const TruthTableRow = memo(({
 TruthTableRow.displayName = 'TruthTableRow';
 
 export const ModuleLab = () => {
+  // Workspace state: protocol text, truth table, last test, catalog selection, and chat/LLM preferences.
   const [source, setSource] = useState(() => createBlankProtocol(DEFAULT_INPUTS, DEFAULT_OUTPUTS));
   const [truthTable, setTruthTable] = useState<TruthTable>(() => createInitialTruthTable());
   const [lastTestResult, setLastTestResult] = useState<TruthTableTestResult | null>(null);
@@ -210,6 +211,7 @@ export const ModuleLab = () => {
     pendingClarification: clarification,
   }), [source, truthTable, activeProcessName, processCatalog, lastTestResult, librarySources, pendingClarification]);
 
+  // All table writes pass through protected-process enforcement so bundled .qpuio metadata cannot be edited away.
   const commitTruthTable = useCallback((
     processName: string | null | undefined,
     attempted: TruthTable,
@@ -311,6 +313,7 @@ export const ModuleLab = () => {
     setLastTestResult(null);
   };
 
+  // Upload pairing: .qpucir drives protocol registration; companion .qpuio loads or updates the truth table.
   const ingestUploadedFiles = async (input: FileList | File[]) => {
     const fileList = Array.from(input);
     fileList.forEach((file) => validateUploadFileName(file.name));
@@ -539,6 +542,7 @@ export const ModuleLab = () => {
     return { response, summary, persist };
   }, [source, librarySources, activeProcessName, refreshCatalog, persistActiveArtifacts, commitTruthTable]);
 
+  // Every parsed intent flows through this gate so protected truth tables are enforced before any correction is applied.
   const applyParsedIntent = async (intent: ModelCorrectionIntent) => {
     if (intent.clarification) {
       setPendingClarification(intent.clarification);
@@ -678,6 +682,7 @@ export const ModuleLab = () => {
     pushMessage('assistant', intent.reply);
   };
 
+  // Clarification replies are resolved before invoking the parser again, avoiding a loop of ambiguous model prompts.
   const handleIntent = async (text: string) => {
     if (pendingClarification) {
       if (/^cancel$/i.test(text.trim())) {
@@ -817,6 +822,7 @@ export const ModuleLab = () => {
     }
   };
 
+  // Browser model downloads are explicit: the regex parser stays available while WebLLM assets are cached or cleared.
   const loadBrowserModel = async () => {
     if (!webGpuAvailable) {
       setStatus('WebGPU is not available in this browser. Use Ollama mode or a WebGPU-capable browser.');
@@ -824,7 +830,7 @@ export const ModuleLab = () => {
     }
     setModelLoading(true);
     try {
-      const { preloadBrowserModel } = await import('../simulator/webLlmNaturalLanguageCorrector');
+      const { preloadBrowserModel } = await import('../simulator/llm/webLlmNaturalLanguageCorrector');
       const ok = await preloadBrowserModel(llmSettings.browserModel, (progress) => setStatus(progress));
       setModelReady(ok);
       setStatus(ok
@@ -842,7 +848,7 @@ export const ModuleLab = () => {
   const handleClearBrowserModel = async () => {
     setCacheClearing(true);
     try {
-      const { clearBrowserModel } = await import('../simulator/webLlmNaturalLanguageCorrector');
+      const { clearBrowserModel } = await import('../simulator/llm/webLlmNaturalLanguageCorrector');
       await clearBrowserModel(llmSettings.browserModel, (progress) => setStatus(progress));
       setModelReady(false);
       setStatus(`Cleared browser cache for ${llmSettings.browserModel}. Download again before using AI mode.`);
@@ -855,6 +861,7 @@ export const ModuleLab = () => {
     }
   };
 
+  // Left column: protocol/table workspace. Right column: regex-first chat with optional browser/Ollama parser.
   return (
     <div className="module-lab-shell">
       <header className="module-lab-hero panel">

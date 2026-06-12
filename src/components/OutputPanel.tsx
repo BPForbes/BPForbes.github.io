@@ -2,7 +2,7 @@ import { basisLabel } from '../simulator/engine';
 import { formatComplex, magnitudeSquared } from '../simulator/complex';
 import { Complex } from '../simulator/complex';
 import { MeasurementMap } from '../simulator/types';
-
+// Renders measurement readouts mapped from simulation indices.
 type OutputPanelProps = {
   state: Complex[];
   qubitCount: number;

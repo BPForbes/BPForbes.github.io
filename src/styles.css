@@ -1,3 +1,11 @@
+/*
+ * Global styling for the QPU circuit builder.
+ *
+ * Styles are grouped by app region rather than component file because this MVP
+ * uses a single stylesheet; section comments below call out the larger UI areas
+ * so future extraction into CSS modules remains straightforward.
+ */
+
 :root {
   color: #eef4ff;
   background: #101827;

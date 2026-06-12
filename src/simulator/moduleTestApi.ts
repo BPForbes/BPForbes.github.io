@@ -1,10 +1,11 @@
+// Re-export truth-table and correction primitives from one API so UI actions and tests use identical contracts.
 export type {
   TruthCellValue,
   TruthTable,
   TruthTableDimensions,
   TruthTableRowResult,
   TruthTableTestResult,
-} from './truthTable';
+} from './compiler';
 
 export type {
   CircuitCorrectionResult,
@@ -12,7 +13,7 @@ export type {
   CorrectionStep,
   GatePreference,
   GuidedGateSpec,
-} from './circuitCorrector';
+} from './correction';
 
 export {
   createEmptyTruthTable,
@@ -33,30 +34,30 @@ export {
   testCircuitAgainstTruthTable,
   truthTablesEqual,
   validateTruthTable,
-} from './truthTable';
+} from './compiler';
 
 export {
   correctCircuit,
   inferTruthTableWithOutputs,
   synthesizeProtocolFromTruthTable,
-} from './circuitCorrector';
+} from './correction';
 
-export type { ChildCorrectionResult } from './childProcessCorrection';
+export type { ChildCorrectionResult } from './correction';
 export {
   collectDescendantProcesses,
   correctChildProcessesForCompatibility,
   getReferencedChildProcesses,
-} from './childProcessCorrection';
+} from './correction';
 
-export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './nlIntentTypes';
-export { parseNaturalLanguageCorrection } from './naturalLanguageCorrector';
-import type { CorrectionGuidance } from './circuitCorrector';
-import { correctCircuit } from './circuitCorrector';
+export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './llm';
+export { parseNaturalLanguageCorrection } from './llm';
+import type { CorrectionGuidance } from './correction';
+import { correctCircuit } from './correction';
 import {
   correctChildProcessesForCompatibility,
   type ChildCorrectionResult,
-} from './childProcessCorrection';
-import type { TruthTable, TruthTableTestResult } from './truthTable';
+} from './correction';
+import type { TruthTable, TruthTableTestResult } from './compiler';
 import {
   createEmptyTruthTable,
   describeTruthTableDimensions,
@@ -64,17 +65,16 @@ import {
   inferTruthTableDimensions,
   testCircuitAgainstTruthTable,
   validateTruthTable,
-} from './truthTable';
+} from './compiler';
 
+// Module-test requests can run read-only checks or propagate corrections through child processes with truth tables.
 export type ModuleTestRequest = {
   source: string;
   truthTable?: TruthTable;
   librarySources?: Record<string, string>;
   guidance?: CorrectionGuidance;
   autonomous?: boolean;
-  /** When false, only test and report failures without mutating the circuit. */
   correct?: boolean;
-  /** When correcting, also test and fix declared child processes that have truth tables. */
   propagateToChildren?: boolean;
   processName?: string;
   getTruthTable?: (processName: string) => TruthTable | undefined;
@@ -90,6 +90,7 @@ export type ModuleTestResponse = {
   librarySources?: Record<string, string>;
 };
 
+// Module tests compile the active source with catalog/library children before comparing against the selected table.
 export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse => {
   const truthTable = request.truthTable ?? createEmptyTruthTable(request.source);
   const dimensions = describeTruthTableDimensions(request.source, truthTable);
@@ -137,6 +138,7 @@ export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse =>
   };
 };
 
+// Probing reuses truth-table inference without applying correction steps.
 export const probeModuleOutputs = (
   source: string,
   truthTable: TruthTable,

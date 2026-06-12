@@ -1,3 +1,9 @@
+/**
+ * Small starter circuits for the visual builder.
+ *
+ * Examples are kept separate from bundled process files because they exercise
+ * the drag-and-drop canvas directly instead of the `.qpucir` process catalog.
+ */
 import { CircuitGate } from '../simulator/types';
 
 const gate = (id: string, type: CircuitGate['type'], step: number, targets: number[], controls: number[] = []): CircuitGate => ({

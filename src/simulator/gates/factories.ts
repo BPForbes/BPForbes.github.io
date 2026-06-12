@@ -1,3 +1,9 @@
+/**
+ * Gate-definition factories for common built-in operation families.
+ *
+ * Small factories keep simple preconfigured gates declarative while preserving a
+ * single implementation path for matrix gates and controlled-X-derived logic.
+ */
 import type { ExecutionResult } from '../types';
 import type { GateApplyContext, GateDefinition } from './types';
 import { gateIoArity } from './types';

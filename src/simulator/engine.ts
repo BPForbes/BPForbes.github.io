@@ -1,7 +1,8 @@
+// Circuit execution orchestration: initial state, per-gate application via the gate registry, and full runs.
 import { Complex, magnitudeSquared, ONE, ZERO } from './complex';
 import { applyGate as applyRegisteredGate } from './gates/registry';
 import { applyStartState, hasBit, measureQubit, padStateVector } from './gates/operations';
-import { buildOperationTransition, snapshotAllParticles } from './particleTracking';
+import { buildOperationTransition, snapshotAllParticles } from './physics/particleTracking';
 import { CircuitGate, ExecutionResult, MeasurementMap, OperationTransition, ParticleStartState } from './types';
 
 export {
@@ -37,6 +38,7 @@ export const projectStateOntoQubits = (
   return probabilities.map((probability) => (probability > 0 ? { re: Math.sqrt(probability), im: 0 } : ZERO));
 };
 
+// When the compiler does not supply explicit param indices, start states bind to the first N simulator wires.
 const resolveParamQubitIndices = (
   qubitCount: number,
   startStates: ParticleStartState[],
@@ -46,6 +48,7 @@ const resolveParamQubitIndices = (
   return Array.from({ length: Math.min(qubitCount, startStates.length) }, (_, qubit) => qubit);
 };
 
+// Start-state preparation applies only to logical parameter qubits; compiler-created ancilla stay initialized to |0⟩.
 export const createInitialState = (
   qubitCount: number,
   startStates: ParticleStartState[] = [],
@@ -68,6 +71,7 @@ export const createInitialState = (
   return state;
 };
 
+// Custom/child gates may pad the state vector beyond the UI qubit count; trust vector width when it is larger.
 export const resolveStateQubitCount = (state: Complex[], qubitCount: number): number => {
   const vectorWidth = Math.round(Math.log2(state.length));
   if (Number.isFinite(vectorWidth) && vectorWidth > 0 && vectorWidth > qubitCount) {
@@ -76,6 +80,7 @@ export const resolveStateQubitCount = (state: Complex[], qubitCount: number): nu
   return qubitCount;
 };
 
+// Pad the state vector before applying a gate whose controls/targets reference a higher wire index.
 const ensureStateWidth = (state: Complex[], qubitCount: number, gate: CircuitGate) => {
   const touched = [...gate.targets, ...gate.controls];
   if (touched.length === 0) return { state, qubitCount };
@@ -90,6 +95,7 @@ export type ApplyGateOptions = {
   trackParticles?: boolean;
 };
 
+// Legacy call sites pass a plain librarySources map; newer paths pass an options object with trackParticles.
 const isExecutionOptions = (
   input: Record<string, string> | ApplyGateOptions | RunCircuitOptions,
 ): boolean => {
@@ -112,6 +118,7 @@ const normalizeApplyGateOptions = (
   return { librarySources: input as Record<string, string>, trackParticles: false };
 };
 
+// Gate application pads the state vector on demand because compiled child processes may introduce workspace qubits.
 export const applyGate = (
   state: Complex[],
   qubitCount: number,
@@ -127,6 +134,7 @@ export const applyGate = (
     return result;
   }
 
+  // Particle tracking snapshots before/after one gate so the Bloch view can animate a single transition.
   const beforeState = state;
   const beforeMeasurements = measurements;
   const result = applyRegisteredGate(state, qubitCount, gate, measurements, librarySources);
@@ -143,6 +151,7 @@ export const applyGate = (
   return { ...result, particles, transitions: [transition] };
 };
 
+// Single-gate step path used by the UI run control; pads width first so stepped custom gates stay addressable.
 export const stepCircuitGate = (
   state: Complex[],
   qubitCount: number,
@@ -171,6 +180,7 @@ const normalizeRunCircuitOptions = (
   return { librarySources: input as Record<string, string>, trackParticles: false };
 };
 
+// Full-circuit runs share the stepping path so logs, measurements, and particle transitions stay consistent.
 export const runCircuit = (
   qubitCount: number,
   gates: CircuitGate[],
@@ -224,6 +234,7 @@ export const runCircuit = (
     );
 };
 
+// Collapse any qubits not already recorded in the measurements map (e.g. after explicit MEASURE gates).
 export const measureAll = (state: Complex[], qubitCount: number, measurements: MeasurementMap): ExecutionResult => {
   let current = state;
   const nextMeasurements = { ...measurements };

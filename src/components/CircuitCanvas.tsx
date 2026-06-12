@@ -1,7 +1,6 @@
 import { isKnownGateType } from '../simulator/gates/registry';
 import { CircuitGate, GateType } from '../simulator/types';
-import { GateBlock } from './GateBlock';
-
+import { GateBlock } from './gate';
 type CircuitCanvasProps = {
   qubitCount: number;
   gates: CircuitGate[];
@@ -15,9 +14,11 @@ type CircuitCanvasProps = {
 const gateTouchesQubit = (gate: CircuitGate, qubit: number) => gate.targets.includes(qubit) || gate.controls.includes(qubit);
 
 export function CircuitCanvas({ qubitCount, gates, activeStep, selectedGate, qubitColors, onDropGate, onRemoveGate }: CircuitCanvasProps) {
+  // Columns are step-indexed rather than pixel-positioned so tap, drag, and keyboard placement share one layout model.
   const sorted = gates.slice().sort((a, b) => a.step - b.step);
   const columns = Math.max(6, sorted.length + 2);
 
+  // Drag data is validated against the live registry before it can mutate the circuit.
   const handleDrop = (event: React.DragEvent, qubit: number) => {
     event.preventDefault();
     const droppedGate = event.dataTransfer.getData('text/plain');
