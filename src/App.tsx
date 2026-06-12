@@ -34,6 +34,7 @@ type AppView = 'builder' | 'docs' | 'qpu-docs' | 'files' | 'particles' | 'module
 
 const initialProtocolSource = protocolExamples[0].source;
 
+// Placement defers control/target wiring to the registry so palette drops and workbench picks share one layout policy.
 const newGate = (
   type: GateType,
   step: number,
@@ -88,11 +89,14 @@ function App() {
   const [customGateRegistryVersion, setCustomGateRegistryVersion] = useState(0);
   const [particleSnapshots, setParticleSnapshots] = useState<ParticleSnapshot[]>([]);
   const [particleTransitions, setParticleTransitions] = useState<OperationTransition[]>([]);
+  // Palette refresh bumps when custom gates register so GateBlock picks up new definitions.
   const palette = useMemo(() => paletteGateIds(), [customGateRegistryVersion]);
   const selectedGateDefinition = selectedGate ? getGateDefinition(selectedGate) : undefined;
 
   const orderedGates = useMemo(() => gates.slice().sort((a, b) => a.step - b.step), [gates]);
+  // RESET lowering stays in orderedGates for simulation but is hidden on the canvas timeline.
   const renderedGates = useMemo(() => visibleCircuitGates(orderedGates), [orderedGates]);
+  // Token labels decorate canvas wires but never change simulator qubit indices.
   const qubitLabels = useMemo(() => {
     const labels = Array.from({ length: qubitCount }, (_, qubit) => `q${qubit}`);
     Object.entries(tokenMap).forEach(([token, qubit]) => {
@@ -109,6 +113,7 @@ function App() {
     return labels;
   }, [qubitCount, tokenMap]);
   const phaseRadians = (phaseDegrees * Math.PI) / 180;
+  // Canvas mode synthesizes one PARAM per wire; compiled mode filters to user-visible process inputs only.
   const controllableParams = useMemo(() => {
     const inRange = processParams.filter((param) => param.qubitIndex >= 0 && param.qubitIndex < simulationQubitCount);
     if (inRange.length > 0) return inRange;
@@ -126,6 +131,7 @@ function App() {
       ? controllableParams.length
       : qubitCount;
   const selectedTarget = Math.min(targetQubit, displayQubitCount - 1);
+  // Workbench indices are display-order; gate placement uses the mapped simulation wire when compiled.
   const selectedSimulationQubit = displayQubitIndices[selectedTarget]
     ?? controllableParams[selectedTarget]?.qubitIndex
     ?? selectedTarget;
@@ -137,12 +143,14 @@ function App() {
         : qubitLabels.slice(0, qubitCount)),
     [returnValues, processParams.length, controllableParams, qubitLabels, qubitCount],
   );
+  // Ket readouts use the projected state whenever ancilla wires exceed logical RETURNVALS width.
   const displayState = useMemo(() => {
     if (displayQubitIndices.length > 0 && simulationQubitCount > displayQubitCount) {
       return projectStateOntoQubits(state, simulationQubitCount, displayQubitIndices);
     }
     return state;
   }, [state, simulationQubitCount, displayQubitCount, displayQubitIndices]);
+  // Measurement panels mirror the same RETURNVALS/PARAMS projection as displayState.
   const displayMeasurements = useMemo(() => {
     if (returnValues.length > 0) {
       const mapped: MeasurementMap = {};
@@ -163,6 +171,7 @@ function App() {
     return mapped;
   }, [measurements, returnValues, controllableParams, processParams.length]);
 
+  // First free wire wins so parametric gates can auto-fill a third control without another dropdown.
   const chooseDistinctQubit = (avoid: number[], wireCount = simulationQubitCount): number | undefined =>
     Array.from({ length: wireCount }, (_, qubit) => qubit).find((qubit) => !avoid.includes(qubit));
 
@@ -214,6 +223,7 @@ function App() {
   };
 
   // New PARAMS receive fresh qubit slots after existing compiled wires so user-added inputs do not collide with workspace registers.
+  // Preserves existing qubitIndex bindings when PARAMS are renamed but keeps new names on fresh slots.
   const processParamsFromProtocolSource = (source: string, previousParams = processParams, firstNewQubit = simulationQubitCount) => {
     let nextNewQubit = firstNewQubit;
     return getProtocolParameterEntries(source).map((param) => {
@@ -250,7 +260,10 @@ function App() {
     setParticleTransitions([]);
   };
 
-  // Gate placement always appends at the next available step so re-ordering is explicit via drag, not implicit.
+  // Drag-drop placement: CircuitCanvas resolves the drop qubit row from the
+  // pointer's Y coordinate and passes it as `target`; the step index is always
+  // appended (max existing step + 1) — there is no mid-sequence insertion or
+  // collision check. Gates re-index sequentially on removal via removeGate.
   const addGate = (type: GateType, target: number, controls?: number[]) => {
     const step = gates.length === 0 ? 0 : Math.max(...gates.map((gate) => gate.step)) + 1;
     const swapPartner = getGateDefinition(type)?.controlKind === 'swap'
@@ -276,7 +289,11 @@ function App() {
     resetRuntime();
   };
 
-  // Runs hide compiler-internal RESET chatter while retaining particle snapshots for the visualizer.
+  // Run / step boundary: both paths write to the same shared vectors (state,
+  // measurements, particleSnapshots). `run` replaces them wholesale and sets
+  // cursor to orderedGates.length. `step` applies one gate and increments cursor,
+  // so the two modes interleave freely — stepping after a full run is a no-op
+  // because cursor >= orderedGates.length guards the gate lookup.
   const run = () => {
     const result = runCircuit(
       simulationQubitCount,
@@ -312,6 +329,7 @@ function App() {
     setCursor((current) => current + 1);
   };
 
+  // resetCircuit is a convenience alias; it does not change qubit count or start states.
   const resetCircuit = () => resetRuntime();
 
   // Start-state edits write back into either the canvas serialization or the matching PARAMS declaration.
@@ -361,6 +379,7 @@ function App() {
   };
 
   // Bulk measurement collapses all unmeasured qubits at once; individual qubit measure is handled by measureSelectedQubit.
+  // measureAll walks every simulation wire; display panels still project results afterward.
   const measure = () => {
     const result = measureAll(state, simulationQubitCount, measurements);
     setState(result.state);
@@ -381,6 +400,7 @@ function App() {
     setLog((current) => [...current, `Measured q${selectedTarget} = ${result.value} (P(1)=${result.probabilityOne.toFixed(3)}).`]);
   };
 
+  // Workbench adds override controls computed from the selected target and control dropdowns.
   const addGateFromWorkbench = () => {
     if (!selectedGate) {
       setLog((current) => [...current, 'Select a gate before adding it to the circuit.']);
@@ -418,6 +438,7 @@ function App() {
       return;
     }
 
+    // Canvas particle cap keeps the drag palette and Bloch view readable on small screens.
     const nextCount = Math.min(qubitCount + 1, 6);
     if (nextCount === qubitCount) {
       setLog((current) => [...current, 'This playground supports up to 6 qubit particles.']);
@@ -466,6 +487,7 @@ function App() {
     setSimulationQubitCount(nextCount);
     const nextStartStates = startStates.slice(0, nextCount);
     setStartStates(nextStartStates);
+    // Removing a canvas wire drops gates that referenced the deleted index and compacts steps.
     setGates((current) =>
       current
         .filter((gate) => gate.targets.every((target) => target < nextCount) && gate.controls.every((control) => control < nextCount))
@@ -478,6 +500,7 @@ function App() {
     resetRuntime(nextCount, `Removed last particle; reset start states.`, nextStartStates);
   };
 
+  // Clearing gates keeps qubit count and start states; only the serialized protocol and runtime reset.
   const clearCircuit = () => {
     setGates([]);
     syncCanvasProtocol([], simulationQubitCount, startStates);
@@ -524,6 +547,7 @@ function App() {
       const returnSummary = result.returnValues.length
         ? `; ket displays ${result.returnValues.map((value) => value.name).join(', ')}`
         : '';
+      // logicalQubitCount tracks RETURNVALS width; qubitCount includes hidden workspace/ancilla wires.
       const registerSummary = result.logicalQubitCount < result.qubitCount
         ? `${result.logicalQubitCount} return qubit(s) over ${result.qubitCount} simulation register(s)${returnSummary}`
         : `${result.qubitCount} register(s)`;
@@ -557,20 +581,24 @@ function App() {
     }
   };
 
+  // Downloads always use the on-disk .qpucir naming helpers so uploads round-trip cleanly.
   const downloadNamedQpucirContents = (name: string, fileName: string, contents: string) => {
     downloadQpucirContents(fileName, contents);
     setFileStatus(`Downloaded ${name} as ${fileName}.`);
   };
 
+  // Bundled examples download their frozen catalog source, not the mutable editor text.
   const downloadConfiguredProtocol = (process: ConfiguredQpucirProcess) => {
     downloadNamedQpucirContents(process.name, process.fileName, process.source);
   };
 
+  // Serializes the live editor buffer, which may differ from the last compiled catalog snapshot.
   const downloadCurrentProtocol = () => {
     const name = extractMainProcessName(protocolSource) ?? 'Current editor protocol';
     downloadNamedQpucirContents(name, qpucirFileNameForSource(protocolSource, name), protocolSource);
   };
 
+  // Validates the editor text compiles before exporting so broken AST never leaves the browser.
   const downloadCompiledAst = () => {
     const name = extractMainProcessName(protocolSource) ?? 'Compiled AST circuit';
     try {
@@ -582,6 +610,7 @@ function App() {
     }
   };
 
+  // Multi-file uploads pair qpucir with optional qpuio; protected bundled tables ignore companion overrides.
   const uploadProtocol = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -641,6 +670,7 @@ function App() {
     }
   };
 
+  // View switches are UI-only; simulator state persists until resetRuntime or compile.
   const showView = (view: AppView) => {
     setActiveView(view);
     setMenuOpen(false);

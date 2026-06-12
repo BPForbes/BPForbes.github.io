@@ -429,7 +429,10 @@ export const parseNaturalLanguageCorrection = (
   const gates = extractGateSpecs(text, context);
   const truthTable = parseTruthTableRowHint(text, context) ?? undefined;
 
-  // Intent ordering keeps explicit loads/saves ahead of broad correction phrases that might otherwise match them.
+  // Static regex patterns are tried in priority order before any model call so
+  // that common, well-formed commands (help, load, catalog open, update, test,
+  // gate bindings) resolve cheaply without an LLM round-trip. Order is
+  // intentional — earlier branches win; more-specific patterns beat broad fallbacks.
   if (/(?:help|what can you do|examples?)/i.test(lower)) {
     return {
       reply: [
@@ -474,6 +477,7 @@ export const parseNaturalLanguageCorrection = (
     }
   }
 
+  // Catalog-save phrases are mutually exclusive so a single "update qpuio" does not also rewrite qpucir.
   const updateBoth = /update\s+both\s+(?:qpucir\s+and\s+qpuio|qpuio\s+and\s+qpucir)/i.test(lower)
     || /update\s+(?:qpucir\s+and\s+qpuio|qpuio\s+and\s+qpucir)/i.test(lower);
   const updateQpuioOnly = !updateBoth && /update\s+(?:the\s+)?qpuio(?:\s+file)?/i.test(lower);
@@ -492,6 +496,7 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
+  // Dimension inference is a catalog helper; it does not mutate the active circuit by itself.
   if (/(?:infer|create|build).*(?:truth table|table dimensions)/i.test(lower)) {
     return {
       reply: 'Inferred truth-table dimensions from the uploaded protocol PARAMS and RETURNVALS.',
@@ -499,6 +504,7 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
+  // Output probing simulates each truth-table row and is intentionally separate from runTest guidance.
   if (/(?:probe|read|fill).*(?:output|circuit)/i.test(lower)) {
     return {
       reply: 'Probed output columns by simulating the current circuit for each input row.',
@@ -506,6 +512,7 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
+  // Autonomous correction may still honor extracted gate preferences when the user named them explicitly.
   if (/(?:fix|correct|repair|update).*(?:automatically|autonomous|on its own|without me)/i.test(lower)
     || /(?:auto|autonomous)(?:matically)?\s+correct/i.test(lower)) {
     return {
@@ -518,6 +525,7 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
+  // Guided test runs reuse the same gate extraction as autonomous mode but never set autonomous: true.
   if (/(?:test|check|verify|validate).*(?:circuit|truth|table|module)/i.test(lower) || /^run\b/i.test(lower)) {
     return {
       reply: gates.length > 0
@@ -537,6 +545,10 @@ export const parseNaturalLanguageCorrection = (
     return addressClarification;
   }
 
+  // context.truthTable gates the row-hint branch above; context.outputColumns
+  // determines whether the partial-gate path asks a clarification question or
+  // infers the single output automatically (detectPartialGateCommand returns
+  // null when outputColumns.length <= 1).
   const partialGate = detectPartialGateCommand(text, context);
   if (partialGate && gates.length === 0) {
     return buildClarificationIntent(
@@ -564,6 +576,7 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
+  // Row edits from parseTruthTableRowHint apply even when no gate bindings were parsed.
   if (truthTable) {
     return {
       reply: 'Updated the truth table row(s) matching your description.',
@@ -573,6 +586,7 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
+  // Gate mentions without bindings only record preference; they do not schedule a correction run.
   if (preferredGates.length > 0) {
     return {
       reply: `Noted preferred gates: ${preferredGates.join(', ')}. Say "fix automatically" to apply them during correction.`,
