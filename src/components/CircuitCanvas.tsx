@@ -1,6 +1,6 @@
 import { isKnownGateType } from '../simulator/gates/registry';
 import { CircuitGate, GateType } from '../simulator/types';
-import { GateBlock } from './gate/GateBlock';
+import { GateBlock } from './gate';
 type CircuitCanvasProps = {
   qubitCount: number;
   gates: CircuitGate[];

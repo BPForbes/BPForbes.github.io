@@ -5,11 +5,11 @@ import {
   correctChildProcessesForCompatibility,
   getReferencedChildProcesses,
   orderProcessesLeafFirst,
-} from '../correction/childProcessCorrection';
-import { singleBitFullAdderTruthTable } from '../compiler/truthTable';
+} from '../childProcessCorrection';
+import { singleBitFullAdderTruthTable } from '../../compiler/truthTable';
 // Covers descendant correction flows across nested processes.
 
-const readProcess = (fileName: string) => readFileSync(new URL(`../../data/processes/${fileName}`, import.meta.url), 'utf8');
+const readProcess = (fileName: string) => readFileSync(new URL(`../../../data/processes/${fileName}`, import.meta.url), 'utf8');
 
 const protocolLibrary = {
   SingleBitFullAdder: readProcess('single-bit-full-adder.qpucir'),

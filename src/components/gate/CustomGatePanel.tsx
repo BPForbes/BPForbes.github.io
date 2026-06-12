@@ -6,14 +6,14 @@
  * custom gate, so the palette only receives processes the simulator can compile.
  */
 import { useMemo, useState } from 'react';
-import { buildProcessCatalogSummaries, getCatalogEntry, getCatalogLibrarySources } from '../../data/catalog/processCatalog';
+import { buildProcessCatalogSummaries, getCatalogEntry, getCatalogLibrarySources } from '../../data/catalog';
 import {
   listCustomGateRecords,
   registerCustomGate,
   removeCustomGateRecord,
 } from '../../simulator/gates/customGateEngine';
 import { refreshCustomGateRegistry } from '../../simulator/gates/registry';
-import { extractMainProcessName } from '../../simulator/compiler/qpuFormat';
+import { extractMainProcessName } from '../../simulator/compiler';
 
 type CustomGatePanelProps = {
   protocolSource: string;

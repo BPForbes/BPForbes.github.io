@@ -5,7 +5,7 @@ export type {
   TruthTableDimensions,
   TruthTableRowResult,
   TruthTableTestResult,
-} from './compiler/truthTable';
+} from './compiler';
 
 export type {
   CircuitCorrectionResult,
@@ -13,7 +13,7 @@ export type {
   CorrectionStep,
   GatePreference,
   GuidedGateSpec,
-} from './correction/circuitCorrector';
+} from './correction';
 
 export {
   createEmptyTruthTable,
@@ -34,30 +34,30 @@ export {
   testCircuitAgainstTruthTable,
   truthTablesEqual,
   validateTruthTable,
-} from './compiler/truthTable';
+} from './compiler';
 
 export {
   correctCircuit,
   inferTruthTableWithOutputs,
   synthesizeProtocolFromTruthTable,
-} from './correction/circuitCorrector';
+} from './correction';
 
-export type { ChildCorrectionResult } from './correction/childProcessCorrection';
+export type { ChildCorrectionResult } from './correction';
 export {
   collectDescendantProcesses,
   correctChildProcessesForCompatibility,
   getReferencedChildProcesses,
-} from './correction/childProcessCorrection';
+} from './correction';
 
 export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './llm/intentTypes';
 export { parseNaturalLanguageCorrection } from './llm/naturalLanguageCorrector';
-import type { CorrectionGuidance } from './correction/circuitCorrector';
-import { correctCircuit } from './correction/circuitCorrector';
+import type { CorrectionGuidance } from './correction';
+import { correctCircuit } from './correction';
 import {
   correctChildProcessesForCompatibility,
   type ChildCorrectionResult,
-} from './correction/childProcessCorrection';
-import type { TruthTable, TruthTableTestResult } from './compiler/truthTable';
+} from './correction';
+import type { TruthTable, TruthTableTestResult } from './compiler';
 import {
   createEmptyTruthTable,
   describeTruthTableDimensions,
@@ -65,7 +65,7 @@ import {
   inferTruthTableDimensions,
   testCircuitAgainstTruthTable,
   validateTruthTable,
-} from './compiler/truthTable';
+} from './compiler';
 
 // Module-test requests can run read-only checks or propagate corrections through child processes with truth tables.
 export type ModuleTestRequest = {

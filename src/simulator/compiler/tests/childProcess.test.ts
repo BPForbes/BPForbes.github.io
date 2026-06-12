@@ -1,11 +1,11 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
-import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from '../compiler/qpuAst';
-import { getProtocolParameterEntries, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from '../compiler/qpuFormat';
-import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from '../engine';
-import { complex, magnitudeSquared } from '../complex';
-import type { ParticleStartState } from '../types';
-const readProcess = (fileName: string) => readFileSync(new URL(`../../data/processes/${fileName}`, import.meta.url), 'utf8');
+import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from '../qpuAst';
+import { getProtocolParameterEntries, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from '../qpuFormat';
+import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from '../../engine';
+import { complex, magnitudeSquared } from '../../complex';
+import type { ParticleStartState } from '../../types';
+const readProcess = (fileName: string) => readFileSync(new URL(`../../../data/processes/${fileName}`, import.meta.url), 'utf8');
 
 const protocolLibrary = {
   SingleBitFullAdder: readProcess('single-bit-full-adder.qpucir'),
