@@ -1,3 +1,12 @@
+/**
+ * Top-level React shell for the QPU Circuit Builder.
+ *
+ * This component keeps the project-wide UI state in one place: uploaded
+ * protocols/truth tables, palette selection, simulation results, and the
+ * active documentation or lab view. The lower-level components focus on
+ * rendering individual panels while this file coordinates data flow between
+ * the catalog, parser, simulator, and download helpers.
+ */
 import { ChangeEvent, useMemo, useState } from 'react';
 import { CircuitCanvas } from './components/CircuitCanvas';
 import { CustomGatePanel } from './components/CustomGatePanel';

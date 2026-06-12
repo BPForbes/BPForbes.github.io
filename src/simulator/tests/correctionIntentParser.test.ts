@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { parseCorrectionIntent } from './correctionIntentParser';
+import { parseCorrectionIntent } from '../correctionIntentParser';
 
 const context = {
   source: 'PARAMS: A:state B:state Cin:state',
@@ -16,7 +16,7 @@ describe('parseCorrectionIntent', () => {
   });
 
   it('skips the LLM when regex already handled the message', async () => {
-    const model = await import('./modelNaturalLanguageCorrector');
+    const model = await import('../modelNaturalLanguageCorrector');
     const spy = vi.spyOn(model, 'parseNaturalLanguageWithModel');
 
     const intent = await parseCorrectionIntent('fix the circuit automatically', context, {

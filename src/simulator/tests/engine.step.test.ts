@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createInitialState, stepCircuitGate } from './engine';
-import type { CircuitGate } from './types';
-import { registerCustomGate } from './gates/customGateEngine';
-import { refreshCustomGateRegistry } from './gates/registry';
+import { createInitialState, stepCircuitGate } from '../engine';
+import type { CircuitGate } from '../types';
+import { registerCustomGate } from '../gates/customGateEngine';
+import { refreshCustomGateRegistry } from '../gates/registry';
 
 const gate = (type: string, step: number, targets: number[], controls: number[] = []): CircuitGate => ({
   id: `${type}-${step}`,

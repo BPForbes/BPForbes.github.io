@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
-import { correctCircuit, runModuleTest, synthesizeProtocolFromTruthTable } from './moduleTestApi';
+import { correctCircuit, runModuleTest, synthesizeProtocolFromTruthTable } from '../moduleTestApi';
 import {
   createEmptyTruthTable,
   describeTruthTableDimensions,
@@ -11,9 +11,9 @@ import {
   testCircuitAgainstTruthTable,
   truthTablesEqual,
   validateTruthTable,
-} from './truthTable';
+} from '../truthTable';
 
-const readProcess = (fileName: string) => readFileSync(new URL(`../data/processes/${fileName}`, import.meta.url), 'utf8');
+const readProcess = (fileName: string) => readFileSync(new URL(`../../data/processes/${fileName}`, import.meta.url), 'utf8');
 
 const protocolLibrary = {
   SingleBitFullAdder: readProcess('single-bit-full-adder.qpucir'),

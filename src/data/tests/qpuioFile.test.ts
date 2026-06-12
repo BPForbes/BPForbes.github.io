@@ -1,9 +1,9 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
-import { companionQpuioFileName, createQpuioPayload, parseQpuioPayload, serializeQpuioText } from './qpuioFile';
-import { singleBitFullAdderTruthTable, truthTablesEqual } from '../simulator/truthTable';
+import { companionQpuioFileName, createQpuioPayload, parseQpuioPayload, serializeQpuioText } from '../qpuioFile';
+import { singleBitFullAdderTruthTable, truthTablesEqual } from '../../simulator/truthTable';
 
-const readProcess = (fileName: string) => readFileSync(new URL(`./processes/${fileName}`, import.meta.url), 'utf8');
+const readProcess = (fileName: string) => readFileSync(new URL(`../processes/${fileName}`, import.meta.url), 'utf8');
 
 describe('qpuioFile', () => {
   const protocol = readProcess('single-bit-full-adder.qpucir');

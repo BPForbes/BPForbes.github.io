@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { angularPeakedIntegral, blochBallRhoExpectationFast, radialPeakedIntegral } from './blochQuadrature';
+import { angularPeakedIntegral, blochBallRhoExpectationFast, radialPeakedIntegral } from '../blochQuadrature';
 
 /** Legacy O(n³) reference integrator for regression checks only. */
 const blochBallRhoExpectationGrid = (

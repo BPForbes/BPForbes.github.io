@@ -4,9 +4,9 @@ import {
   parseNaturalLanguageWithWebLlm,
   preloadBrowserModel,
   resetWebLlmEngineForTests,
-} from './webLlmNaturalLanguageCorrector';
-import { getCachedBrowserModelId } from './llmConfig';
-import { hasWebGpu } from './webGpu';
+} from '../webLlmNaturalLanguageCorrector';
+import { getCachedBrowserModelId } from '../llmConfig';
+import { hasWebGpu } from '../webGpu';
 
 const context = {
   source: 'PARAMS: A:state B:state Cin:state',

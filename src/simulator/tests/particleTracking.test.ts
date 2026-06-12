@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, runCircuit } from './engine';
+import { createInitialState, runCircuit } from '../engine';
 import {
   blochCartesianFromSpherical,
   blochVectorForQubit,
@@ -9,8 +9,8 @@ import {
   particleDelta,
   snapshotParticle,
   sphericalFromBlochCartesian,
-} from './particleTracking';
-import type { CircuitGate } from './types';
+} from '../particleTracking';
+import type { CircuitGate } from '../types';
 
 const gate = (type: string, step: number, targets: number[], controls: number[] = []): CircuitGate => ({
   id: `${type}-${step}`,

@@ -3,8 +3,8 @@ import {
   enforceProtectedTruthTable,
   getProtectedTruthTable,
   isProtectedQpuioProcess,
-} from './protectedQpuio';
-import { singleBitFullAdderTruthTable, truthTablesEqual } from '../simulator/truthTable';
+} from '../protectedQpuio';
+import { singleBitFullAdderTruthTable, truthTablesEqual } from '../../simulator/truthTable';
 
 describe('protectedQpuio', () => {
   it('marks bundled adder and phase-demo processes as protected', () => {

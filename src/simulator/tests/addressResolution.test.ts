@@ -4,11 +4,11 @@ import {
   formatAddressLabel,
   getAddressCandidates,
   resolveWireAddress,
-} from './addressResolution';
-import type { NlCorrectionContext } from './nlIntentTypes';
+} from '../addressResolution';
+import type { NlCorrectionContext } from '../nlIntentTypes';
 
-const singleBitSource = readFileSync(new URL('../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');
-const twoBitSource = readFileSync(new URL('../data/processes/two-bit-full-adder.qpucir', import.meta.url), 'utf8');
+const singleBitSource = readFileSync(new URL('../../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');
+const twoBitSource = readFileSync(new URL('../../data/processes/two-bit-full-adder.qpucir', import.meta.url), 'utf8');
 
 const singleBitContext: NlCorrectionContext = {
   source: singleBitSource,

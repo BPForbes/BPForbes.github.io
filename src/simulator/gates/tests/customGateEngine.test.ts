@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { magnitudeSquared } from '../complex';
-import { createInitialState } from '../engine';
+import { magnitudeSquared } from '../../complex';
+import { createInitialState } from '../../engine';
 import type { CircuitGate } from '../types';
 import {
   applyCustomGateProcess,
@@ -8,7 +8,7 @@ import {
   listCustomGateRecords,
   registerCustomGate,
   removeCustomGateRecord,
-} from './customGateEngine';
+} from '../customGateEngine';
 
 const validSource = 'MAIN-PROCESS TestGate\nRETURNVALS Q0';
 

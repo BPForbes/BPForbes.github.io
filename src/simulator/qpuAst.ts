@@ -1,3 +1,12 @@
+/**
+ * Parser and compiler for the text-based `.qpucir` protocol language.
+ *
+ * The compiler turns human-readable commands such as PARAMS, RUNCHILD, and
+ * RETURNVALS into simulator-ready `CircuitGate` records. It also tracks the
+ * mapping from symbolic protocol tokens (`$A:0`, child return values, etc.) to
+ * physical qubit indices so UI labels, truth-table checks, and child-process
+ * composition all describe the same wires.
+ */
 import { assertGateArity } from './gates/arity';
 import { astDerivedGateIds, astPrimitiveGateIds } from './gates/metadata';
 import { CircuitGate, GateType, QpuOperation } from './types';

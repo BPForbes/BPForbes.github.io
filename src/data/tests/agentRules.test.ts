@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAgentRulesPrompt, protectedQpuioAgentRule, repositoryAgentRules } from './agentRules';
+import { buildAgentRulesPrompt, protectedQpuioAgentRule, repositoryAgentRules } from '../agentRules';
 
 describe('agentRules', () => {
   it('loads AGENTS.md content for LLM prompts', () => {

@@ -4,10 +4,10 @@ import {
   fourBitFullAdderTruthTable,
   phaseDemoTruthTable,
   twoBitFullAdderTruthTable,
-} from './bundledTruthTables';
-import { serializeQpuioText } from './qpuioFile';
+} from '../bundledTruthTables';
+import { serializeQpuioText } from '../qpuioFile';
 
-const readFixture = (fileName: string) => readFileSync(new URL(`./processes/${fileName}`, import.meta.url), 'utf8');
+const readFixture = (fileName: string) => readFileSync(new URL(`../processes/${fileName}`, import.meta.url), 'utf8');
 
 describe('generate bundled qpuio', () => {
   it('matches checked-in bundled qpuio fixtures', () => {

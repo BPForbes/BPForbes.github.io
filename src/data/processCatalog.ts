@@ -1,3 +1,13 @@
+/**
+ * In-browser process catalog for bundled, uploaded, compiled, and corrected
+ * QPU protocols.
+ *
+ * The catalog is the bridge between source files and higher-level workflows:
+ * it caches process summaries for correction prompts, exposes a library of
+ * protocol sources for RUNCHILD compilation, persists user uploads in
+ * localStorage, and enforces protected truth-table metadata for bundled
+ * examples.
+ */
 import { configuredProcesses } from './protocolExamples';
 import {
   enforceProtectedTruthTable,

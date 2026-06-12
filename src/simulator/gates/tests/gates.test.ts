@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, runCircuit } from '../engine';
-import { getGateDefinition, isKnownGateType } from './registry';
+import { createInitialState, runCircuit } from '../../engine';
+import { getGateDefinition, isKnownGateType } from '../registry';
 import type { CircuitGate } from '../types';
 
 const gate = (type: string, step: number, targets: number[], controls: number[] = [], phase?: number): CircuitGate => ({
