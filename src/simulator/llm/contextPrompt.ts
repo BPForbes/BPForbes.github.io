@@ -1,4 +1,4 @@
-import { buildAgentRulesPrompt } from '../../data/agentRules';
+import { buildAgentRulesPrompt } from '../../data/catalog/agentRules';
 import { formatCatalogForPrompt, formatTestFailuresForPrompt } from '../../data/catalog/processCatalog';
 import { isProtectedQpuioProcess } from '../../data/catalog/protectedQpuio';
 import { extractMainProcessName } from '../compiler/qpuFormat';
