@@ -28,6 +28,13 @@
   frame=single,
   backgroundcolor=\color{gray!8},
 }
+\lstdefinestyle{code}{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!5},
+  language=Java,
+}
 
 \title{\textbf{QPU React Parity Specification}\\[0.4em]
 \large Physics Engine, Mathematics, API, Circuit Builder, Hilbert Space, and Data Migration}
@@ -38,14 +45,16 @@
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\ket}[1]{\left|#1\right\rangle}
 \newcommand{\bra}[1]{\left\langle#1\right|}
+\newcommand{\ketbra}[2]{\ket{#1}\!\bra{#2}}
 \newcommand{\Tr}{\operatorname{Tr}}
 \newcommand{\HS}{\mathcal{H}_{\mathrm{log}}}
+\newcommand{\xor}{\oplus}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \emph{static site} (Vite $\rightarrow$ GitHub Pages). Simulation, compilation, and correction currently execute entirely in the browser. The reference Python implementation (\texttt{BPForbes/QPU}) provides cycle-oriented AST evaluation, a register-indexed \texttt{HilbertSpace} audit log, hybrid sparse/dense state vectors, noise channels, and checkpointing (\texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}). This document specifies the mathematical, architectural, API, UI, and data-object upgrades required to bring the React stack to parity while preserving static-site deployment via an optional sidecar API and in-browser fallback.
+The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \emph{static site} (Vite $\rightarrow$ GitHub Pages). Simulation, compilation, and correction currently execute entirely in the browser. The reference Python implementation (\texttt{BPForbes/QPU}) provides cycle-oriented AST evaluation, a register-indexed \texttt{HilbertSpace} audit log, hybrid sparse/dense state vectors, noise channels, and checkpointing (\texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}). This document specifies the mathematical, architectural, API, UI, and data-object upgrades required to bring the React stack to parity while preserving static-site deployment via an optional sidecar API and in-browser fallback. \textbf{Verified against current code} (2026): \texttt{engine.ts}, \texttt{particleTracking.ts}, \texttt{blochQuadrature.ts}, \texttt{qpuAst.ts}, \texttt{qpucirFile.ts}; HilbertSpace and sidecar are \emph{specified}, not yet implemented.
 \end{abstract}
 
 \tableofcontents
@@ -55,15 +64,17 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
 \section{Scope and gap analysis}
 %=============================================================================
 
-\subsection{Current React capabilities}
+\subsection{Current React capabilities (verified)}
 
 \begin{itemize}[noitemsep]
-  \item Full state-vector simulation over $\ket{\psi}\in\C^{2^n}$ (\texttt{engine.ts}).
+  \item Full state-vector simulation over $\ket{\psi}\in\C^{2^n}$ as \texttt{Complex[]} (\texttt{engine.ts}).
   \item Compile-time lowering of \texttt{.qpucir} to flat \texttt{CircuitGate[]} (\texttt{qpuAst.ts}); \texttt{INCREASECYCLE} flushes workspace zeros at compile time, not at runtime.
-  \item Marginal Bloch analytics: $\rho_k=\Tr_{\bar{k}}(\ketbra{\psi}{\psi})$, purity, $\Tr(\rho^2)$, quadrature on the Bloch ball (\texttt{particleTracking.ts}).
+  \item Marginal Bloch analytics: $\rho_k$ via \texttt{marginalRho}, $\vec{B}_k$, purity $r=\|\vec{B}_k\|$, $\Tr(\rho_k^2)=(1+r^2)/2$, triple-integral $\langle\rho\rangle$ on the Bloch ball (\texttt{particleTracking.ts}, \texttt{blochQuadrature.ts}).
+  \item Ket display: $\ket{\psi}=\cos(\theta/2)\ket{0}+e^{i\phi}\sin(\theta/2)\ket{1}$ via \texttt{ketFromSpherical} (Euler form for $\alpha,\beta$).
   \item Truth-table testing via \texttt{.qpuio} and \texttt{moduleTestApi.ts}.
   \item Correction Lab: truth-table-driven synthesis and LLM intent parsing.
-  \item Export payloads: \texttt{qpucir} v1 JSON, \texttt{qpuio} v1 JSON, catalog v1 in \texttt{localStorage}.
+  \item Export payloads: \texttt{qpucir} v1 JSON (\texttt{createQpucirPayload}), \texttt{qpuio} v1 JSON, catalog v1 in \texttt{localStorage}.
+  \item \texttt{SAVE\_STATE}/\texttt{LOAD\_STATE} parsed in \texttt{qpuAst.ts} but \textbf{not lowered} to runtime (no-op at compile time).
 \end{itemize}
 
 \subsection{Python capabilities not yet realized in React}
@@ -82,7 +93,7 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
 \subsection{Parity principle}
 
 \begin{quote}
-\textbf{P1 (semantic parity):} For every supported protocol command, the observable outputs (measurements, return values, truth-table rows, and Hilbert log entries) must match Python within tolerance $\varepsilon=10^{-6}$ on amplitudes and $10^{-4}$ on probabilities.
+\textbf{P1 (semantic parity):} For every supported protocol command, the observable outputs (measurements, return values, truth-table rows, and Hilbert log entries) must match Python within tolerance $\varepsilon_a=10^{-6}$ on amplitudes and $\varepsilon_p=10^{-4}$ on probabilities.
 
 \textbf{P2 (static-site preservation):} The GitHub Pages bundle remains a client; parity features that require shared state or heavy jobs are exposed through an optional HTTP API and degrade gracefully to in-browser execution when no API URL is configured.
 
@@ -104,7 +115,7 @@ Define two engine backends selectable at compile or session creation:
 
 Let $c\in\mathbb{N}$ be the simulation cycle and $M_c$ the memory map (register $\rightarrow$ state at cycle $c$). Cycle mode satisfies:
 \begin{equation}
-  \text{node.evaluate}(M_c, c, \mathrm{QPU}, \HS) \quad\text{iff}\quad \text{node.is\_ready}(M, c).
+  \text{node.evaluate}(M_c, c, \mathrm{QPU}, \HS) \quad\text{iff}\quad \text{node.is\_ready}(M_c, c).
 \end{equation}
 
 \subsection{Global state and register views}
@@ -132,15 +143,28 @@ Let $S=\{i : |a_i|>\tau\}$ with $\tau=10^{-12}$. Use sparse storage when $|S|\le
 
 \subsection{Noise model}
 
-When \texttt{noise.enabled}, apply after each \texttt{INCREASECYCLE}:
+When \texttt{noise.enabled}, apply after each \texttt{INCREASECYCLE} (mirroring \texttt{qpu\_base.py}):
 
+\textbf{Amplitude damping} with $p_1 = 1 - e^{-\Delta t / T_1}$:
 \begin{align}
-  \text{Amplitude damping } E_0 &= \begin{bmatrix}1&0\\0&\sqrt{1-p_1}\end{bmatrix},\quad
-  E_1 = \begin{bmatrix}0&\sqrt{p_1}\\0&0\end{bmatrix}, \\
-  p_1 &= 1 - e^{-\Delta t / T_1}, \quad p_\phi = 1 - e^{-\Delta t / T_2}.
+  E_0 &= \begin{bmatrix}1&0\\0&\sqrt{1-p_1}\end{bmatrix}, &
+  E_1 &= \begin{bmatrix}0&\sqrt{p_1}\\0&0\end{bmatrix}.
 \end{align}
 
-Phase damping and depolarizing channels follow Python \texttt{qpu\_base.py}. Readout flip probability $p_{\mathrm{ro}}$ applies on \texttt{MEASURE}.
+\textbf{Phase damping} with $p_\phi = 1 - e^{-\Delta t / T_2}$:
+\begin{align}
+  K_0 &= \sqrt{1-p_\phi}\, I, &
+  K_1 &= \sqrt{p_\phi}\begin{bmatrix}1&0\\0&-1\end{bmatrix}.
+\end{align}
+Apply stochastically: choose $K_0$ or $K_1$ with probability $\|K_j\ket{\psi}\|^2$, then renormalize.
+
+\textbf{Depolarizing} (per idle step, probability $p_{\mathrm{dep}}$):
+\begin{equation}
+  \rho \mapsto (1-p_{\mathrm{dep}})\,\rho + \frac{p_{\mathrm{dep}}}{2}\, I.
+\end{equation}
+Equivalently: with probability $p_{\mathrm{dep}}$, apply random Pauli $X$, $Y$, or $Z$ (as in Python \texttt{apply\_idle\_noise}).
+
+\textbf{Readout error} on \texttt{MEASURE}: classical bit-flip with probability $p_{\mathrm{ro}}$ (flip reported outcome $0\leftrightarrow 1$ while leaving collapsed state as measured, matching Python \texttt{readout\_error}).
 
 \textbf{Device table} $\mathbf{P}\in\R^{n\times 3}$: columns $(f_g, T_1, T_2)$ per qubit, serializable in session exports.
 
@@ -148,14 +172,14 @@ Phase damping and depolarizing channels follow Python \texttt{qpu\_base.py}. Rea
 
 For checkpoint name $s$, store:
 \begin{equation}
-  \mathcal{C}(s) = \bigl(\ket{\Psi},\, M,\, c,\, \mathrm{measurements},\, \HS\big|_{\le c}\bigr).
+  \mathcal{C}(s) = \bigl(\ket{\Psi},\, M_c,\, c,\, \mathrm{measurements},\, \HS\big|_{\le c}\bigr).
 \end{equation}
 
-\texttt{SAVE\_STATE} $s$ writes $\mathcal{C}(s)$; \texttt{LOAD\_STATE} $s$ restores. Compiler must \emph{lower} these opcodes to runtime hooks in cycle mode (today they are accepted but no-ops in \texttt{qpuAst.ts}).
+\texttt{SAVE\_STATE} $s$ writes $\mathcal{C}(s)$; \texttt{LOAD\_STATE} $s$ restores. Compiler must \emph{lower} these opcodes to runtime hooks in cycle mode (today accepted but no-ops in \texttt{qpuAst.ts} lines 513--514).
 
 \subsection{Particle tracking integration}
 
-Retain existing Bloch pipeline when \texttt{trackParticles: true}. Extend snapshots with Hilbert cycle index:
+Retain existing Bloch pipeline when \texttt{trackParticles: true} (\texttt{engine.ts}). Extend snapshots with Hilbert cycle index:
 \begin{equation}
   \mathrm{Snapshot}(k,c) = \bigl(\vec{B}_k,\, \ket{\psi_k^{\mathrm{marg}}},\, \rho_k,\, c\bigr).
 \end{equation}
@@ -173,7 +197,7 @@ All amplitudes use IEEE-754 \texttt{float64}. Define:
 \end{align}
 
 \textbf{Normalization:} After measurement collapse and noise Kraus maps, renormalize:
-$\ket{\psi}\leftarrow \ket{\psi}/\|\psi\|$ if $\|\psi\|>\varepsilon_{\mathrm{nrm}}$.
+$\ket{\psi}\leftarrow \ket{\psi}/\|\psi\|$ if $\|\psi\|>\varepsilon_{\mathrm{nrm}}$ with $\varepsilon_{\mathrm{nrm}}=10^{-12}$.
 
 \textbf{Tolerances:}
 \begin{center}
@@ -189,6 +213,8 @@ Pure-state Bloch radius & $1 \pm 10^{-6}$ \\
 \end{tabular}
 \end{center}
 
+\textbf{Composition across $N$ gates:} For deterministic amplitude comparisons in regression tests, adopt the \textbf{worst-case linear bound} $|a-a'| \le N\cdot\varepsilon_a$ when comparing end-to-end state vectors after $N$ serialized gates. For probability/purity display checks, use $N\cdot\varepsilon_p$. If modeling independent per-gate numerical noise, an optional RSS bound $\sqrt{N}\cdot\varepsilon_a$ may be used for diagnostics but is \textbf{not} the default pass/fail rule (avoids spurious failures on long circuits). Pruning threshold $\tau$ and pure-state Bloch radius tolerance apply \textbf{per snapshot}, not scaled by $N$. Example: a 16-gate regression comparing $|\Psi\rangle$ uses amplitude tolerance $16\times 10^{-6}$; a single-gate Bloch radius check still uses $1\pm 10^{-6}$.
+
 \subsection{Basis indexing convention}
 
 Qubit $q$ (0-indexed, MSB-left in labels) occupies bit $(n-1-q)$ of basis index $i$:
@@ -199,29 +225,29 @@ This matches \texttt{hasBit} in \texttt{operations.ts}. \textbf{All API and expo
 
 \subsection{Single-qubit gates}
 
-For gate matrix $U\in\C^{2\times 2}$ on wire $k$:
+For gate matrix $U\in\C^{2\times 2}$ on wire $k$, let $m=2^{n-1-k}$. For each index $i$ with $\mathrm{bit}(i,k,n)=0$ and paired index $j=i\xor m$:
 \begin{equation}
-  a'_i = U_{00}\,a_i + U_{01}\,a_{i|2^{n-1-k}}, \qquad
-  b'_i = U_{10}\,a_i + U_{11}\,a_{i|2^{n-1-k}},
+  a'_i = U_{00}\,a_i + U_{01}\,a_j, \qquad
+  a'_j = U_{10}\,a_i + U_{11}\,a_j.
 \end{equation}
-where $i$ ranges over indices with $\mathrm{bit}(i,k,n)=0$ and $i|2^{n-1-k}$ is the paired index.
+Here $\xor$ denotes bitwise XOR (flip bit $k$). This matches \texttt{applySingleQubitGate} in \texttt{operations.ts}.
 
 \subsection{Marginal and Bloch coordinates}
 
-For qubit $k$, reduced density matrix:
+For qubit $k$, reduced density matrix (as implemented in \texttt{marginalRho}):
 \begin{equation}
   \rho_k = \begin{bmatrix}
     \rho_{00} & \rho_{01} \\
     \rho_{01}^* & \rho_{11}
   \end{bmatrix}, \quad
-  \rho_{ab} = \sum_{i:\,\mathrm{bit}(i,k,n)=a} a_i \overline{a_{i'}} 
+  \rho_{ab} = \sum_{i:\,\mathrm{bit}(i,k,n)=a} a_i \overline{a_{i'}},
 \end{equation}
-with $i'$ differing only in bit $k$.
+where $i' = i \xor 2^{n-1-k}$ (same bit-flip pairing as single-qubit gates).
 
-Bloch vector (Pauli expectation):
+Bloch vector (Pauli expectations; matches \texttt{blochVectorForQubit} and \texttt{MATRIX\_Y} in \texttt{matrices.ts}):
 \begin{equation}
   \vec{B}_k = \bigl(\Tr(\rho_k X),\, \Tr(\rho_k Y),\, \Tr(\rho_k Z)\bigr)
-  = \bigl(2\Re\rho_{01},\, -2\Im\rho_{01},\, \rho_{00}-\rho_{11}\bigr).
+  = \bigl(2\Re\rho_{01},\, 2\Im\rho_{01},\, \rho_{00}-\rho_{11}\bigr).
 \end{equation}
 
 Spherical coordinates on the Bloch ball:
@@ -232,19 +258,49 @@ Spherical coordinates on the Bloch ball:
   r &= \|\vec{B}_k\|_2.
 \end{align}
 
-Pure-state ket display (when $r\approx 1$):
+Pure-state ket display (when $r\approx 1$; \texttt{ketFromSpherical}):
 \begin{equation}
-  \ket{\psi_k} = \cos\frac{\theta}{2}\ket{0} + e^{i\phi}\sin\frac{\theta}{2}\ket{1}.
+  \ket{\psi_k} = \cos\frac{\theta}{2}\ket{0} + e^{i\phi}\sin\frac{\theta}{2}\ket{1},
+  \quad \alpha=\cos\frac{\theta}{2},\quad \beta=e^{i\phi}\sin\frac{\theta}{2}.
 \end{equation}
 
-\textbf{Entanglement caveat} (must appear in API docs and UI): $\vec{B}_k$ from $\rho_k$ describes the \emph{marginal} state; for entangled $\ket{\Psi}$, $\rho_k$ may be mixed even when the global state is pure.
+\textbf{Entanglement caveat} (must appear in API docs and UI): $\vec{B}_k$ from $\rho_k$ describes the \emph{marginal} state; for entangled $\ket{\Psi}$, $\rho_k$ may be mixed even when the global state is pure. Today \texttt{snapshotParticle} still calls \texttt{ketFromSpherical} on $(\theta,\phi)$ even when $r<1$; extension: branch to eigenket display when mixed.
+
+\subsection{Extending existing particle mathematics}
+
+\subsubsection{Triple integral for particle density}
+
+Current \texttt{blochBallRhoExpectationFast} computes
+\begin{equation}
+  \langle\rho\rangle = \frac{1}{V}\iiint_{\mathrm{ball}} \rho(r,\theta,\phi)\, r^2\sin\theta\, dr\,d\theta\,d\phi,\quad V=\frac{4\pi}{3},
+\end{equation}
+via separable Gauss--Legendre quadrature (10 radial $\times$ 10$\times$10 angular samples). Noise $\eta=1-r$ blends peaked kernel with uniform $\rho_{\mathrm{uni}}=3/(4\pi)$.
+
+\textbf{Extensions} (same quadrature skeleton):
+\begin{itemize}
+  \item \textbf{Depolarizing kernel:} $\rho_{\mathrm{kernel}}=(1-p_{\mathrm{dep}})\delta_{\vec{r}_0}+p_{\mathrm{dep}}\rho_{\mathrm{uni}}$ tied to \texttt{NoiseConfig.depolarizingProb}.
+  \item \textbf{Cycle diffusion:} spread $\sigma(c)$ grows with Hilbert cycle $c$ for time-smoothed inspector.
+  \item \textbf{Exact mode:} optional voxel grid (as in \texttt{blochQuadrature.test.ts}) when high precision requested.
+\end{itemize}
+
+\subsubsection{Ket / Euler layer}
+
+Extend \texttt{PsiKet}:
+\begin{itemize}
+  \item \textbf{Pure} ($r\ge 1-\varepsilon_a$): read $(\alpha,\beta)$ from amplitudes or $\rho_k$ with global phase fixed ($\alpha\in\R_{\ge 0}$).
+  \item \textbf{Mixed} ($r<1-\varepsilon_a$): expose dominant eigenket of $\rho_k$ with weight $\lambda_1$; keep \texttt{formatPsiKet} for pure branch only.
+\end{itemize}
+
+\subsubsection{Gate-induced geometry}
+
+Extend \texttt{particleDelta} with rotation angle $\omega$ where $\cos(\omega/2)=1-\|\Delta\vec{B}\|^2/2$ for $r\approx 1$, and fidelity $F(\rho,\rho')$ between snapshots for checkpoint validation.
 
 \subsection{Ket formatting (Python parity)}
 
 Implement \texttt{formatQubitState}($\vec{a}\in\C^d$):
 \begin{itemize}
-  \item $d=2$: \texttt{"$\alpha\ket{0} + \beta\ket{1}$"} with complex formatting matching \texttt{formatComplex}.
-  \item $d=2^n$: sum over nonzero amplitudes: \texttt{"$a_k\ket{b_{n-1}\ldots b_0}$"}.
+  \item $d=2$: use \texttt{formatPsiKet} / \texttt{formatComplex}.
+  \item $d=2^n$: sum over indices with $|a_i|>\tau$: \texttt{"$a_k\ket{b_{n-1}\ldots b_0}$"}.
 \end{itemize}
 
 \subsection{Math module structure}
@@ -274,7 +330,7 @@ Module & Responsibility \\
 
 \subsection{Definition}
 
-Python's \texttt{HilbertSpace} is \textbf{not} the Hilbert space $\C^{2^n}$ itself; it is an append-only \emph{observation log}:
+Python's \texttt{HilbertSpace} (\texttt{qpu/hilbert.py}) is \textbf{not} the Hilbert space $\C^{2^n}$ itself; it is an append-only \emph{observation log}:
 \begin{equation}
   \HS \colon (\mathit{Reg} \times \mathbb{N}) \rightharpoonup \C^{2^k}
   \cup \{(\texttt{\_\_all\_\_}, c) \mapsto \ket{\Psi}_{\mathrm{global}}\}.
@@ -294,11 +350,57 @@ type HilbertEntry = {
 type HilbertSpace = {
   output(register, cycle, state): void;
   outputAll(cycle, globalState): void;
-  input(register, cycle): Complex[] | undefined;  // pop
+  input(register, cycle): Complex[] | undefined;
   prune(maxCycle): void;
   view(): string;
   entries(): HilbertEntry[];
 };
+\end{lstlisting}
+
+\subsection{Semantics of \texttt{input(register, cycle)}}
+
+\textbf{Destructive pop} (Python parity): \texttt{input(r,c)} returns a copy of the \texttt{Complex[]} stored under \texttt{HilbertKey\{register:r, cycle:c\}} and \textbf{removes} that entry from internal storage. Subsequent calls with the same $(r,c)$ return \texttt{undefined}. Absent keys return \texttt{undefined} without mutation.
+
+\textbf{Non-destructive reads} use \texttt{entries()} or a future \texttt{peek(register, cycle)} if needed; \texttt{output}/\texttt{outputAll} are append/overwrite-at-key writes; \texttt{prune(maxCycle)} deletes all entries with $\mathrm{cycle}>\mathrm{maxCycle}$.
+
+Parity tests must assert pop semantics for \texttt{input} and append semantics for \texttt{output}.
+
+\subsection{Reference implementation sketch}
+
+\begin{lstlisting}[style=code]
+// physics/hilbertSpace.ts (proposed)
+export class HilbertSpace {
+  private space = new Map<string, Complex[]>();
+
+  private key(register: string | number, cycle: number): string {
+    return `${String(register)}@${cycle}`;
+  }
+
+  output(register: string | number, cycle: number, state: Complex[]): void {
+    this.space.set(this.key(register, cycle), state.map((z) => ({ ...z })));
+  }
+
+  outputAll(cycle: number, globalState: Complex[]): void {
+    this.output('__all__', cycle, globalState);
+  }
+
+  input(register: string | number, cycle: number): Complex[] | undefined {
+    const k = this.key(register, cycle);
+    const value = this.space.get(k);
+    if (!value) return undefined;
+    this.space.delete(k);
+    return value.map((z) => ({ ...z }));
+  }
+
+  prune(maxCycle: number): void {
+    for (const k of [...this.space.keys()]) {
+      const cycle = Number(k.split('@').pop());
+      if (cycle > maxCycle) this.space.delete(k);
+    }
+  }
+
+  entries(): HilbertEntry[] { /* map space -> HilbertEntry + ketFormatted */ }
+}
 \end{lstlisting}
 
 \subsection{Recording policy}
@@ -319,6 +421,56 @@ Record to $\HS$ when:
   \item \textbf{Correction}: when a truth-table row fails, attach minimal $\HS$ slice for implicated registers across cycles where outputs are read.
   \item \textbf{LLM context}: include \texttt{hilbert.view()} text capped at $N$ entries with guidance to prefer gate-level fixes over table edits for protected processes.
 \end{itemize}
+
+%=============================================================================
+\section{State vector implementation}
+%=============================================================================
+
+\subsection{Current code (verified)}
+
+\texttt{engine.ts} uses dense \texttt{Complex[]} length $2^n$, \texttt{createInitialState}, \texttt{applyGate} $\rightarrow$ \texttt{gates/registry}, optional \texttt{trackParticles} $\rightarrow$ \texttt{snapshotAllParticles}.
+
+\subsection{Proposed \texttt{StateVector} wrapper}
+
+\begin{lstlisting}[style=code]
+// physics/stateVector.ts (proposed; mirrors Python statevector.py)
+export class StateVector {
+  private data: Complex[];
+  private gen = 0;
+
+  constructor(readonly qubitCount: number) {
+    this.data = Array.from({ length: 2 ** qubitCount }, () => ZERO);
+    this.data[0] = ONE;
+  }
+
+  clone(): StateVector {
+    const next = new StateVector(this.qubitCount);
+    next.data = this.data.map((z) => ({ ...z }));
+    next.gen = this.gen;
+    return next;
+  }
+
+  ensureCow(currentGen: number): void {
+    if (this.gen !== currentGen) { this.data = this.data.map((z) => ({ ...z })); this.gen = currentGen; }
+  }
+
+  applySingleQubitGate(matrix: Complex[][], k: number): void {
+    const n = this.qubitCount;
+    const mask = 1 << (n - 1 - k);
+    for (let i = 0; i < this.data.length; i++) {
+      if (i & mask) continue;
+      const j = i | mask;
+      const a = this.data[i]; const b = this.data[j];
+      this.data[i] = add(scale(a, matrix[0][0].re), scale(b, matrix[0][1].re)); // use complex mul
+      this.data[j] = add(scale(a, matrix[1][0].re), scale(b, matrix[1][1].re));
+    }
+  }
+
+  fullState(): Complex[] { return this.data.map((z) => ({ ...z })); }
+}
+\end{lstlisting}
+
+Sparse/dense hybrid remains Phase~II; initial parity uses dense arrays identical to today's \texttt{engine.ts} loops.
 
 %=============================================================================
 \section{API changes}
@@ -350,19 +502,14 @@ type ModuleTestResponse = {
 \textbf{Correction with Hilbert Space:}
 \begin{enumerate}
   \item Run failing test with \texttt{recordHilbert: true}, \texttt{executionMode: 'cycle'}.
-  \item Build \texttt{CorrectionContext}:
-    \begin{itemize}
-      \item failing rows from \texttt{TruthTableTestResult};
-      \item $\HS$ entries for \texttt{RETURNVALS} registers at final cycle;
-      \item gate-level \texttt{OperationTransition[]} when \texttt{trackParticles} enabled.
-    \end{itemize}
-  \item \texttt{correctCircuit} ranks fixes by truth-table pass rate first, then minimal Hilbert displacement $\sum_k \|\vec{B}_k^{\mathrm{after}}-\vec{B}_k^{\mathrm{before}}\|$.
+  \item Build \texttt{CorrectionContext}: failing rows; $\HS$ entries for \texttt{RETURNVALS} at final cycle; \texttt{OperationTransition[]} when \texttt{trackParticles}.
+  \item \texttt{correctCircuit} ranks fixes by truth-table pass rate first, then minimal $\sum_k \|\Delta\vec{B}_k\|$.
   \item Never emit intents that rewrite protected \texttt{.qpuio} tables.
 \end{enumerate}
 
 \subsection{Optional HTTP API (static-site sidecar)}
 
-Environment: \texttt{VITE\_QPU\_API\_URL}. When unset, all calls stay in-process.
+Environment: \texttt{VITE\_QPU\_API\_URL}. When unset, all calls stay in-process (current behavior).
 
 \begin{center}
 \begin{tabular}{@{}lll@{}}
@@ -371,6 +518,7 @@ Method & Path & Purpose \\
 \midrule
 POST & \texttt{/v1/compile} & protocol $\rightarrow$ gates or AST \\
 POST & \texttt{/v1/sessions} & create session (mode, noise, $n$) \\
+DELETE & \texttt{/v1/sessions/\{id\}} & destroy session \\
 POST & \texttt{/v1/sessions/\{id\}/run} & flat run \\
 POST & \texttt{/v1/sessions/\{id\}/step} & one gate or one cycle \\
 GET  & \texttt{/v1/sessions/\{id\}/hilbert} & $\HS$ entries \\
@@ -383,7 +531,94 @@ POST & \texttt{/v1/jobs} & async correction \\
 \end{tabular}
 \end{center}
 
-Wire format for amplitudes: \texttt{\{re, im\}[]} pairs; ket strings precomputed server-side for bandwidth.
+\subsubsection{Error handling and wire format}
+
+\textbf{HTTP status codes:}
+\begin{itemize}
+  \item \texttt{200} success; \texttt{201} session/job created.
+  \item \texttt{400} malformed JSON or schema validation failure.
+  \item \texttt{404} unknown \texttt{sessionId} or checkpoint name.
+  \item \texttt{409} session mutation conflict (see concurrency).
+  \item \texttt{422} compilation error, invalid protocol, or unsupported \texttt{execution.mode}.
+  \item \texttt{500} internal error; \texttt{503} sidecar at session capacity.
+\end{itemize}
+
+\textbf{Uniform error envelope} (all endpoints):
+\begin{lstlisting}[style=protocol]
+{ "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "No session with id ...",
+    "details": { ... optional structured fields ... }
+  }}
+\end{lstlisting}
+Examples: \texttt{COMPILE\_ERROR}, \texttt{STATE\_CORRUPT}, \texttt{VERSION\_UNSUPPORTED}, \texttt{SESSION\_CONFLICT}.
+
+\textbf{API versioning:} \texttt{/v1/} prefix is stable for minor additive fields. Breaking changes require \texttt{/v2/}. Clients send optional \texttt{Accept-Version: 1} header; servers include \texttt{X-QPU-API-Version: 1}. Deprecation: \texttt{Sunset} header + 6-month overlap documented in release notes.
+
+\textbf{Amplitude wire format:}
+\begin{itemize}
+  \item JSON array of \texttt{\{"re": number, "im": number\}} objects; IEEE-754 \texttt{float64} semantics.
+  \item JSON is text; \textbf{no binary endianness} on the wire. If a future binary codec is added, use big-endian IEEE-754 per field.
+  \item \texttt{NaN}, \texttt{+Inf}, \texttt{-Inf} are \textbf{rejected} on input (\texttt{400}); never emitted on output (normalize or error).
+  \item Length must be exact power of two $2^n$; mismatch $\rightarrow$ \texttt{422}.
+\end{itemize}
+Ket strings may be precomputed server-side for bandwidth; amplitudes remain authoritative.
+
+\subsubsection{Session concurrency and lifecycle}
+
+\textbf{Single-writer per session:} \texttt{POST .../run}, \texttt{POST .../step}, \texttt{POST .../checkpoint}, \texttt{POST .../restore} are serialized through a server-side mutex (FIFO queue). Concurrent mutating requests receive \texttt{409 SESSION\_CONFLICT} with \texttt{details.expectedRevision}.
+
+\textbf{Optimistic revision:} each session has monotonic \texttt{revision} (integer). Mutating requests should include \texttt{If-Match: <revision>}; mismatch $\rightarrow$ \texttt{409}.
+
+\textbf{Concurrent reads allowed:} \texttt{GET .../hilbert}, \texttt{GET .../bloch} may run parallel to each other but see last-committed revision (read-your-writes after mutations complete).
+
+\textbf{Browser tabs:} default \textbf{one session per tab} (client generates \texttt{sessionId} in \texttt{sessionStorage}). Sharing a session across tabs is opt-in via URL hash; clients must coordinate writes (leader election or single-writer tab) to avoid \texttt{409} storms.
+
+\textbf{Lifecycle:}
+\begin{itemize}
+  \item Idle timeout: 30 minutes (configurable); timer resets on any request.
+  \item Explicit \texttt{DELETE /v1/sessions/\{id\}}; idempotent.
+  \item Server GC: sweep expired sessions every 5 minutes.
+  \item Default max concurrent sessions per sidecar instance: 64 (configurable); excess $\rightarrow$ \texttt{503}.
+\end{itemize}
+
+\subsection{Sidecar implementation sketch}
+
+\begin{lstlisting}[style=code]
+// server/index.ts (proposed Node sidecar)
+import { createServer } from 'node:http';
+import { compileQpuProtocol } from '../src/simulator/compiler/qpuAst';
+import { runCircuit, stepCircuitGate } from '../src/simulator/engine';
+import { runModuleTest } from '../src/simulator/moduleTestApi';
+import { HilbertSpace } from '../src/simulator/physics/hilbertSpace';
+
+type Session = {
+  id: string; revision: number; lock: Promise<void>;
+  qubitCount: number; state: Complex[]; measurements: MeasurementMap;
+  hilbert: HilbertSpace; mode: 'flat' | 'cycle'; expiresAt: number;
+};
+
+const sessions = new Map<string, Session>();
+
+function json(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'application/json', 'X-QPU-API-Version': '1' });
+  res.end(JSON.stringify(body));
+}
+
+createServer(async (req, res) => {
+  if (req.url === '/v1/compile' && req.method === 'POST') {
+    try {
+      const { source, librarySources } = await readJson(req);
+      const compiled = compileQpuProtocol(source, librarySources ?? {});
+      json(res, 200, { compiled });
+    } catch (e) { json(res, 422, { error: { code: 'COMPILE_ERROR', message: String(e) } }); }
+    return;
+  }
+  // POST /v1/sessions, serialized POST .../step with revision check, etc.
+}).listen(process.env.PORT ?? 8787);
+\end{lstlisting}
+
+Deploy sidecar separately from GitHub Pages; SPA reads \texttt{import.meta.env.VITE\_QPU\_API\_URL}.
 
 %=============================================================================
 \section{Circuit builder updates}
@@ -392,9 +627,9 @@ Wire format for amplitudes: \texttt{\{re, im\}[]} pairs; ket strings precomputed
 \subsection{Cycle-aware canvas}
 
 \begin{itemize}
-  \item Add optional \textbf{cycle lanes}: horizontal bands $c=0,1,2,\ldots$ when \texttt{executionMode=cycle}.
-  \item Show \texttt{INCREASECYCLE} as lane separators (compiler-internal zeros remain hidden as today).
-  \item Token syntax \texttt{\$Name:c} displayed on wires; alias resolution from \texttt{tokenMap}.
+  \item Optional \textbf{cycle lanes} when \texttt{executionMode=cycle}.
+  \item \texttt{INCREASECYCLE} as lane separators (compiler-internal zeros remain hidden).
+  \item Token syntax \texttt{\$Name:c} from \texttt{tokenMap}.
 \end{itemize}
 
 \subsection{New palette items}
@@ -404,10 +639,10 @@ Wire format for amplitudes: \texttt{\{re, im\}[]} pairs; ket strings precomputed
 \toprule
 Item & Visual & Runtime \\
 \midrule
-\texttt{SAVE\_STATE} & bookmark icon on lane & checkpoint \\
+\texttt{SAVE\_STATE} & bookmark icon & checkpoint \\
 \texttt{LOAD\_STATE} & restore icon & restore \\
 \texttt{INCREASECYCLE} & dashed separator & $c\gets c+1$ \\
-Noise toggle & toolbar & enables $\mathbf{P}$ table editor \\
+Noise toggle & toolbar & $\mathbf{P}$ editor \\
 Hilbert inspector & side panel & live $\HS$ feed \\
 \bottomrule
 \end{tabular}
@@ -416,17 +651,9 @@ Hilbert inspector & side panel & live $\HS$ feed \\
 \subsection{Particle / Bloch view}
 
 \begin{itemize}
-  \item Scrubber binds to gate \texttt{step} or cycle $c$ depending on mode.
-  \item Show purity $ \Tr(\rho_k^2)$ and warning badge when $r<1-\varepsilon_p$ (mixed marginal).
-  \item Optional 3D Bloch sphere (WebGL) fed by $\vec{B}_k$; CSS fallback retained.
-\end{itemize}
-
-\subsection{Module Lab}
-
-\begin{itemize}
-  \item ``Record Hilbert trace'' checkbox maps to \texttt{recordHilbert}.
-  \item Failure summary links to $\HS$ rows for output registers.
-  \item Export correction report JSON (see \S\ref{sec:exports}).
+  \item Scrubber binds to gate \texttt{step} or cycle $c$.
+  \item Show $\Tr(\rho_k^2)$ and mixed badge when $r<1-\varepsilon_p$.
+  \item Optional WebGL Bloch sphere; CSS fallback retained (\texttt{ParticleView.tsx}).
 \end{itemize}
 
 %=============================================================================
@@ -437,14 +664,9 @@ Hilbert inspector & side panel & live $\HS$ feed \\
 
 \begin{enumerate}
   \item Load catalog (\texttt{processCatalog.ts}).
-  \item Select process $\rightarrow$ compile with \texttt{executionMode} from settings.
-  \item Create \texttt{SimulationSession}:
-    \begin{itemize}
-      \item \texttt{RegisterBank} + \texttt{StateVector}
-      \item optional \texttt{HilbertSpace}
-      \item optional \texttt{NoiseEngine}
-    \end{itemize}
-  \item Run / step $\rightarrow$ update UI panels from \texttt{ExecutionResult} + \texttt{hilbert.entries()}.
+  \item Compile with \texttt{executionMode} from settings.
+  \item Create \texttt{SimulationSession}: \texttt{RegisterBank} + \texttt{StateVector} + optional \texttt{HilbertSpace} + \texttt{NoiseEngine}.
+  \item Run / step $\rightarrow$ \texttt{ExecutionResult} + \texttt{hilbert.entries()}.
 \end{enumerate}
 
 \subsection{Feature flags}
@@ -459,11 +681,7 @@ type QpuFeatureFlags = {
 };
 \end{lstlisting}
 
-Defaults: \texttt{flat}, \texttt{recordHilbert=false}, \texttt{trackParticles=true} in UI, \texttt{noise=false}.
-
-\subsection{Custom gates and child processes}
-
-Custom gates compiled from child \texttt{.qpucir} sources must record $\HS$ at token boundaries when cycle mode is active. Child correction (\texttt{childProcessCorrection.ts}) validates descendant truth tables before parent Hilbert slices are shown to the LLM.
+Defaults: \texttt{flat}, \texttt{recordHilbert=false}, \texttt{trackParticles=true}, \texttt{noise=false}.
 
 %=============================================================================
 \section{Data objects and migration}
@@ -472,7 +690,7 @@ Custom gates compiled from child \texttt{.qpucir} sources must record $\HS$ at t
 
 \subsection{\texttt{qpucir} payload}
 
-\textbf{v1} (current):
+\textbf{v1} (current, \texttt{createQpucirPayload}):
 \begin{lstlisting}[style=protocol]
 { format: "qpucir", version: 1, name, source,
   compiled: { qubitCount, gates, tokenMap }, exportedAt }
@@ -483,7 +701,7 @@ Custom gates compiled from child \texttt{.qpucir} sources must record $\HS$ at t
 {
   format: "qpucir", version: 2, name, source, exportedAt,
   execution: { mode: "flat"|"cycle", noise?: NoiseConfig },
-  compiled: { qubitCount, gates, tokenMap, processParams, returnValues },
+  compiled: { qubitCount, gates, tokenMap, processParams?, returnValues? },
   hilbertPolicy: "none" | "on-export" | "full-trace",
   hilbert?: HilbertEntry[],
   checkpoints?: Record<string, CheckpointPayload>,
@@ -491,73 +709,78 @@ Custom gates compiled from child \texttt{.qpucir} sources must record $\HS$ at t
 }
 \end{lstlisting}
 
-\textbf{Migration v1$\rightarrow$v2:} Set \texttt{version: 2}, \texttt{execution.mode: "flat"}, \texttt{hilbertPolicy: "none"}; recompile \texttt{compiled} from \texttt{source}.
+\subsection{Backward compatibility and schema validation}
 
-\subsection{\texttt{qpuio} payload}
+\textbf{v1 readers encountering v2 files:}
+\begin{itemize}
+  \item \textbf{(A)} If \texttt{version===2} and runtime is v1-only: \textbf{reject} with error ``\texttt{qpucir v2 requires engine $\geq$2.x; upgrade client or re-export as v1}'' unless \texttt{execution.mode==="flat"} and \texttt{hilbertPolicy==="none"} and no \texttt{checkpoints}/\texttt{deviceTable}---then \textbf{strip unknown fields} and recompile from \texttt{source} only.
+  \item \textbf{(B)} If \texttt{execution.mode==="cycle"} (or \texttt{hilbertPolicy!=="none"}) and runtime cannot execute those features: \textbf{fail fast} with descriptive error; do not silently downgrade.
+\end{itemize}
 
-Version remains \texttt{1}; truth-table semantics unchanged. Optional metadata:
-\begin{lstlisting}[style=protocol]
-{ ..., parity: { engineVersion: "2.x", tolerance: 1e-6 } }
+\textbf{v2 validation rules} (on import):
+\begin{enumerate}
+  \item \texttt{format==="qpucir"} and \texttt{version===2}.
+  \item \texttt{execution.mode} $\in$ \{\texttt{flat},\texttt{cycle}\}.
+  \item \texttt{hilbertPolicy} $\in$ \{\texttt{none},\texttt{on-export},\texttt{full-trace}\}.
+  \item If \texttt{hilbertPolicy==="none"} then \texttt{hilbert} must be absent.
+  \item If \texttt{hilbertPolicy!=="none"} then \texttt{hilbert} must be present (may be empty array).
+  \item If \texttt{execution.mode==="cycle"} then \texttt{hilbertPolicy} cannot be \texttt{none} (cycle mode requires trace policy \texttt{on-export} or \texttt{full-trace}).
+  \item \texttt{compiled.qubitCount} is non-negative integer; \texttt{gates}/\texttt{tokenMap} present.
+  \item If \texttt{deviceTable} present: shape $n\times 3$ with $n=\texttt{compiled.qubitCount}$.
+  \item If \texttt{checkpoints} present: each payload's \texttt{globalState.length} $= 2^{\texttt{compiled.qubitCount}}$.
+  \item If \texttt{compiled.processParams}/\texttt{returnValues} present: arrays of strings matching protocol compile metadata.
+\end{enumerate}
+
+\subsection{Upgrade system implementation sketch}
+
+\begin{lstlisting}[style=code]
+// data/formats/qpucirMigrate.ts (proposed)
+export function parseQpucirPayloadV2(contents: string): QpucirPayloadV2 {
+  const parsed = JSON.parse(contents);
+  if (parsed.format !== 'qpucir') throw new Error('Not a qpucir payload');
+  if (parsed.version === 1) return migrateV1ToV2(parsed);
+  if (parsed.version === 2) {
+    validateQpucirV2(parsed);
+    return parsed;
+  }
+  throw new Error(`Unsupported qpucir version: ${parsed.version}`);
+}
+
+function migrateV1ToV2(v1: QpucirPayloadV1): QpucirPayloadV2 {
+  const compiled = compileQpuProtocol(v1.source, {});
+  return {
+    format: 'qpucir', version: 2, name: v1.name, source: v1.source,
+    exportedAt: v1.exportedAt,
+    execution: { mode: 'flat' },
+    hilbertPolicy: 'none',
+    compiled: { ...v1.compiled, processParams: compiled.processParams,
+      returnValues: compiled.returnValues },
+  };
+}
 \end{lstlisting}
 
-Protected processes (\texttt{SingleBitFullAdder}, \texttt{TwoBitFullAdder}, \texttt{FourBitFullAdder}, \texttt{PhaseDemo}) keep canonical tables in \texttt{src/data/processes/*.qpuio}.
+\textbf{Migration v1$\rightarrow$v2:} set \texttt{version: 2}, \texttt{execution.mode: "flat"}, \texttt{hilbertPolicy: "none"}; recompile \texttt{compiled} from \texttt{source}. Current \texttt{parseQpucirPayload} ignores \texttt{version} and reads \texttt{source} only---upgrade path preserves that for plain imports while JSON exports gain validation.
 
 \subsection{Catalog storage}
 
-\textbf{v1} key: \texttt{qpu-process-catalog-v1}.
+\textbf{v1} key: \texttt{qpu-process-catalog-v1}. \textbf{v2} key: \texttt{qpu-process-catalog-v2}. On first load, import v1 entries with \texttt{qpucirVersion: 1} defaults.
 
-\textbf{v2} key: \texttt{qpu-process-catalog-v2} with per-entry:
-\begin{lstlisting}[style=protocol]
-{
-  id, name, source, origin, updatedAt,
-  preferredExecutionMode?: "flat" | "cycle",
-  lastHilbertPolicy?: string,
-  qpucirVersion?: 1 | 2
-}
-\end{lstlisting}
+\subsection{Session and correction exports}
 
-On first load of v2, import v1 entries and set defaults.
-
-\subsection{Session export (\texttt{qpu-session})}
-
-New format for debugging and API round-trip:
-\begin{lstlisting}[style=protocol]
-{
-  format: "qpu-session", version: 1,
-  createdAt, executionMode, qubitCount,
-  globalState: Complex[],
-  measurements: MeasurementMap,
-  currentCycle: number,
-  hilbert: HilbertEntry[],
-  checkpoints: Record<string, CheckpointPayload>,
-  log: string[]
-}
-\end{lstlisting}
-
-\subsection{Correction report (\texttt{qpu-correction-report})}
-
-\begin{lstlisting}[style=protocol]
-{
-  format: "qpu-correction-report", version: 1,
-  processName, passed: boolean,
-  steps: CorrectionStep[],
-  hilbertDiff?: { register, cycle, before, after }[],
-  truthTableSummary: string
-}
-\end{lstlisting}
+\texttt{qpu-session} v1 and \texttt{qpu-correction-report} v1 as previously specified; amplitudes use the same \texttt{\{re,im\}} JSON rules.
 
 \subsection{Upgrade matrix}
 
 \begin{center}
-\begin{tabular}{@{}lll@{}}
+\begin{tabular}{@{}p{3cm}p{4.5cm}p{4.5cm}}
 \toprule
 Object & Reader action & Writer action \\
 \midrule
-\texttt{qpucir v1} & Import as v2 defaults & Emit v2 when Hilbert/checkpoints used \\
-\texttt{qpucir v2} & Full features & Preferred \\
+\texttt{qpucir v1} & Import \texttt{source}; ignore stale \texttt{compiled} if recompiling. v1 reader on v2 file: reject or strip per policy (A/B) above. & Emit v1 only if \texttt{hilbertPolicy===none} and flat mode \\
+\texttt{qpucir v2} & \texttt{validateQpucirV2} then execute & Preferred when cycle/Hilbert/checkpoints used \\
 \texttt{qpuio v1} & Unchanged & Unchanged \\
-Catalog v1 & Migrate on read & Write v2 only \\
-Plain \texttt{.qpucir} text & Parse as today & Add \texttt{SAVE\_STATE} lines when needed \\
+Catalog v1 & Migrate on read to v2 & Write v2 only \\
+Plain text & \texttt{parseQpucirPayload} today & unchanged \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -574,17 +797,14 @@ For each bundled process $P$ and truth-table row $\mathbf{x}$:
   \mathrm{Measure}(\mathrm{Run}_{\mathrm{Py}}(P,\mathbf{x})).
 \end{equation}
 
-Additional Hilbert tests: for cycle mode, compare sorted keys of $\HS$ against Python CLI memory snapshot for cycles $c\le c_{\max}$.
+\textbf{Hilbert tests:} In cycle mode, compare sorted $(\mathit{register},c)$ keys of $\HS$ against the Python CLI memory snapshot for $c\le c_{\max}$ with \textbf{exact key-set equality}. Compare amplitude vectors element-wise: $|a_i-a'_i|\le\varepsilon_a$ for all components (using $\varepsilon_a=10^{-6}$ from \S3.1). Ket strings are informational; amplitudes are authoritative.
 
 \subsection{Regression suite}
 
-Extend Vitest:
 \begin{itemize}
-  \item \texttt{hilbertSpace.test.ts} --- output, prune, view formatting.
-  \item \texttt{cycleMode.test.ts} --- \texttt{INCREASECYCLE} vs Python clock.
-  \item \texttt{checkpoint.test.ts} --- save/load round-trip.
-  \item \texttt{formatQubitState.test.ts} --- ket strings vs Python samples.
-  \item \texttt{exportMigration.test.ts} --- v1$\rightarrow$v2 idempotence.
+  \item \texttt{hilbertSpace.test.ts} --- \texttt{output}, destructive \texttt{input}, \texttt{prune}, \texttt{view}.
+  \item \texttt{cycleMode.test.ts}, \texttt{checkpoint.test.ts}, \texttt{formatQubitState.test.ts}, \texttt{exportMigration.test.ts}.
+  \item \texttt{blochQuadrature.test.ts} (existing) --- fast vs grid integral.
 \end{itemize}
 
 %=============================================================================
@@ -592,17 +812,17 @@ Extend Vitest:
 %=============================================================================
 
 \begin{enumerate}[label=\textbf{Phase \Roman*.}]
-  \item \texttt{HilbertSpace} + \texttt{formatQubitState} + cycle-mode executor behind flag; lower \texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}.
-  \item \texttt{RegisterBank}, noise, device table; Module Lab Hilbert context.
-  \item \texttt{qpucir v2} exports, catalog v2 migration, correction reports.
-  \item Optional HTTP sidecar; React client switches on \texttt{VITE\_QPU\_API\_URL}.
-  \item Sparse state vector (performance); WebGPU acceleration probe $\rightarrow$ implementation.
+  \item \texttt{HilbertSpace} + \texttt{formatQubitState} + cycle executor; lower \texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}.
+  \item \texttt{RegisterBank}, noise, device table; Module Lab Hilbert context; extend particle math kernels.
+  \item \texttt{qpucir v2}, \texttt{qpucirMigrate.ts}, catalog v2.
+  \item HTTP sidecar + \texttt{VITE\_QPU\_API\_URL} client.
+  \item Sparse \texttt{StateVector}; WebGPU (\texttt{webGpu.ts} probe exists, no backend yet).
 \end{enumerate}
 
 %=============================================================================
 \section{Summary}
 %=============================================================================
 
-Bringing the React QPU to Python parity requires: (i)~a cycle-capable executor with $\HS$ logging; (ii)~unified math layers for $\C^{2^n}$, marginals, and ket display; (iii)~extended \texttt{moduleTestApi} and optional REST sessions for the static-site split; (iv)~circuit-builder and inspector affordances for cycles, checkpoints, and Hilbert traces; (v)~versioned export objects with explicit v1$\rightarrow$v2 migration. The static GitHub Pages deployment remains viable: the browser keeps a fast flat-mode path while full parity runs locally or against a sidecar API sharing the same schemas.
+Parity requires: cycle-capable executor with destructive-pop $\HS$ (Python semantics); math layers extending existing marginal $\rho_k$, Euler ket, and triple-integral $\langle\rho\rangle$; strict API contracts (errors, amplitudes, session locking); versioned exports with validation; sidecar separate from static Pages. Verified gaps in current code: HilbertSpace, cycle runtime, checkpoints, noise, and sidecar are specified here but not yet in \texttt{src/}.
 
 \end{document}
