@@ -354,7 +354,7 @@ function App() {
     resetRuntime(simulationQubitCount, `Set ${resolvedParamName} start state to ${value}.`, nextStartStates);
   };
 
-  // Full site reset clears catalog state, protocol text, and UI selections back to the default builder configuration.
+  // Full site reset restores default protocol text, runtime vectors, and UI selections; the process catalog is unchanged.
   const resetSite = () => {
     setQubitCount(QUBIT_COUNT);
     setSimulationQubitCount(QUBIT_COUNT);
