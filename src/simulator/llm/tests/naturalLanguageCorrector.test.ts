@@ -1,10 +1,10 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
-import { buildProcessCatalogSummaries } from '../../data/catalog/processCatalog';
-import { parseNaturalLanguageCorrection } from '../llm/naturalLanguageCorrector';
-import { singleBitFullAdderTruthTable } from '../compiler/truthTable';
-const singleBitSource = readFileSync(new URL('../../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');
-const twoBitSource = readFileSync(new URL('../../data/processes/two-bit-full-adder.qpucir', import.meta.url), 'utf8');
+import { buildProcessCatalogSummaries } from '../../../data/catalog';
+import { singleBitFullAdderTruthTable } from '../../compiler/truthTable';
+import { parseNaturalLanguageCorrection } from '../naturalLanguageCorrector';
+const singleBitSource = readFileSync(new URL('../../../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');
+const twoBitSource = readFileSync(new URL('../../../data/processes/two-bit-full-adder.qpucir', import.meta.url), 'utf8');
 
 describe('parseNaturalLanguageCorrection', () => {
   const context = {
