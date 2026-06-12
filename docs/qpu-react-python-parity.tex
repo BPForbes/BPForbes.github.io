@@ -121,7 +121,7 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
   \node[box, right=1.6cm of store] (sidecar) {Optional sidecar\\(separate deploy)};
 
   \draw[->] (ui) -- (sim);
-  \draw[->] (sim.north) to[bend left=20] (store.north);
+  \draw[->] (sim.north) to[bend left=15] (store.north);
   \draw[->, dashed] (ui) -- (worker);
   \draw[->, dashed] (worker) -- (sim);
   \draw[->, dashed] (ui.south east) to[bend right=25]
@@ -439,6 +439,7 @@ type HilbertSpace = {
   outputAll(cycle, globalState): void;
   input(register, cycle): Complex[] | undefined;
   prune(maxCycle): void;
+  copy(): HilbertSpace;
   view(): string;
   entries(): HilbertEntry[];
 };
@@ -487,6 +488,12 @@ export class HilbertSpace {
   }
 
   entries(): HilbertEntry[] { /* map space -> HilbertEntry + ketFormatted */ }
+
+  copy(): HilbertSpace {
+    const next = new HilbertSpace();
+    next.space = new Map(this.space);
+    return next;
+  }
 }
 \end{lstlisting}
 
@@ -772,8 +779,9 @@ export async function fetchHilbertLog(sessionId: string): Promise<QpuResult<Hilb
 }
 
 export async function fetchStateVector(sessionId: string): Promise<QpuResult<Complex[]>> {
-  return qpuFetch<{ amplitudes: Complex[] }>(`/v1/sessions/${sessionId}/state`)
-    .then((r) => (r.ok ? { ok: true, value: r.value.amplitudes } : r));
+  const result = await qpuFetch<{ amplitudes: Complex[] }>(`/v1/sessions/${sessionId}/state`);
+  if (!result.ok) return result;
+  return { ok: true, value: result.value.amplitudes };
 }
 
 export async function fetchParticleSnapshots(
@@ -976,6 +984,34 @@ Plain text & \texttt{parseQpucirPayload} today & unchanged \\
 %=============================================================================
 \section{Verification}
 %=============================================================================
+
+\subsection{Python $\leftrightarrow$ React discrepancies (verified)}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{0.5cm}p{3.2cm}p{9.8cm}@{}}
+\toprule
+ & Topic & Status \\
+\midrule
+1 & Qubit bit index & React: MSB-left, \texttt{1 << (n-1-k)} (\texttt{operations.ts}). Python \texttt{StateVector}: \texttt{1 << k}. Cross-impl tests must map wire labels explicitly; do not assume identical $k$. \\
+2 & \texttt{extract\_qubit} & Python sums amplitudes (product-state approx). React uses full state vector + \texttt{marginalRho} (partial trace). TS is authoritative for Bloch display. \\
+3 & Controlled gates & React: unitary \texttt{applyControlledX} over basis indices. Python: classical threshold \texttt{abs(c\_state[1])>0.5} on register slices---no superposition-controlled entanglement. Cycle-mode parity must choose which model to replicate. \\
+4 & \texttt{HilbertSpace.copy} & Python has \texttt{copy()}; required for checkpoints. Added to TS interface above. \\
+5 & \texttt{bb84.py}, \texttt{xmss.py} & \textbf{Out of scope} for this parity target (future phase). \\
+6 & Section hooks & Python \texttt{GLOBALPROLOGUE}/\texttt{MAINPROLOGUE}/\ldots not in React compiler yet; cycle mode must add or emulate. \\
+7 & \texttt{ClockFrame} stack & Python nested subprocess cycle bases; spec cycle mode must document absolute $c = \mathrm{base}+\mathrm{local}$. \\
+8 & Protocol syntax & \textbf{Already in React:} \texttt{readProtocolLines} supports \texttt{\textbackslash} continuation, \texttt{\#}, \texttt{/* */} (\texttt{qpuAst.ts}). \\
+9 & \texttt{embed\_registers} & Python register-padding helper; relevant only if \texttt{RegisterBank} cycle mode mirrors Python register model. \\
+10 & Memory snapshot & Python \texttt{generate\_complete\_memory\_snapshot}; optional LLM context beyond \texttt{hilbert.view()}. \\
+11 & RNG & React today: \texttt{Math.random()} in \texttt{measureQubit} (injectable for tests). Planned noise: prefer \texttt{crypto.getRandomValues()} or seeded PRNG. \\
+12 & Ket display precision & \textbf{Already aligned:} \texttt{formatComplex} uses 3 decimals (\texttt{complex.ts}), matching Python \texttt{\{:.3f\}}. \\
+13 & Device table RNG & Python \texttt{np.random} at init; parity tests should use fixed \texttt{deviceTable} fixture. \\
+14 & \texttt{sp} token & \textbf{Diverges today:} Python random superposition at QPU init; React applies \texttt{H} via \texttt{applyStartState} ($\approx\ket{+}$ from $\ket{0}$), deterministic. \\
+15 & \texttt{FREE} & React compiler logs only; no memory/$\HS$ removal yet (\texttt{qpuAst.ts}). \\
+16 & Frequency fingerprint & Python \texttt{compare\_frequency\_fingerprints}; out of scope until device UI lands. \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 \subsection{Cross-implementation tests}
 
