@@ -58,7 +58,7 @@ const parseTokenList = (raw: string, context: NlCorrectionContext) => (
 const pushGateSpec = (
   specs: GuidedGateSpec[],
   gate: GatePreference | undefined,
-
+  inputs: string[],
   output: string | undefined,
 ) => {
   if (!gate || inputs.length === 0 || !output) return;
