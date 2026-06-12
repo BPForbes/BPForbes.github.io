@@ -1,7 +1,7 @@
-import { getProtocolParameterEntries } from '../simulator/qpuFormat';
-import { getReturnValTokens } from '../simulator/qpuAst';
-import type { TruthCellValue, TruthTable } from '../simulator/truthTable';
-import { isTruthCellValue, parseTruthTableJson } from '../simulator/truthTable';
+import { getProtocolParameterEntries } from '../../simulator/compiler/qpuFormat';
+import { getReturnValTokens } from '../../simulator/compiler/qpuAst';
+import type { TruthCellValue, TruthTable } from '../../simulator/compiler/truthTable';
+import { isTruthCellValue, parseTruthTableJson } from '../../simulator/compiler/truthTable';
 export { companionQpuioFileName, qpuioTxtFileNameForProcess } from './qpuFileNames';
 
 export type QpuioPayload = {

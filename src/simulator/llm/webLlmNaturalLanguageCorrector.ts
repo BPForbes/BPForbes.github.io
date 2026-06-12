@@ -3,7 +3,7 @@ import { DEFAULT_BROWSER_MODEL, getCachedBrowserModelId, markBrowserModelCached,
 import { buildNlContextSections } from './contextPrompt';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './intentTypes';
 import { sanitizeIntent } from './modelNaturalLanguageCorrector';
-import { hasWebGpu } from '../webGpu';
+import { hasWebGpu } from '../physics/webGpu';
 
 // Keep the large WebLLM engine lazy and singleton-scoped so normal rule parsing does not trigger a download.
 let enginePromise: Promise<MLCEngine> | null = null;

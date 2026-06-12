@@ -5,8 +5,8 @@
  * `.qpuio` fixtures, which keeps protected example expectations reproducible
  * across tests, downloads, and catalog initialization.
  */
-import type { TruthCellValue, TruthTable } from '../simulator/truthTable';
-import { indexToInputRow } from '../simulator/truthTable';
+import type { TruthCellValue, TruthTable } from '../../simulator/compiler/truthTable';
+import { indexToInputRow } from '../../simulator/compiler/truthTable';
 
 const bit = (value: number): TruthCellValue => (value === 1 ? '1p' : '0p');
 

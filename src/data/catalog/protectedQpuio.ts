@@ -11,8 +11,8 @@ import {
   twoBitFullAdderTruthTable,
 } from './bundledTruthTables';
 import { configuredProcesses } from './protocolExamples';
-import type { TruthTable } from '../simulator/truthTable';
-import { cloneTruthTable, singleBitFullAdderTruthTable, truthTablesEqual } from '../simulator/truthTable';
+import type { TruthTable } from '../../simulator/compiler/truthTable';
+import { cloneTruthTable, singleBitFullAdderTruthTable, truthTablesEqual } from '../../simulator/compiler/truthTable';
 
 const PROTECTED_PROCESS_NAMES = new Set([
   'SingleBitFullAdder',

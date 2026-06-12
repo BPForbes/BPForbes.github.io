@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
-import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from '../qpuAst';
-import { getProtocolParameterEntries, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from '../qpuFormat';
+import { compileQpuProtocol, getReturnValToken, visibleCircuitGates } from '../compiler/qpuAst';
+import { getProtocolParameterEntries, serializeCircuitToQpuProtocol, updateProtocolParameterCount, updateProtocolStartStateSet } from '../compiler/qpuFormat';
 import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from '../engine';
 import { complex, magnitudeSquared } from '../complex';
 import type { ParticleStartState } from '../types';

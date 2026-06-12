@@ -5,13 +5,13 @@ import {
   getProtectedTruthTable,
   isProtectedQpuioProcess,
 } from './protectedQpuio';
-import { qpuioFileNameForProcess } from './qpuioFile';
-import { extractMainProcessName, qpucirFileNameForSource } from '../simulator/qpuFormat';
-import { describeTruthTableDimensions, formatTruthTableRowSummary, inferTruthTableDimensions } from '../simulator/truthTable';
-import { getProtocolParameterEntries } from '../simulator/qpuFormat';
-import { getReturnValTokens } from '../simulator/qpuAst';
-import type { TruthTable, TruthTableDimensions, TruthTableTestResult } from '../simulator/truthTable';
-import type { ProcessCatalogSummary } from '../simulator/llm/intentTypes';
+import { qpuioFileNameForProcess } from '../formats/qpuioFile';
+import { extractMainProcessName, qpucirFileNameForSource } from '../../simulator/compiler/qpuFormat';
+import { describeTruthTableDimensions, formatTruthTableRowSummary, inferTruthTableDimensions } from '../../simulator/compiler/truthTable';
+import { getProtocolParameterEntries } from '../../simulator/compiler/qpuFormat';
+import { getReturnValTokens } from '../../simulator/compiler/qpuAst';
+import type { TruthTable, TruthTableDimensions, TruthTableTestResult } from '../../simulator/compiler/truthTable';
+import type { ProcessCatalogSummary } from '../../simulator/llm/intentTypes';
 
 export type ProcessCatalogOrigin = 'bundled' | 'compiled' | 'uploaded' | 'corrected';
 

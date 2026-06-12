@@ -5,7 +5,7 @@ export type {
   TruthTableDimensions,
   TruthTableRowResult,
   TruthTableTestResult,
-} from './truthTable';
+} from './compiler/truthTable';
 
 export type {
   CircuitCorrectionResult,
@@ -13,7 +13,7 @@ export type {
   CorrectionStep,
   GatePreference,
   GuidedGateSpec,
-} from './circuitCorrector';
+} from './correction/circuitCorrector';
 
 export {
   createEmptyTruthTable,
@@ -34,30 +34,30 @@ export {
   testCircuitAgainstTruthTable,
   truthTablesEqual,
   validateTruthTable,
-} from './truthTable';
+} from './compiler/truthTable';
 
 export {
   correctCircuit,
   inferTruthTableWithOutputs,
   synthesizeProtocolFromTruthTable,
-} from './circuitCorrector';
+} from './correction/circuitCorrector';
 
-export type { ChildCorrectionResult } from './childProcessCorrection';
+export type { ChildCorrectionResult } from './correction/childProcessCorrection';
 export {
   collectDescendantProcesses,
   correctChildProcessesForCompatibility,
   getReferencedChildProcesses,
-} from './childProcessCorrection';
+} from './correction/childProcessCorrection';
 
 export type { ModelCorrectionIntent, NlCorrectionContext, NlCorrectionIntent } from './llm/intentTypes';
 export { parseNaturalLanguageCorrection } from './llm/naturalLanguageCorrector';
-import type { CorrectionGuidance } from './circuitCorrector';
-import { correctCircuit } from './circuitCorrector';
+import type { CorrectionGuidance } from './correction/circuitCorrector';
+import { correctCircuit } from './correction/circuitCorrector';
 import {
   correctChildProcessesForCompatibility,
   type ChildCorrectionResult,
-} from './childProcessCorrection';
-import type { TruthTable, TruthTableTestResult } from './truthTable';
+} from './correction/childProcessCorrection';
+import type { TruthTable, TruthTableTestResult } from './compiler/truthTable';
 import {
   createEmptyTruthTable,
   describeTruthTableDimensions,
@@ -65,7 +65,7 @@ import {
   inferTruthTableDimensions,
   testCircuitAgainstTruthTable,
   validateTruthTable,
-} from './truthTable';
+} from './compiler/truthTable';
 
 // Module-test requests can run read-only checks or propagate corrections through child processes with truth tables.
 export type ModuleTestRequest = {

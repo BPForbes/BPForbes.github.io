@@ -1,8 +1,8 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
-import { fourBitFullAdderTruthTable, phaseDemoTruthTable, twoBitFullAdderTruthTable } from '../bundledTruthTables';
-import { parseQpuioPayload } from '../qpuioFile';
-import { simulateTruthTableOutputs, truthTablesEqual, validateTruthTable } from '../../simulator/truthTable';
+import { fourBitFullAdderTruthTable, phaseDemoTruthTable, twoBitFullAdderTruthTable } from '../catalog/bundledTruthTables';
+import { parseQpuioPayload } from '../formats/qpuioFile';
+import { simulateTruthTableOutputs, truthTablesEqual, validateTruthTable } from '../../simulator/compiler/truthTable';
 // Validates bundled adder truth-table fixtures.
 const readProcess = (fileName: string) => readFileSync(new URL(`../processes/${fileName}`, import.meta.url), 'utf8');
 

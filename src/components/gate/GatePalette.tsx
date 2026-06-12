@@ -1,5 +1,5 @@
-import { customPaletteGates, preconfiguredPaletteGates } from '../simulator/gates/registry';
-import { GateType } from '../simulator/types';
+import { customPaletteGates, preconfiguredPaletteGates } from '../../simulator/gates/registry';
+import { GateType } from '../../simulator/types';
 import { GateBlock } from './GateBlock';
 type GatePaletteProps = {
   selectedGate: GateType | null;

@@ -1,11 +1,11 @@
-import type { LlmSettings } from './llm/config';
-import type { ModelCorrectionIntent, NlCorrectionContext } from './llm/intentTypes';
+import type { LlmSettings } from '../llm/config';
+import type { ModelCorrectionIntent, NlCorrectionContext } from '../llm/intentTypes';
 import {
   isClarificationIntent,
   isRegexFallbackIntent,
   parseNaturalLanguageCorrection,
-} from './llm/naturalLanguageCorrector';
-import { parseNaturalLanguageWithModel } from './llm/modelNaturalLanguageCorrector';
+} from '../llm/naturalLanguageCorrector';
+import { parseNaturalLanguageWithModel } from '../llm/modelNaturalLanguageCorrector';
 
 export type CorrectionIntentParseOptions = {
   useLlm?: boolean;
@@ -36,7 +36,7 @@ export const parseCorrectionIntent = async (
   }
 
   options.onProgress?.('Using cached browser model…');
-  const { parseNaturalLanguageWithWebLlm } = await import('./llm/webLlmNaturalLanguageCorrector');
+  const { parseNaturalLanguageWithWebLlm } = await import('../llm/webLlmNaturalLanguageCorrector');
   return await parseNaturalLanguageWithWebLlm(message, context, {
     modelId: settings?.browserModel,
     onProgress: options.onProgress,

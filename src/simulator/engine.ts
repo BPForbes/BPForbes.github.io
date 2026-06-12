@@ -2,7 +2,7 @@
 import { Complex, magnitudeSquared, ONE, ZERO } from './complex';
 import { applyGate as applyRegisteredGate } from './gates/registry';
 import { applyStartState, hasBit, measureQubit, padStateVector } from './gates/operations';
-import { buildOperationTransition, snapshotAllParticles } from './particleTracking';
+import { buildOperationTransition, snapshotAllParticles } from './physics/particleTracking';
 import { CircuitGate, ExecutionResult, MeasurementMap, OperationTransition, ParticleStartState } from './types';
 
 export {

@@ -1,5 +1,5 @@
 // Ollama-backed NL parser: same JSON intent schema as the browser model, with a short timeout fallback.
-import type { GatePreference } from '../circuitCorrector';
+import type { GatePreference } from '../correction/circuitCorrector';
 import { defaultLlmSettings } from './config';
 import { buildNlContextSections } from './contextPrompt';
 import type { ModelCorrectionIntent, NlCorrectionContext } from './intentTypes';

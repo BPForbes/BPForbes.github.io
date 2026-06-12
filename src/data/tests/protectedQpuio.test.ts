@@ -3,8 +3,8 @@ import {
   enforceProtectedTruthTable,
   getProtectedTruthTable,
   isProtectedQpuioProcess,
-} from '../protectedQpuio';
-import { singleBitFullAdderTruthTable, truthTablesEqual } from '../../simulator/truthTable';
+} from '../catalog/protectedQpuio';
+import { singleBitFullAdderTruthTable, truthTablesEqual } from '../../simulator/compiler/truthTable';
 // Ensures protected catalog tables cannot be overwritten.
 
 describe('protectedQpuio', () => {

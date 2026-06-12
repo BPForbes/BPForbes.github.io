@@ -126,13 +126,13 @@ export type {
   ParticleSnapshot,
   PsiKet,
   SphericalCoordinates,
-} from './particleTracking';
+} from './physics/particleTracking';
 
 // Execution results may include optional particle snapshots and per-gate transitions when tracing is enabled.
 export type ExecutionResult = {
   state: Complex[];
   measurements: MeasurementMap;
   log: string[];
-  particles?: import('./particleTracking').ParticleSnapshot[];
-  transitions?: import('./particleTracking').OperationTransition[];
+  particles?: import('./physics/particleTracking').ParticleSnapshot[];
+  transitions?: import('./physics/particleTracking').OperationTransition[];
 };

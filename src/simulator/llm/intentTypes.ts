@@ -1,5 +1,5 @@
-import type { CorrectionGuidance } from '../circuitCorrector';
-import type { TruthTable, TruthTableTestResult } from '../truthTable';
+import type { CorrectionGuidance } from '../correction/circuitCorrector';
+import type { TruthTable, TruthTableTestResult } from '../compiler/truthTable';
 
 export type ProcessCatalogSummary = {
   name: string;

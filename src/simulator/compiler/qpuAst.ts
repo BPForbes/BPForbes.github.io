@@ -1,7 +1,7 @@
 // QPU protocol compiler: child processes and cycles expand into flat gates so the simulator and UI share one execution model.
-import { assertGateArity } from './gates/arity';
-import { astDerivedGateIds, astPrimitiveGateIds } from './gates/metadata';
-import { CircuitGate, GateType, QpuOperation } from './types';
+import { assertGateArity } from '../gates/arity';
+import { astDerivedGateIds, astPrimitiveGateIds } from '../gates/metadata';
+import { CircuitGate, GateType, QpuOperation } from '../types';
 
 export type ParsedCommand = {
   op: QpuOperation;

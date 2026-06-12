@@ -4,10 +4,10 @@
  * The helpers normalize uploaded source, derive process-aware file names, and
  * emit browser downloads without coupling the UI to DOM blob mechanics.
  */
-import { compileQpuProtocol } from '../simulator/qpuAst';
+import { compileQpuProtocol } from '../../simulator/compiler/qpuAst';
 import { qpucirTxtFileNameForProcess } from './qpuFileNames';
-import { extractMainProcessName, qpucirFileNameForSource } from '../simulator/qpuFormat';
-import type { QpucirPayload } from './protocolExamples';
+import { extractMainProcessName, qpucirFileNameForSource } from '../../simulator/compiler/qpuFormat';
+import type { QpucirPayload } from '../catalog/protocolExamples';
 
 export const createQpucirPayload = (
   name: string,

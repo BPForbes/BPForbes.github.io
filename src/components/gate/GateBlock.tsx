@@ -4,8 +4,8 @@
  * Gate metadata comes from the registry; this component only handles rendering,
  * selection state, drag payloads, and remove affordances.
  */
-import { getGateDefinition } from '../simulator/gates/registry';
-import { GateType } from '../simulator/types';
+import { getGateDefinition } from '../../simulator/gates/registry';
+import { GateType } from '../../simulator/types';
 
 type GateBlockProps = {
   type: GateType;
