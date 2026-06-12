@@ -20,6 +20,7 @@ export const BROWSER_MODEL_OPTIONS = [
   'Llama-3.2-3B-Instruct-q4f16_1-MLC',
 ] as const;
 
+// Browser mode is the default because it works without a local Ollama server once the model is cached.
 export const defaultLlmSettings = (): LlmSettings => ({
   mode: 'browser',
   browserModel: DEFAULT_BROWSER_MODEL,

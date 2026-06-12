@@ -27,6 +27,7 @@ export const buildNlContextSections = (context: NlCorrectionContext) => {
       // Fall back when protocol source cannot be parsed for dimension inference.
     }
   }
+  // Partial-table scope is explicit so model-suggested tests/corrections do not assume missing rows were failures.
   const tableScopeNote = tableDimensions
     ? `Truth table scope: ${formatTruthTableRowSummary(tableDimensions)}. Tests, probe, and correction only evaluate listed rows.`
     : 'Truth table scope: not loaded.';

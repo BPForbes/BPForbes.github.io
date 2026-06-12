@@ -16,6 +16,7 @@ export type ProcessCatalogSummary = {
   description?: string;
 };
 
+// Clarification options carry executable follow-up commands, not just display text.
 export type ClarificationOption = {
   label: string;
   command: string;

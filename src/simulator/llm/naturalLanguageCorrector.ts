@@ -425,6 +425,7 @@ export const parseNaturalLanguageCorrection = (
   const gates = extractGateSpecs(text, context);
   const truthTable = parseTruthTableRowHint(text, context) ?? undefined;
 
+  // Intent ordering keeps explicit loads/saves ahead of broad correction phrases that might otherwise match them.
   if (/(?:help|what can you do|examples?)/i.test(lower)) {
     return {
       reply: [
@@ -546,6 +547,7 @@ export const parseNaturalLanguageCorrection = (
     );
   }
 
+  // Fully bound gates become guided edits immediately; unresolved/partial gates above ask for clarification first.
   if (gates.length > 0) {
     const gateSummary = gates
       .map((spec) => `${spec.gate} -I ${spec.inputs.join(' ')} -O ${spec.output}`)
@@ -589,6 +591,7 @@ export const parseNaturalLanguageCorrection = (
   };
 };
 
+// This exact local fallback reply is the handoff signal for optional model parsing in correctionIntentParser.
 export const isRegexFallbackIntent = (intent: ModelCorrectionIntent) => (
   !intent.clarification && intent.reply.startsWith('I could not map that request')
 );

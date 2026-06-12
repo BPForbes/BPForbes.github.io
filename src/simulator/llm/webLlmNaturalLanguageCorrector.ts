@@ -52,6 +52,7 @@ export async function parseNaturalLanguageWithWebLlm(
   try {
     const modelId = options?.modelId ?? DEFAULT_BROWSER_MODEL;
     const engine = await getEngine(modelId, options?.onProgress);
+    // Deterministic JSON mode keeps browser-model behavior aligned with the stricter Ollama sanitizer.
     const response = await engine.chat.completions.create({
       messages: [
         { role: 'system', content: buildSystemPrompt(context) },

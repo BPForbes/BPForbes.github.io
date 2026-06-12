@@ -70,6 +70,7 @@ export const sanitizeIntent = (raw: unknown): ModelCorrectionIntent | null => {
   const guidanceRaw = record.guidance;
   let guidance: ModelCorrectionIntent['guidance'];
 
+  // Guidance is the only nested object we accept, and each gate must match the corrector's supported vocabulary.
   if (guidanceRaw && typeof guidanceRaw === 'object') {
     const guidanceRecord = guidanceRaw as Record<string, unknown>;
     const preferredGates = Array.isArray(guidanceRecord.preferredGates)
