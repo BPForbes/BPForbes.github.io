@@ -4,6 +4,7 @@ import type { GateDefinition } from './types';
 import { gateIoArity } from './types';
 import { padStateVector } from './operations';
 import { preconfiguredGateMap } from './preconfigured';
+// Gate-module helper for customGateEngine.
 
 const assertCustomGateIdAvailable = (trimmedId: string) => {
   const conflict = Object.keys(preconfiguredGateMap).find((id) => id.toLowerCase() === trimmedId.toLowerCase());
@@ -24,8 +25,10 @@ export type CustomGateRecord = {
   createdAt: string;
 };
 
+// Internal helper: STORAGE_KEY.
 const STORAGE_KEY = 'qpu-custom-gates-v1';
 
+// Internal helper: PRECONFIGURED_HUES.
 const PRECONFIGURED_HUES = [0, 25, 195, 260, 290, 120, 84, 205, 270, 142, 158, 228, 45, 315];
 
 const randomCustomColor = (usedColors: Set<string>) => {
@@ -56,8 +59,10 @@ const writeStore = (records: CustomGateRecord[]) => {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(records));
 };
 
+// Public API: listCustomGateRecords.
 export const listCustomGateRecords = () => readStore();
 
+// Public API: getCustomGateRecord.
 export const getCustomGateRecord = (id: string) =>
   readStore().find((record) => record.id.toLowerCase() === id.toLowerCase());
 
@@ -74,6 +79,7 @@ export type RegisterCustomGateInput = {
   color?: string;
   label?: string;
 };
+// Section 1: customGateEngine implementation detail.
 
 // Registration compiles once up front to validate arity and capture any library sources needed by child processes.
 export const registerCustomGate = ({
@@ -155,6 +161,7 @@ const buildQubitRemap = (
     remap.set(qubit, nextAncilla);
     used.add(nextAncilla);
     nextAncilla += 1;
+// Section 2: customGateEngine implementation detail.
   });
 
   Object.values(compiled.tokenMap).forEach((qubit) => {
@@ -233,5 +240,6 @@ export const customGateToDefinition = (record: CustomGateRecord): GateDefinition
     applyCustomGateProcess(state, qubitCount, gate, measurements, record, librarySources),
 });
 
+// Public API: buildCustomGateDefinitions.
 export const buildCustomGateDefinitions = () =>
   readStore().map((record) => customGateToDefinition(record));

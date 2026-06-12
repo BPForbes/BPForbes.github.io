@@ -2,6 +2,7 @@ import { getGateDefinition } from '../simulator/gates/registry';
 import { resolvedArity } from '../simulator/gates/arity';
 import type { OperationTransition, ParticleSnapshot } from '../simulator/particleTracking';
 import { CircuitGate, MeasurementMap, ParticleStartState } from '../simulator/types';
+// UI surface for ParticleView in the circuit builder shell.
 
 type ParticleViewProps = {
   qubitCount: number;
@@ -25,6 +26,7 @@ const seededColor = (index: number): [number, number, number] => {
   return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
 };
 
+// Section 1: ParticleView implementation detail.
 const srgbToLinear = (value: number) => {
   const normalized = value / 255;
   return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
@@ -53,6 +55,7 @@ const oklabToCss = ([L, a, b]: number[]) => {
   const rLin = 4.0767416621 * l - 3.3077115903 * m + 0.2309699292 * s;
   const gLin = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s;
   const bLin = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s;
+// Section 2: ParticleView implementation detail.
   return `rgb(${linearToSrgb(rLin)} ${linearToSrgb(gLin)} ${linearToSrgb(bLin)})`;
 };
 
@@ -62,6 +65,7 @@ const mixedColor = (qubits: number[]) => {
   return oklabToCss(average);
 };
 
+// Internal helper: deg.
 const deg = (radians: number) => `${((radians * 180) / Math.PI).toFixed(1)}°`;
 
 const gateIoLabel = (gate: CircuitGate) => {
@@ -80,6 +84,7 @@ export function ParticleView({
   activeStep = -1,
   startStates = [],
   qubitLabels = [],
+// Section 3: ParticleView implementation detail.
   physicalQubitIndices,
   particleSnapshots = [],
   transitions = [],
@@ -108,6 +113,7 @@ export function ParticleView({
               {measured === undefined ? (
                 <div className="sphere" aria-label={`q${physicalQubit} unmeasured quantum sphere`} />
               ) : (
+// Section 4: ParticleView implementation detail.
                 <div className="state-card" aria-label={`q${physicalQubit} measured ${measured}`}>
                   {measured}
                 </div>
@@ -136,6 +142,7 @@ export function ParticleView({
                 </>
               )}
               {delta && delta.displacement > 1e-4 && (
+// Section 5: ParticleView implementation detail.
                 <div className="particle-delta" aria-label={`q${physicalQubit} change after last gate`}>
                   <span>Δr {delta.deltaR.toFixed(3)}</span>
                   <span>Δθ {deg(delta.deltaTheta)}</span>

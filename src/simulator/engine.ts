@@ -5,6 +5,7 @@ import { buildOperationTransition, snapshotAllParticles } from './particleTracki
 import { CircuitGate, ExecutionResult, MeasurementMap, OperationTransition, ParticleStartState } from './types';
 
 export {
+// Simulator support for engine.
   applySingleQubitGate,
   applyControlledX,
   applyControlledPredicateX,
@@ -13,9 +14,11 @@ export {
   prepareZeroQubit,
 } from './gates/operations';
 
+// Public API: basisLabel.
 export const basisLabel = (index: number, qubitCount: number): string => index.toString(2).padStart(qubitCount, '0');
 
 /** Marginalize a state vector onto the selected qubit indices for logical-param display. */
+// Public API: projectStateOntoQubits.
 export const projectStateOntoQubits = (
   state: Complex[],
   sourceQubitCount: number,
@@ -37,6 +40,7 @@ export const projectStateOntoQubits = (
   return probabilities.map((probability) => (probability > 0 ? { re: Math.sqrt(probability), im: 0 } : ZERO));
 };
 
+// Internal helper: resolveParamQubitIndices.
 const resolveParamQubitIndices = (
   qubitCount: number,
   startStates: ParticleStartState[],
@@ -91,6 +95,7 @@ export type ApplyGateOptions = {
   trackParticles?: boolean;
 };
 
+// Internal helper: isExecutionOptions.
 const isExecutionOptions = (
   input: Record<string, string> | ApplyGateOptions | RunCircuitOptions,
 ): boolean => {
@@ -104,6 +109,7 @@ const isExecutionOptions = (
     );
 };
 
+// Internal helper: normalizeApplyGateOptions.
 const normalizeApplyGateOptions = (
   input: Record<string, string> | ApplyGateOptions = {},
 ): ApplyGateOptions => {
@@ -145,6 +151,7 @@ export const applyGate = (
   return { ...result, particles, transitions: [transition] };
 };
 
+// Public API: stepCircuitGate.
 export const stepCircuitGate = (
   state: Complex[],
   qubitCount: number,
@@ -164,6 +171,7 @@ export type RunCircuitOptions = {
   trackParticles?: boolean;
 };
 
+// Internal helper: normalizeRunCircuitOptions.
 const normalizeRunCircuitOptions = (
   input: Record<string, string> | RunCircuitOptions = {},
 ): RunCircuitOptions => {

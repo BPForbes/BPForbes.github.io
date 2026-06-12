@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+// Regression coverage for protectedQpuio behavior.
   enforceProtectedTruthTable,
   getProtectedTruthTable,
   isProtectedQpuioProcess,
 } from '../protectedQpuio';
 import { singleBitFullAdderTruthTable, truthTablesEqual } from '../../simulator/truthTable';
+// Ensures protected catalog tables cannot be overwritten.
 
 describe('protectedQpuio', () => {
   it('marks bundled adder and phase-demo processes as protected', () => {
@@ -27,6 +29,7 @@ describe('protectedQpuio', () => {
     expect(enforced?.truthTable).toEqual(canonical);
   });
 
+// Case: keeps canonical tables immutable after callers mutate returned copies.
   it('keeps canonical tables immutable after callers mutate returned copies', () => {
     const original = getProtectedTruthTable('SingleBitFullAdder');
     expect(original).toBeTruthy();

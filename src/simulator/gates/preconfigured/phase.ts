@@ -2,6 +2,7 @@ import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { applySingleQubitGate } from '../operations';
 import { phaseMatrix } from '../matrices';
+// PHASE gate palette entry and apply hook for the shared registry.
 
 export const phaseGate: GateDefinition = {
   id: 'PHASE',
@@ -16,6 +17,7 @@ export const phaseGate: GateDefinition = {
   supportsReverse: true,
   supportsPhase: true,
   cssClass: 'gate-phase',
+  // apply hook wires simulator state through the shared operations layer.
   apply: ({ state, qubitCount, gate, measurements }) => {
     const target = gate.targets[0];
     const angle = gate.phase ?? 0;

@@ -2,6 +2,7 @@ import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { applyControlledSingleQubit } from '../operations';
 import { MATRIX_Y } from '../matrices';
+// CY gate palette entry and apply hook for the shared registry.
 
 export const cyGate: GateDefinition = {
   id: 'CY',
@@ -16,6 +17,7 @@ export const cyGate: GateDefinition = {
   supportsReverse: true,
   supportsPhase: false,
   cssClass: 'gate-cy',
+  // apply hook wires simulator state through the shared operations layer.
   apply: ({ state, qubitCount, gate, measurements }) => {
     const target = gate.targets[0];
     return {

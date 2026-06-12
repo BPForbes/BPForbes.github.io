@@ -3,6 +3,7 @@ import { magnitudeSquared } from '../../complex';
 import { createInitialState } from '../../engine';
 import type { CircuitGate } from '../types';
 import {
+// Regression coverage for customGateEngine behavior.
   applyCustomGateProcess,
   getCustomGateRecord,
   listCustomGateRecords,
@@ -49,6 +50,7 @@ describe('customGateEngine', () => {
     })).toThrow(/must start with a letter/i);
   });
 
+// Case: registers and retrieves a custom gate record.
   it('registers and retrieves a custom gate record', () => {
     const record = registerCustomGate({ id: 'MyGate', source: validSource });
     expect(record.id).toBe('MyGate');
@@ -57,6 +59,7 @@ describe('customGateEngine', () => {
     expect(listCustomGateRecords()).toHaveLength(1);
   });
 
+// Case: executes custom gates with RETURNVALS mapped onto gate targets.
   it('executes custom gates with RETURNVALS mapped onto gate targets', () => {
     const record = registerCustomGate({
       id: 'Macro',
@@ -76,6 +79,7 @@ describe('customGateEngine', () => {
     expect(magnitudeSquared(result.state[1])).toBeCloseTo(0, 10);
   });
 
+// Case: re-registers the same custom id by replacing the stored record.
   it('re-registers the same custom id by replacing the stored record', () => {
     const updatedSource = 'MAIN-PROCESS TestGate\nRETURNVALS Q0\nRETURNVALS Q1';
     registerCustomGate({ id: 'MyGate', source: validSource });
@@ -85,4 +89,5 @@ describe('customGateEngine', () => {
     expect(getCustomGateRecord('mygate')?.source).toBe(updatedSource);
     removeCustomGateRecord('MyGate');
   });
+// Keeps customGateEngine.test wiring explicit for maintainers.
 });

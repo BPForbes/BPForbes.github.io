@@ -1,12 +1,14 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import {
+// Regression coverage for childProcessCorrection behavior.
   collectDescendantProcesses,
   correctChildProcessesForCompatibility,
   getReferencedChildProcesses,
   orderProcessesLeafFirst,
 } from '../childProcessCorrection';
 import { singleBitFullAdderTruthTable } from '../truthTable';
+// Covers descendant correction flows across nested processes.
 
 const readProcess = (fileName: string) => readFileSync(new URL(`../../data/processes/${fileName}`, import.meta.url), 'utf8');
 
@@ -29,6 +31,7 @@ describe('child process correction', () => {
     ]);
   });
 
+// Case: orders descendants leaf-first.
   it('orders descendants leaf-first', () => {
     expect(orderProcessesLeafFirst(
       collectDescendantProcesses('FourBitFullAdder', protocolLibrary),
@@ -36,6 +39,7 @@ describe('child process correction', () => {
     )).toEqual(['SingleBitFullAdder', 'TwoBitFullAdder']);
   });
 
+// Case: corrects a broken child before parent compatibility checks.
   it('corrects a broken child before parent compatibility checks', () => {
     const brokenSingleBit = `PARAMS: A:state B:state Cin:state
 

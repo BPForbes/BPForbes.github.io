@@ -1,6 +1,7 @@
 import { CircuitGate, ParticleStartState } from './types';
 
 export type ProtocolParamEntry = { name: string; type: string };
+// Simulator support for qpuFormat.
 
 const sanitizeProcessName = (name: string) => {
   const cleaned = name.replace(/[^A-Za-z0-9_]+/g, ' ').trim().replace(/\s+(\w)/g, (_, letter: string) => letter.toUpperCase());
@@ -21,10 +22,15 @@ export const qpucirFileNameForSource = (source: string, fallbackName = 'CurrentC
   return `${processName}.qpucir`;
 };
 
+// Internal helper: stripProtocolRef.
 const stripProtocolRef = (token: string) => token.replace(/^\$/, '').split(':')[0];
+// Internal helper: isMainProcessLine.
 const isMainProcessLine = (line: string) => /^\s*MAIN-PROCESS\s+/i.test(line);
+// Internal helper: isParamsLine.
 const isParamsLine = (line: string) => /^\s*PARAMS:/i.test(line);
+// Internal helper: isSetLine.
 const isSetLine = (line: string) => /^\s*SET\s+/i.test(line);
+// Internal helper: isCreateTokenLine.
 const isCreateTokenLine = (line: string) => /^\s*CREATETOKEN\b/i.test(line);
 type ProtocolLineBlock = { start: number; end: number; logicalLine: string };
 
@@ -50,6 +56,7 @@ const findParamsBlock = (lines: string[]): ProtocolLineBlock | null => {
   return start >= 0 ? findContinuedLineBlock(lines, start) : null;
 };
 
+// Internal helper: parseProtocolParamParts.
 const parseProtocolParamParts = (paramsBody: string): ProtocolParamEntry[] => paramsBody
   .trim()
   .split(/\s+/)
@@ -65,6 +72,7 @@ export const getProtocolParameterEntries = (source: string): ProtocolParamEntry[
   return parseProtocolParamParts(block.logicalLine.slice(block.logicalLine.indexOf(':') + 1));
 };
 
+// Internal helper: reservedProtocolNames.
 const reservedProtocolNames = (source: string) => new Set(
   Array.from(source.matchAll(/\b[A-Za-z_][A-Za-z0-9_]*\b/g), ([name]) => name)
     .filter((name) => !['PARAMS', 'MAIN', 'PROCESS', 'state', 'int', 'float'].includes(name)),
@@ -91,6 +99,7 @@ export const updateProtocolReturnValTokens = (source: string, outputNames: strin
     const indent = lines[block.start].match(/^\s*/)?.[0] ?? '';
     lines.splice(block.start, block.end - block.start + 1, `${indent}${returnLine}`);
   } else {
+// Section 1: qpuFormat implementation detail.
     lines.push(returnLine);
   }
 
@@ -192,6 +201,7 @@ export const updateProtocolParameterCount = (source: string, paramCount: number)
   const paramsLine = `PARAMS: ${nextParams.map((param) => `${param.name}:${param.type}`).join(' ')}`.trimEnd();
   if (paramsBlock) {
     const indent = lines[paramsBlock.start].match(/^\s*/)?.[0] ?? '';
+// Section 2: qpuFormat implementation detail.
     lines.splice(paramsBlock.start, paramsBlock.end - paramsBlock.start + 1, `${indent}${paramsLine}`);
   } else {
     lines.unshift(paramsLine, '');
@@ -229,6 +239,7 @@ export const updateProtocolStartStateSet = (source: string, paramName: string, s
   return nextLines.join(newline);
 };
 
+// Internal helper: canvasParamRef.
 const canvasParamRef = (qubit: number) => `$Q${qubit}`;
 
 // Canvas serialization emits a minimal MAIN-PROCESS that the parser/compiler can immediately load again.

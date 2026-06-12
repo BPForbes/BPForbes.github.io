@@ -1,5 +1,6 @@
 import { createSingleQubitMatrixGate } from '../factories';
 import { MATRIX_H } from '../matrices';
+// H gate palette entry and apply hook for the shared registry.
 
 export const hGate = createSingleQubitMatrixGate({
   id: 'H',

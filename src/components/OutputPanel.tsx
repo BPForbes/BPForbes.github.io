@@ -2,6 +2,8 @@ import { basisLabel } from '../simulator/engine';
 import { formatComplex, magnitudeSquared } from '../simulator/complex';
 import { Complex } from '../simulator/complex';
 import { MeasurementMap } from '../simulator/types';
+// Renders measurement readouts mapped from simulation indices.
+// UI surface for OutputPanel in the circuit builder shell.
 
 type OutputPanelProps = {
   state: Complex[];
@@ -18,6 +20,7 @@ export function OutputPanel({ state, qubitCount, measurements, log, qubitLabels 
   return (
     <section className="panel output" aria-labelledby="output-title">
       <div className="section-heading">
+// Section 1: OutputPanel implementation detail.
         <p className="eyebrow">Output panel</p>
         <h2 id="output-title">Execution results</h2>
       </div>
@@ -39,6 +42,7 @@ export function OutputPanel({ state, qubitCount, measurements, log, qubitLabels 
             <thead>
               <tr>
                 <th>Outcome</th>
+// Section 2: OutputPanel implementation detail.
                 <th>Amplitude</th>
                 <th>Probability</th>
               </tr>

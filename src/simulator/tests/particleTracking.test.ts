@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createInitialState, runCircuit } from '../engine';
 import {
+// Regression coverage for particleTracking behavior.
   blochCartesianFromSpherical,
   blochVectorForQubit,
   blochBallRhoExpectation,
@@ -51,6 +52,7 @@ describe('particleTracking', () => {
     expect(ket.formatted).toContain('|ψ⟩');
   });
 
+// Case: uses x = sinθ cosφ, y = sinθ sinφ, z = cosθ for Pauli-axis directions.
   it('uses x = sinθ cosφ, y = sinθ sinφ, z = cosθ for Pauli-axis directions', () => {
     const xGate = blochCartesianFromSpherical(1, Math.PI / 2, 0);
     expect(xGate.x).toBeCloseTo(1, 5);
@@ -63,6 +65,7 @@ describe('particleTracking', () => {
     expect(zGate.z).toBeCloseTo(1, 5);
   });
 
+// Case: detects particle movement after a Hadamard gate.
   it('detects particle movement after a Hadamard gate', () => {
     const initial = snapshotParticle(createInitialState(1), 1, 0);
     const afterH = snapshotParticle(runCircuit(1, [gate('H', 0, [0])], undefined, undefined, { trackParticles: true }).state, 1, 0);
@@ -71,6 +74,7 @@ describe('particleTracking', () => {
     expect(delta.deltaTheta).toBeGreaterThan(0.5);
   });
 
+// Case: lowers ⟨ρ⟩ expectation for mixed marginals.
   it('lowers ⟨ρ⟩ expectation for mixed marginals', () => {
     const pure = mixedStateMetrics({ r: 1, theta: Math.PI / 4, phi: 0 });
     const mixed = mixedStateMetrics({ r: 0.4, theta: Math.PI / 3, phi: Math.PI / 6 });
@@ -80,6 +84,7 @@ describe('particleTracking', () => {
     expect(blochBallRhoExpectation(0.4, Math.PI / 3, Math.PI / 6, 0.6)).toBeGreaterThan(0);
   });
 
+// Case: records transitions when runCircuit tracking is enabled.
   it('records transitions when runCircuit tracking is enabled', () => {
     const result = runCircuit(2, [gate('H', 0, [0]), gate('CNOT', 1, [1], [0])], undefined, undefined, {
       trackParticles: true,

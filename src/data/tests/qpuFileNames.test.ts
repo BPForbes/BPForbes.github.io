@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+// Regression coverage for qpuFileNames behavior.
   companionQpucirFileName,
   companionQpuioFileName,
   isQpucirFileName,
@@ -44,12 +45,14 @@ describe('qpuFileNames', () => {
     expect(companionQpucirFileName('RsNorLatchStep-qpuio.txt')).toBe('RsNorLatchStep-qpucir.txt');
   });
 
+// Case: extracts process stems from qpuio filenames.
   it('extracts process stems from qpuio filenames', () => {
     expect(processStemFromQpuioFileName('RsNorLatchStep.qpuio')).toBe('RsNorLatchStep');
     expect(processStemFromQpuioFileName('RsNorLatchStep-qpuio.txt')).toBe('RsNorLatchStep');
     expect(processStemFromQpuioFileName('custom-upload')).toBe('custom-upload');
   });
 
+// Case: rejects qpuio filenames with empty process stems.
   it('rejects qpuio filenames with empty process stems', () => {
     expect(() => processStemFromQpuioFileName('.qpuio')).toThrow(/empty process stem/i);
     expect(() => processStemFromQpuioFileName('-qpuio.txt')).toThrow(/empty process stem/i);

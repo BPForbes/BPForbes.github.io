@@ -1,6 +1,7 @@
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { prepareZeroQubit } from '../operations';
+// RESET gate palette entry and apply hook for the shared registry.
 
 export const resetGate: GateDefinition = {
   id: 'RESET',
@@ -26,4 +27,5 @@ export const resetGate: GateDefinition = {
       log: [`Cycle workspace prepared: q${gate.targets.join(', q')} as |0⟩.`],
     };
   },
+// Keeps reset wiring explicit for maintainers.
 };

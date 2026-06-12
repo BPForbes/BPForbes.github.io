@@ -1,5 +1,6 @@
 import { add, Complex, magnitudeSquared, mul, ONE, scale, ZERO } from '../complex';
 import { MATRIX_H, MATRIX_X } from './matrices';
+// Gate-module helper for operations.
 
 const bitMask = (qubit: number, qubitCount: number) => 1 << (qubitCount - qubit - 1);
 
@@ -30,12 +31,15 @@ export const applySingleQubitGate = (
   return next;
 };
 
+// Public API: controlsAreActive.
 export const controlsAreActive = (basisIndex: number, qubitCount: number, controls: number[]) =>
   controls.every((control) => hasBit(basisIndex, control, qubitCount));
 
+// Public API: controlsHaveParity.
 export const controlsHaveParity = (basisIndex: number, qubitCount: number, controls: number[]) =>
   controls.filter((control) => hasBit(basisIndex, control, qubitCount)).length % 2 === 1;
 
+// Public API: anyControlIsActive.
 export const anyControlIsActive = (basisIndex: number, qubitCount: number, controls: number[]) =>
   controls.some((control) => hasBit(basisIndex, control, qubitCount));
 
@@ -61,6 +65,7 @@ export const applyControlledPredicateX = (
   return next;
 };
 
+// Public API: applyControlledX.
 export const applyControlledX = (state: Complex[], qubitCount: number, controls: number[], target: number): Complex[] =>
   applyControlledPredicateX(state, qubitCount, controls, target, controlsAreActive);
 
@@ -77,6 +82,7 @@ export const applyControlledZ = (state: Complex[], qubitCount: number, controls:
   return next;
 };
 
+// Public API: applyControlledSingleQubit.
 export const applyControlledSingleQubit = (
   state: Complex[],
   qubitCount: number,

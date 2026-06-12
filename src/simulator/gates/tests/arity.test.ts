@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { checkGateArity, formatGateArityViolation } from '../arity';
 import { parseCommand } from '../../qpuAst';
+// Regression coverage for arity behavior.
 
 describe('gate arity validation', () => {
   it('rejects too many -I parameters for CNOT', () => {
@@ -26,6 +27,7 @@ describe('gate arity validation', () => {
     expect(command.outputs).toHaveLength(2);
   });
 
+// Case: throws when CCNOT is missing a control input.
   it('throws when CCNOT is missing a control input', () => {
     expect(() => parseCommand('CCNOT -I $Q0:0 -O $Q2:0')).toThrow(/at least 2 -I/);
   });

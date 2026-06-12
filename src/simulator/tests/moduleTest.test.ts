@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { correctCircuit, runModuleTest, synthesizeProtocolFromTruthTable } from '../moduleTestApi';
 import {
+// Regression coverage for moduleTest behavior.
   createEmptyTruthTable,
   describeTruthTableDimensions,
   formatTruthTableRowSummary,
@@ -132,6 +133,7 @@ describe('partial truth tables', () => {
     expect(formatTruthTableRowSummary(dimensions)).toBe('8 of 16 rows (partial)');
   });
 
+// Case: rejects duplicate input rows in partial tables.
   it('rejects duplicate input rows in partial tables', () => {
     const duplicate = {
       ...rsNorLatchStepTable,
@@ -142,6 +144,7 @@ describe('partial truth tables', () => {
     );
   });
 
+// Case: preserves partial row count when resizing output columns.
   it('preserves partial row count when resizing output columns', () => {
     const resized = resizeTruthTable(rsNorLatchStepTable, rsNorLatchStepTable.inputColumns, ['Q', 'Qbar', 'Hold']);
     expect(resized.rows).toHaveLength(8);
@@ -149,6 +152,7 @@ describe('partial truth tables', () => {
     expect(resized.rows[0]).toEqual(['0p', '0p', '1p', '0p', '1p', '0p', '0p']);
   });
 
+// Case: runs tests only across listed partial rows.
   it('runs tests only across listed partial rows', () => {
     const result = testCircuitAgainstTruthTable(rsNorLatchStepSource, rsNorLatchStepTable);
     expect(result.totalRows).toBe(8);
@@ -159,6 +163,7 @@ describe('partial truth tables', () => {
     });
   });
 
+// Case: synthesizes circuits from partial tables with arbitrary input rows.
   it('synthesizes circuits from partial tables with arbitrary input rows', () => {
     const table = {
       inputColumns: ['A', 'B'],
@@ -174,7 +179,9 @@ describe('partial truth tables', () => {
   });
 });
 
+// Test group: module test API.
 describe('module test API', () => {
+// Case: returns a passing response without correction for a valid module.
   it('returns a passing response without correction for a valid module', () => {
     const response = runModuleTest({
       source: protocolLibrary.SingleBitFullAdder,
@@ -185,6 +192,7 @@ describe('module test API', () => {
     expect(response.correctedSource).toBeUndefined();
   });
 
+// Case: synthesizes a circuit that matches the requested truth table.
   it('synthesizes a circuit that matches the requested truth table', () => {
     const table = singleBitFullAdderTruthTable();
     const synthesized = synthesizeProtocolFromTruthTable(table, 'SynthesizedAdder');
@@ -192,6 +200,7 @@ describe('module test API', () => {
     expect(result.passed).toBe(true);
   });
 
+// Case: synthesizes minterms with zero-valued controls.
   it('synthesizes minterms with zero-valued controls', () => {
     const table = {
       inputColumns: ['A', 'B'],
@@ -208,6 +217,7 @@ describe('module test API', () => {
     expect(result.passed).toBe(true);
   });
 
+// Case: returns failures without correction when correct=false.
   it('returns failures without correction when correct=false', () => {
     const broken = `PARAMS: A:state B:state Cin:state
 
@@ -227,6 +237,7 @@ RETURNVALS Cout:0 Sum:0`;
     expect(response.correctedSource).toBeUndefined();
   });
 
+// Case: autonomously corrects through runModuleTest.
   it('autonomously corrects through runModuleTest', () => {
     const broken = `PARAMS: A:state B:state Cin:state
 
@@ -247,7 +258,9 @@ RETURNVALS Cout:0 Sum:0`;
   });
 });
 
+// Test group: truth table helpers.
 describe('truth table helpers', () => {
+// Case: recognizes equivalent truth tables.
   it('recognizes equivalent truth tables', () => {
     expect(truthTablesEqual(singleBitFullAdderTruthTable(), singleBitFullAdderTruthTable())).toBe(true);
   });

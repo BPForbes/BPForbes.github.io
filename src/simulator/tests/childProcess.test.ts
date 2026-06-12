@@ -5,6 +5,7 @@ import { getProtocolParameterEntries, serializeCircuitToQpuProtocol, updateProto
 import { createInitialState, measureAll, projectStateOntoQubits, runCircuit } from '../engine';
 import { complex, magnitudeSquared } from '../complex';
 import type { ParticleStartState } from '../types';
+// Regression coverage for childProcess behavior.
 
 const readProcess = (fileName: string) => readFileSync(new URL(`../../data/processes/${fileName}`, import.meta.url), 'utf8');
 
@@ -155,6 +156,7 @@ describe('process parameter exposure', () => {
     expect(removed).toContain('MAIN-PROCESS SingleBitFullAdder');
   });
 
+// Case: does not inflate qubit count when a compiled circuit is serialized and recompiled.
   it('does not inflate qubit count when a compiled circuit is serialized and recompiled', () => {
     const first = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
     const roundTripSource = serializeCircuitToQpuProtocol(first.gates, first.qubitCount);
@@ -165,6 +167,7 @@ describe('process parameter exposure', () => {
     expect(second.processParams.length).toBeLessThanOrEqual(first.qubitCount);
   });
 
+// Case: preserves workspace zeroing when a compiled circuit is serialized and recompiled.
   it('preserves workspace zeroing when a compiled circuit is serialized and recompiled', () => {
     const source = protocolLibrary.SingleBitFullAdder;
     const first = compileQpuProtocol(source, protocolLibrary);
@@ -204,7 +207,9 @@ describe('process parameter exposure', () => {
   });
 });
 
+// Test group: projectStateOntoQubits.
 describe('projectStateOntoQubits', () => {
+// Case: marginalizes probabilities instead of summing amplitudes when hidden qubits interfere.
   it('marginalizes probabilities instead of summing amplitudes when hidden qubits interfere', () => {
     const fullState = createInitialState(2, ['0p', 'sp']);
     const projected = projectStateOntoQubits(fullState, 2, [0]);
@@ -214,7 +219,9 @@ describe('projectStateOntoQubits', () => {
   });
 });
 
+// Test group: PhaseDemo.
 describe('PhaseDemo', () => {
+// Case: uses one qubit and displays the RETURNVALS wire.
   it('uses one qubit and displays the RETURNVALS wire', () => {
     const source = readProcess('phase-demo.qpucir');
     const compiled = compileQpuProtocol(source, protocolLibrary);
@@ -225,7 +232,9 @@ describe('PhaseDemo', () => {
   });
 });
 
+// Test group: SingleBitFullAdder standalone.
 describe('SingleBitFullAdder standalone', () => {
+// Case: projects the displayed ket onto Cout and Sum return values.
   it('projects the displayed ket onto Cout and Sum return values', () => {
     const compiled = compileQpuProtocol(protocolLibrary.SingleBitFullAdder, protocolLibrary);
     const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
@@ -242,6 +251,7 @@ describe('SingleBitFullAdder standalone', () => {
     expect(compiled.returnValues.map((value) => value.name)).toEqual(['Cout', 'Sum']);
   });
 
+// Case: computes sum and carry from RETURNVALS register names.
   it('computes sum and carry from RETURNVALS register names', () => {
     const source = protocolLibrary.SingleBitFullAdder;
     const compiled = compileQpuProtocol(source, protocolLibrary);
@@ -260,7 +270,9 @@ describe('SingleBitFullAdder standalone', () => {
   });
 });
 
+// Test group: TwoBitFullAdder.
 describe('TwoBitFullAdder', () => {
+// Case: allocates only live qubits instead of one ancilla per child invocation.
   it('allocates only live qubits instead of one ancilla per child invocation', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     expect(compiled.qubitCount).toBe(9);
@@ -269,6 +281,7 @@ describe('TwoBitFullAdder', () => {
     expect(Object.keys(compiled.tokenMap)).not.toContain('SingleBitFullAdder#1/2');
   });
 
+// Case: projects the final state onto RETURNVALS outputs for TwoBitFullAdder.
   it('projects the final state onto RETURNVALS outputs for TwoBitFullAdder', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
@@ -287,6 +300,7 @@ describe('TwoBitFullAdder', () => {
     expect(projected.filter((amplitude) => Math.abs(amplitude.re) > 1e-8 || Math.abs(amplitude.im) > 1e-8)).toHaveLength(1);
   });
 
+// Case: adds |10> and |11> with cin=0 to produce |101> on sum and carry outputs.
   it('adds |10> and |11> with cin=0 to produce |101> on sum and carry outputs', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
@@ -305,6 +319,7 @@ describe('TwoBitFullAdder', () => {
     expect(readMeasured(compiled.tokenMap, measured.measurements, 'Cout')).toBe(1);
   });
 
+// Case: adds |10> and |01> to produce sum 3.
   it('adds |10> and |01> to produce sum 3', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
@@ -321,6 +336,7 @@ describe('TwoBitFullAdder', () => {
     expect(readMeasured(compiled.tokenMap, measured.measurements, 'Cout')).toBe(0);
   });
 
+// Case: ignores incorrect 1p start states on child output registers.
   it('ignores incorrect 1p start states on child output registers', () => {
     const compiled = compileQpuProtocol(protocolLibrary.TwoBitFullAdder, protocolLibrary);
     const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
@@ -342,7 +358,9 @@ describe('TwoBitFullAdder', () => {
   });
 });
 
+// Test group: FourBitFullAdder nested children.
 describe('FourBitFullAdder nested children', () => {
+// Case: computes low-nibble 2 + 1 = 3.
   it('computes low-nibble 2 + 1 = 3', () => {
     const source = readProcess('four-bit-full-adder.qpucir');
     const compiled = compileQpuProtocol(source, protocolLibrary);

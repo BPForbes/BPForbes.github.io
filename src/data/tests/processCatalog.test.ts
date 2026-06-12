@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+// Regression coverage for processCatalog behavior.
   getCatalogEntries,
   getCatalogEntry,
   persistCatalogArtifacts,
@@ -39,6 +40,7 @@ describe('processCatalog', () => {
     expect(resolveCatalogEntry('single-bit-full-adder')?.name).toBe('SingleBitFullAdder');
   });
 
+// Case: resolves uploaded processes by original filename.
   it('resolves uploaded processes by original filename', () => {
     registerCatalogProcess({
       name: 'MyCircuit',
@@ -50,6 +52,7 @@ describe('processCatalog', () => {
     expect(resolveCatalogEntry('custom-logic')?.name).toBe('MyCircuit');
   });
 
+// Case: stores and retrieves bundled truth tables.
   it('stores and retrieves bundled truth tables', () => {
     expect(getCatalogEntry('SingleBitFullAdder')?.truthTable?.rows).toHaveLength(8);
     expect(getCatalogEntry('TwoBitFullAdder')?.truthTable?.rows).toHaveLength(32);
@@ -57,6 +60,7 @@ describe('processCatalog', () => {
     expect(getCatalogEntry('PhaseDemo')?.truthTable?.rows).toHaveLength(1);
   });
 
+// Case: does not update qpuio when persisting qpucir-only correction artifacts.
   it('does not update qpuio when persisting qpucir-only correction artifacts', () => {
     const originalTable = {
       inputColumns: ['S', 'R'],
@@ -102,6 +106,7 @@ RETURNVALS Q Qbar`;
     expect(resolveCatalogEntry('LatchStep')?.truthTable).toEqual(originalTable);
   });
 
+// Case: persists custom qpucir and qpuio metadata after workflow sync.
   it('persists custom qpucir and qpuio metadata after workflow sync', () => {
     registerCatalogProcess({
       name: 'MyCircuit',
@@ -131,6 +136,7 @@ RETURNVALS Q Qbar`;
     expect(resolveCatalogEntry('MyCircuit')?.truthTableFileName).toBe('MyCircuit.qpuio');
   });
 
+// Case: skips persistence for bundled processes.
   it('skips persistence for bundled processes', () => {
     const result = persistCatalogArtifacts({
       processName: 'SingleBitFullAdder',
@@ -140,6 +146,7 @@ RETURNVALS Q Qbar`;
     expect(result.skipped).toBe(true);
   });
 
+// Case: restores canonical qpuio filename for protected processes.
   it('restores canonical qpuio filename for protected processes', () => {
     const result = registerCatalogTruthTable({
       processName: 'SingleBitFullAdder',
@@ -149,6 +156,7 @@ RETURNVALS Q Qbar`;
     expect(result.entry.truthTableFileName).toBe('single-bit-full-adder.qpuio');
   });
 
+// Case: reverts protected truth-table registration to canonical metadata.
   it('reverts protected truth-table registration to canonical metadata', () => {
     const edited = structuredClone(getCatalogEntry('SingleBitFullAdder')!.truthTable!);
     edited.rows[0] = ['1p', '1p', '1p', '1p', '1p'];

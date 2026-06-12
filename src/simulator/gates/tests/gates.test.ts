@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createInitialState, runCircuit } from '../../engine';
 import { getGateDefinition, isKnownGateType } from '../registry';
 import type { CircuitGate } from '../types';
+// Regression coverage for gates behavior.
 
 const gate = (type: string, step: number, targets: number[], controls: number[] = [], phase?: number): CircuitGate => ({
   id: `${type}-${step}`,
@@ -29,6 +30,7 @@ describe('gate registry', () => {
     expect(result.state[1].im).toBeCloseTo(1, 5);
   });
 
+// Case: applies Z as a phase flip on |1⟩.
   it('applies Z as a phase flip on |1⟩', () => {
     const prepared = runCircuit(1, [gate('X', 0, [0])]);
     const result = runCircuit(1, [gate('Z', 1, [0])], ['0p'], undefined);
@@ -41,6 +43,7 @@ describe('gate registry', () => {
     expect(flipped.state[1].re).toBeCloseTo(-1, 5);
   });
 
+// Case: swaps two qubit amplitudes.
   it('swaps two qubit amplitudes', () => {
     const start = createInitialState(2);
     const withOne = runCircuit(2, [gate('X', 0, [0])], ['0p', '0p']).state;

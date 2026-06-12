@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildProcessCatalogSummaries } from '../../data/processCatalog';
 import { parseNaturalLanguageCorrection } from '../llm/naturalLanguageCorrector';
 import { singleBitFullAdderTruthTable } from '../truthTable';
+// Regression coverage for naturalLanguageCorrector behavior.
 
 const singleBitSource = readFileSync(new URL('../../data/processes/single-bit-full-adder.qpucir', import.meta.url), 'utf8');
 const twoBitSource = readFileSync(new URL('../../data/processes/two-bit-full-adder.qpucir', import.meta.url), 'utf8');
@@ -86,12 +87,14 @@ describe('parseNaturalLanguageCorrection', () => {
     });
   });
 
+// Case: recognizes autonomous correction requests.
   it('recognizes autonomous correction requests', () => {
     const intent = parseNaturalLanguageCorrection('fix the circuit automatically', context);
     expect(intent.autonomous).toBe(true);
     expect(intent.runTest).toBe(true);
   });
 
+// Case: asks for clarification when a wire bit address is missing.
   it('asks for clarification when a wire bit address is missing', () => {
     const twoBitContext = {
       ...context,
@@ -105,17 +108,20 @@ describe('parseNaturalLanguageCorrection', () => {
     expect(intent.clarification?.options[0].label).toContain('A0:0');
   });
 
+// Case: resolves explicit wire addresses without clarification.
   it('resolves explicit wire addresses without clarification', () => {
     const intent = parseNaturalLanguageCorrection('CNOT -I 1:0 -O Sum:0', context);
     expect(intent.clarification).toBeUndefined();
     expect(intent.guidance?.gates).toEqual([{ gate: 'CNOT', inputs: ['1:0'], output: 'Sum:0' }]);
   });
 
+// Case: loads the full adder truth table.
   it('loads the full adder truth table', () => {
     const intent = parseNaturalLanguageCorrection('load the full adder truth table', context);
     expect(intent.loadFullAdderTable).toBe(true);
   });
 
+// Case: updates truth-table rows from natural language.
   it('updates truth-table rows from natural language', () => {
     const intent = parseNaturalLanguageCorrection(
       'when A is 1 and B is 1 and Cin is 0, Sum should be 0 and Cout should be 1',
@@ -125,4 +131,5 @@ describe('parseNaturalLanguageCorrection', () => {
     const row = intent.truthTable!.rows.find((candidate) => candidate[0] === '1p' && candidate[1] === '1p' && candidate[2] === '0p');
     expect(row).toEqual(['1p', '1p', '0p', '1p', '0p']);
   });
+// Keeps naturalLanguageCorrector.test wiring explicit for maintainers.
 });

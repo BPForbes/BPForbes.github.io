@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { fourBitFullAdderTruthTable, phaseDemoTruthTable, twoBitFullAdderTruthTable } from '../bundledTruthTables';
 import { parseQpuioPayload } from '../qpuioFile';
 import { simulateTruthTableOutputs, truthTablesEqual, validateTruthTable } from '../../simulator/truthTable';
+// Validates bundled adder truth-table fixtures.
+// Regression coverage for bundledTruthTables behavior.
 
 const readProcess = (fileName: string) => readFileSync(new URL(`../processes/${fileName}`, import.meta.url), 'utf8');
 
@@ -36,6 +38,7 @@ describe('bundledTruthTables', () => {
     expect(validateTruthTable(parsed.truthTable, protocol)).toEqual([]);
   });
 
+// Case: aligns phase-demo truth table with its protocol.
   it('aligns phase-demo truth table with its protocol', () => {
     const protocol = readProcess('phase-demo.qpucir');
     const qpuio = readProcess('phase-demo.qpuio');

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+// Regression coverage for webLlmNaturalLanguageCorrector behavior.
   clearBrowserModel,
   parseNaturalLanguageWithWebLlm,
   preloadBrowserModel,
@@ -38,6 +39,7 @@ describe('parseNaturalLanguageWithWebLlm', () => {
     await expect(parseNaturalLanguageWithWebLlm('fix automatically', context)).resolves.toBeNull();
   });
 
+// Case: parses a successful WebLLM response when WebGPU is available.
   it('parses a successful WebLLM response when WebGPU is available', async () => {
     vi.stubGlobal('navigator', { gpu: {} });
 
@@ -74,6 +76,7 @@ describe('parseNaturalLanguageWithWebLlm', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+// Case: clears the in-memory engine, session marker, and browser model cache.
   it('clears the in-memory engine, session marker, and browser model cache', async () => {
     vi.stubGlobal('navigator', { gpu: {} });
     vi.stubGlobal('sessionStorage', {
@@ -96,6 +99,7 @@ describe('parseNaturalLanguageWithWebLlm', () => {
     expect(getCachedBrowserModelId()).toBeNull();
   });
 
+// Case: reuses the cached engine on preload and subsequent calls.
   it('reuses the cached engine on preload and subsequent calls', async () => {
     vi.stubGlobal('navigator', { gpu: {} });
 
@@ -117,13 +121,16 @@ describe('parseNaturalLanguageWithWebLlm', () => {
   });
 });
 
+// Test group: hasWebGpu.
 describe('hasWebGpu', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
+// Case: detects navigator.gpu.
   it('detects navigator.gpu', () => {
     vi.stubGlobal('navigator', { gpu: {} });
     expect(hasWebGpu()).toBe(true);
   });
+// Keeps webLlmNaturalLanguageCorrector.test wiring explicit for maintainers.
 });

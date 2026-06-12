@@ -1,6 +1,7 @@
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { measureQubit } from '../operations';
+// MEASURE gate palette entry and apply hook for the shared registry.
 
 export const measureGate: GateDefinition = {
   id: 'MEASURE',
@@ -15,6 +16,7 @@ export const measureGate: GateDefinition = {
   supportsReverse: false,
   supportsPhase: false,
   cssClass: 'gate-measure',
+  // apply hook wires simulator state through the shared operations layer.
   apply: ({ state, qubitCount, gate, measurements }) => {
     const target = gate.targets[0];
     const measured = measureQubit(state, qubitCount, target);

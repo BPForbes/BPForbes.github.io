@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseCorrectionIntent } from '../correctionIntentParser';
+// Regression coverage for correctionIntentParser behavior.
 
 const context = {
   source: 'PARAMS: A:state B:state Cin:state',
@@ -15,6 +16,7 @@ describe('parseCorrectionIntent', () => {
     expect(intent.autonomous).toBe(false);
   });
 
+// Case: skips the LLM when regex already handled the message.
   it('skips the LLM when regex already handled the message', async () => {
     const model = await import('../llm/modelNaturalLanguageCorrector');
     const spy = vi.spyOn(model, 'parseNaturalLanguageWithModel');

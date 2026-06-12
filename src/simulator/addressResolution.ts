@@ -1,9 +1,13 @@
 import type { NlCorrectionContext } from './llm/intentTypes';
+// Simulator support for addressResolution.
 
+// Internal helper: stripRef.
 const stripRef = (token: string) => token.replace(/^\$/, '').split(':')[0].trim();
 
+// Internal helper: escapeRegex.
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Internal helper: tokenExistsInSource.
 const tokenExistsInSource = (token: string, source: string) => (
   new RegExp(`\\b${escapeRegex(token)}\\b`).test(source)
 );
@@ -54,6 +58,7 @@ export const formatAddressLabel = (address: string, context: NlCorrectionContext
     if (param) return `${address} (${param[1]})`;
     const base = stripRef(address);
     if (context.inputColumns.includes(base) || context.outputColumns.includes(base)) {
+// Section 1: addressResolution implementation detail.
       return `${address} (register ${base})`;
     }
   }
@@ -116,6 +121,7 @@ export type WireAddressResolution =
 
 // Ambiguous matches surface as clarification options instead of guessing which circuit binding to edit.
 export const resolveWireAddress = (name: string, context: NlCorrectionContext): WireAddressResolution => {
+// Section 2: addressResolution implementation detail.
   const raw = name.trim();
   const bare = raw.replace(/^\$/, '');
   const base = stripRef(bare);

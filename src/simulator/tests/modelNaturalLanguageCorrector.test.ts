@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseNaturalLanguageWithModel, sanitizeIntent } from '../llm/modelNaturalLanguageCorrector';
+// Regression coverage for modelNaturalLanguageCorrector behavior.
 
 const context = {
   source: 'PARAMS: A:state B:state Cin:state',
@@ -52,16 +53,19 @@ describe('sanitizeIntent', () => {
   });
 });
 
+// Test group: parseNaturalLanguageWithModel.
 describe('parseNaturalLanguageWithModel', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
+// Case: returns null when Ollama is unavailable.
   it('returns null when Ollama is unavailable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     await expect(parseNaturalLanguageWithModel('fix automatically', context)).resolves.toBeNull();
   });
 
+// Case: parses a successful Ollama response.
   it('parses a successful Ollama response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,
@@ -85,4 +89,5 @@ describe('parseNaturalLanguageWithModel', () => {
       guidance: undefined,
     });
   });
+// Keeps modelNaturalLanguageCorrector.test wiring explicit for maintainers.
 });

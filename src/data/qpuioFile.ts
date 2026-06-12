@@ -5,6 +5,7 @@ import { isTruthCellValue, parseTruthTableJson } from '../simulator/truthTable';
 export { companionQpuioFileName, qpuioTxtFileNameForProcess } from './qpuFileNames';
 
 export type QpuioPayload = {
+// Catalog/data helper for qpuioFile.
   format: 'qpuio';
   version: 1;
   processName: string;
@@ -18,11 +19,15 @@ export type ParsedQpuio = {
   truthTable: TruthTable;
 };
 
+// Internal helper: MAIN_PROCESS_PATTERN.
 const MAIN_PROCESS_PATTERN = /^MAIN-PROCESS:\s*(\S+)/i;
 
+// Internal helper: INPUTS_PATTERN.
 const INPUTS_PATTERN = /^INPUTS:\s*(.*)$/i;
+// Internal helper: OUTPUTS_PATTERN.
 const OUTPUTS_PATTERN = /^OUTPUTS:\s*(.+)$/i;
 
+// Internal helper: stripInlineComment.
 const stripInlineComment = (line: string) => line.replace(/\s+#.*$/, '').trim();
 
 const splitDataLine = (line: string): string[] => {
@@ -43,6 +48,7 @@ const splitColumnNames = (line: string): string[] => {
 const resolveColumnGroups = (
   columnNames: string[],
   options: { protocolSource?: string; declaredInputs?: string[]; declaredOutputs?: string[] },
+// Section 1: qpuioFile implementation detail.
 ): { inputColumns: string[]; outputColumns: string[] } => {
   if (options.declaredOutputs?.length !== undefined && options.declaredOutputs.length > 0) {
     const inputColumns = options.declaredInputs ?? [];
@@ -93,6 +99,7 @@ const parseTextQpuio = (contents: string, protocolSource?: string): ParsedQpuio 
     }
     const outputsMatch = line.match(OUTPUTS_PATTERN);
     if (outputsMatch) {
+// Section 2: qpuioFile implementation detail.
       declaredOutputs = splitDataLine(outputsMatch[1]);
       return;
     }
@@ -143,6 +150,7 @@ const parseTextQpuio = (contents: string, protocolSource?: string): ParsedQpuio 
     });
     rows.push(values as TruthCellValue[]);
   });
+// Section 3: qpuioFile implementation detail.
 
   const { inputColumns, outputColumns } = resolveColumnGroups(columnNames, {
     protocolSource,
@@ -178,6 +186,7 @@ const parseColumnNames = (columns: unknown, label: string): string[] => {
   });
 };
 
+// Internal helper: parseJsonRows.
 const parseJsonRows = (
   rows: unknown,
   inputColumns: string[],
@@ -192,6 +201,7 @@ const parseJsonRows = (
       throw new Error(`Row ${rowIndex} must be an array.`);
     }
     if (row.length !== expectedWidth) {
+// Section 4: qpuioFile implementation detail.
       throw new Error(`Row ${rowIndex} has ${row.length} cell(s); expected ${expectedWidth}.`);
     }
     return row.map((cell, columnIndex) => {
@@ -242,6 +252,7 @@ export const parseQpuioPayload = (contents: string, protocolSource?: string): Pa
   }
   return parseTextQpuio(contents, protocolSource);
 };
+// Section 5: qpuioFile implementation detail.
 
 export const createQpuioPayload = (
   processName: string,

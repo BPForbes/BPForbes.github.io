@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import { companionQpuioFileName, createQpuioPayload, parseQpuioPayload, serializeQpuioText } from '../qpuioFile';
 import { singleBitFullAdderTruthTable, truthTablesEqual } from '../../simulator/truthTable';
+// Regression coverage for qpuioFile behavior.
 
 const readProcess = (fileName: string) => readFileSync(new URL(`../processes/${fileName}`, import.meta.url), 'utf8');
 
@@ -77,6 +78,7 @@ RETURNVALS Y`);
     expect(companionQpuioFileName('custom-upload')).toBe('custom-upload.qpuio');
   });
 
+// Case: parses valid JSON qpuio envelopes.
   it('parses valid JSON qpuio envelopes', () => {
     const table = singleBitFullAdderTruthTable();
     const payload = createQpuioPayload('SingleBitFullAdder', table);
@@ -85,18 +87,21 @@ RETURNVALS Y`);
     expect(truthTablesEqual(parsed.truthTable, table)).toBe(true);
   });
 
+// Case: rejects JSON qpuio envelopes with unsupported versions.
   it('rejects JSON qpuio envelopes with unsupported versions', () => {
     const table = singleBitFullAdderTruthTable();
     const payload = { ...createQpuioPayload('SingleBitFullAdder', table), version: 2 };
     expect(() => parseQpuioPayload(JSON.stringify(payload), protocol)).toThrow(/version to 1/i);
   });
 
+// Case: rejects JSON qpuio envelopes missing processName.
   it('rejects JSON qpuio envelopes missing processName', () => {
     const table = singleBitFullAdderTruthTable();
     const payload = { ...createQpuioPayload('SingleBitFullAdder', table), processName: '  ' };
     expect(() => parseQpuioPayload(JSON.stringify(payload), protocol)).toThrow(/processName/i);
   });
 
+// Case: rejects JSON qpuio envelopes with non-string column names.
   it('rejects JSON qpuio envelopes with non-string column names', () => {
     const table = singleBitFullAdderTruthTable();
     const payload = createQpuioPayload('SingleBitFullAdder', table);
@@ -104,6 +109,7 @@ RETURNVALS Y`);
     expect(() => parseQpuioPayload(JSON.stringify(payload), protocol)).toThrow(/inputColumns\[0\] must be a string/i);
   });
 
+// Case: rejects JSON qpuio envelopes with invalid row cells.
   it('rejects JSON qpuio envelopes with invalid row cells', () => {
     const table = singleBitFullAdderTruthTable();
     const payload = createQpuioPayload('SingleBitFullAdder', table);

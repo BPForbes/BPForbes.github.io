@@ -34,6 +34,7 @@ export {
   testCircuitAgainstTruthTable,
   truthTablesEqual,
   validateTruthTable,
+// Section 1: moduleTestApi implementation detail.
 } from './truthTable';
 
 export {
@@ -70,6 +71,7 @@ import {
 // Module-test requests can run read-only checks or propagate corrections through child processes with truth tables.
 export type ModuleTestRequest = {
   source: string;
+// Section 2: moduleTestApi implementation detail.
   truthTable?: TruthTable;
   librarySources?: Record<string, string>;
   guidance?: CorrectionGuidance;
@@ -106,6 +108,7 @@ export const runModuleTest = (request: ModuleTestRequest): ModuleTestResponse =>
     const childResult = correctChildProcessesForCompatibility(
       request.processName,
       librarySources,
+// Section 3: moduleTestApi implementation detail.
       request.getTruthTable,
       request.guidance,
       request.autonomous ?? true,

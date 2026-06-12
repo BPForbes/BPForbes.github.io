@@ -1,6 +1,7 @@
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { applyControlledZ } from '../operations';
+// CZ gate palette entry and apply hook for the shared registry.
 
 export const czGate: GateDefinition = {
   id: 'CZ',
@@ -15,6 +16,7 @@ export const czGate: GateDefinition = {
   supportsReverse: true,
   supportsPhase: false,
   cssClass: 'gate-cz',
+  // apply hook wires simulator state through the shared operations layer.
   apply: ({ state, qubitCount, gate, measurements }) => {
     const target = gate.targets[0];
     return {

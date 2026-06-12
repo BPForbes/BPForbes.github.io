@@ -1,5 +1,6 @@
 import { configuredProcesses } from './protocolExamples';
 import {
+// Catalog/data helper for processCatalog.
   enforceProtectedTruthTable,
   getProtectedQpuioFileName,
   getProtectedTruthTable,
@@ -28,8 +29,10 @@ export type ProcessCatalogEntry = {
   updatedAt: string;
 };
 
+// Internal helper: STORAGE_KEY.
 const STORAGE_KEY = 'qpu-process-catalog-v1';
 
+// Internal helper: catalog.
 const catalog = new Map<string, ProcessCatalogEntry>();
 
 let catalogVersion = 0;
@@ -43,10 +46,13 @@ const invalidateCatalogCache = () => {
   libraryCache = null;
 };
 
+// Public API: getCatalogVersion.
 export const getCatalogVersion = () => catalogVersion;
 
+// Internal helper: entryIdForName.
 const entryIdForName = (name: string) => name.trim().toLowerCase();
 
+// Internal helper: summarizeSource.
 const summarizeSource = (source: string, maxLines = 6) => source
   .replace(/\r\n/g, '\n')
   .split('\n')
@@ -73,6 +79,7 @@ const protocolSignatureMatches = (leftSource: string, rightSource: string) => {
   return left.inputs.join() === right.inputs.join() && left.outputs.join() === right.outputs.join();
 };
 
+// Internal helper: canonicalProtectedTruthTableFileName.
 const canonicalProtectedTruthTableFileName = (processName: string, fallback?: string) => (
   isProtectedQpuioProcess(processName)
     ? getProtectedQpuioFileName(processName) ?? fallback
@@ -222,12 +229,16 @@ export const getCatalogTruthTable = (processName: string): TruthTable | undefine
   return getCatalogEntry(processName)?.truthTable;
 };
 
+// Public API: isCatalogTruthTableProtected.
 export const isCatalogTruthTableProtected = (processName: string) => isProtectedQpuioProcess(processName);
 
+// Public API: getCatalogEntries.
 export const getCatalogEntries = (): ProcessCatalogEntry[] => (
   Array.from(catalog.values()).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+// Section 1: processCatalog implementation detail.
 );
 
+// Public API: getCatalogEntry.
 export const getCatalogEntry = (name: string): ProcessCatalogEntry | undefined => (
   catalog.get(entryIdForName(name))
 );
@@ -328,6 +339,7 @@ export const buildProcessCatalogSummaries = (): ProcessCatalogSummary[] => {
   return summariesCache;
 };
 
+// Public API: formatCatalogForPrompt.
 export const formatCatalogForPrompt = (
   entries: ProcessCatalogSummary[] = buildProcessCatalogSummaries(),
   options: { compact?: boolean } = {},

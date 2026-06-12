@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { angularPeakedIntegral, blochBallRhoExpectationFast, radialPeakedIntegral } from '../blochQuadrature';
+// Regression coverage for blochQuadrature behavior.
 
 /** Legacy O(n³) reference integrator for regression checks only. */
 const blochBallRhoExpectationGrid = (
@@ -53,6 +54,7 @@ describe('blochQuadrature', () => {
     expect(angular).toBeGreaterThan(0);
   });
 
+// Case: matches coarse grid quadrature within tolerance.
   it('matches coarse grid quadrature within tolerance', () => {
     const args = [0.4, Math.PI / 3, Math.PI / 6, 0.6] as const;
     const fast = blochBallRhoExpectationFast(...args);

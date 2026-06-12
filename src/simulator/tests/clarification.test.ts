@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+// Regression coverage for clarification behavior.
   formatClarificationPrompt,
   resolveClarificationResponse,
 } from '../clarification';
@@ -25,6 +26,7 @@ describe('clarification helpers', () => {
     expect(resolveClarificationResponse('option 1', pending)?.command).toBe('open SingleBitFullAdder');
   });
 
+// Case: resolves label replies.
   it('resolves label replies', () => {
     expect(resolveClarificationResponse('TwoBitFullAdder', pending)?.command).toBe('open TwoBitFullAdder');
   });

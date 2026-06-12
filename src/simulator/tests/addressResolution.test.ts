@@ -1,6 +1,7 @@
 import { readFileSync } from 'fs';
 import { describe, expect, it } from 'vitest';
 import {
+// Regression coverage for addressResolution behavior.
   formatAddressLabel,
   getAddressCandidates,
   resolveWireAddress,
@@ -51,7 +52,9 @@ describe('resolveWireAddress', () => {
   });
 });
 
+// Test group: formatAddressLabel.
 describe('formatAddressLabel', () => {
+// Case: shows param aliases for wire addresses.
   it('shows param aliases for wire addresses', () => {
     expect(formatAddressLabel('0:0', singleBitContext)).toBe('0:0 ($A)');
     expect(formatAddressLabel('A0:0', twoBitContext)).toBe('A0:0 ($A0)');

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ONE, scale, ZERO } from '../complex';
 import { measureQubit, padStateVector, prepareZeroQubit } from '../gates/operations';
+// Regression coverage for operations behavior.
 
 describe('operations', () => {
   it('pads state vectors by shifting indices for appended |0⟩ wires', () => {
@@ -33,6 +34,7 @@ describe('operations', () => {
     expect(reset[3].re).toBeCloseTo(0, 5);
   });
 
+// Case: never collapses to an all-zero state when random equals 1 and P(1) is 1.
   it('never collapses to an all-zero state when random equals 1 and P(1) is 1', () => {
     const state = [ZERO, ONE];
     const measured = measureQubit(state, 1, 0, 1);
