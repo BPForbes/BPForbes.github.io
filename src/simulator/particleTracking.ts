@@ -10,13 +10,10 @@ export type BlochVector = {
   z: number;
 };
 
-/** Spherical coordinates on the Bloch ball. */
+// Spherical coordinates on the Bloch ball: r is radial, θ is polar from +Z, and φ is azimuthal.
 export type SphericalCoordinates = {
-  /** Radial coordinate in [0, 1]; 1 is the pure-state surface. */
   r: number;
-  /** Polar angle θ from +Z in radians. */
   theta: number;
-  /** Azimuthal angle φ in radians. */
   phi: number;
 };
 
@@ -29,15 +26,11 @@ export type PsiKet = {
   formatted: string;
 };
 
-/** Mixed-state / noise metrics from the Bloch-ball density model. */
+// Mixed-state metrics summarize Bloch length, Tr(ρ²), unit-ball density expectation, and depolarizing spread.
 export type MixedStateMetrics = {
-  /** Bloch-vector length r in [0, 1]. */
   purity: number;
-  /** Tr(ρ²) for the single-qubit marginal. */
   traceRhoSquared: number;
-  /** ⟨ρ⟩ = ∫ ρ(r,θ,φ) r² sinθ dr dθ dφ over the unit ball. */
   rhoExpectation: number;
-  /** 1 − purity; grows with depolarizing spread. */
   noise: number;
   isPure: boolean;
 };

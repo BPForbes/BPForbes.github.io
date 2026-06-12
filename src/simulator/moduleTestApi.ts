@@ -67,15 +67,14 @@ import {
   validateTruthTable,
 } from './truthTable';
 
+// Module-test requests can run read-only checks or propagate corrections through child processes with truth tables.
 export type ModuleTestRequest = {
   source: string;
   truthTable?: TruthTable;
   librarySources?: Record<string, string>;
   guidance?: CorrectionGuidance;
   autonomous?: boolean;
-  /** When false, only test and report failures without mutating the circuit. */
   correct?: boolean;
-  /** When correcting, also test and fix declared child processes that have truth tables. */
   propagateToChildren?: boolean;
   processName?: string;
   getTruthTable?: (processName: string) => TruthTable | undefined;

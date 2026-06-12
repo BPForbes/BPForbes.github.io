@@ -30,18 +30,15 @@ export type ReturnValue = {
   qubitIndex: number;
 };
 
+// Compile output separates physical simulator width from user-facing PARAMS/RETURNVALS mappings.
 export type CompileResult = {
   gates: CircuitGate[];
-  /** Physical registers used by the compiled circuit. */
   qubitCount: number;
-  /** Ket width for RETURNVALS outputs when present, otherwise process parameter count. */
   logicalQubitCount: number;
   parsed: ParsedCommand[];
   log: string[];
   tokenMap: Record<string, number>;
-  /** User-facing inputs from the PARAMS line only (excludes ancilla and reset targets). */
   processParams: ProcessParam[];
-  /** Output registers from RETURNVALS; drive the displayed ket. */
   returnValues: ReturnValue[];
 };
 

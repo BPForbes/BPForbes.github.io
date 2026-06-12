@@ -5,7 +5,7 @@
  * one-dimensional estimates suitable for UI feedback rather than research-grade
  * numerical simulation. Background: https://en.wikipedia.org/wiki/Bloch_sphere
  */
-/** Fixed-order Gauss–Legendre nodes/weights on [-1, 1] (n = 10). */
+// Fixed-order Gauss–Legendre nodes and weights on [-1, 1] (n = 10).
 const GL_NODES = [
   -0.973906528517172, -0.865063366688985, -0.679409568299024, -0.43388843412695, -0.148874338981631,
   0.148874338981631, 0.43388843412695, 0.679409568299024, 0.865063366688985, 0.973906528517172,
@@ -30,7 +30,7 @@ const angularDistance = (thetaA: number, phiA: number, thetaB: number, phiB: num
   return Math.acos(dot);
 };
 
-/** ∫₀¹ r² exp(-(r-r₀)²/(2σ²)) dr — O(1) Gauss–Legendre on [0,1]. */
+// Separable peaked integrals use fixed Gauss–Legendre samples for radial and angular terms.
 export const radialPeakedIntegral = (r0: number, spread: number): number => {
   let sum = 0;
   for (let index = 0; index < GL_NODES.length; index += 1) {
@@ -42,7 +42,6 @@ export const radialPeakedIntegral = (r0: number, spread: number): number => {
   return sum;
 };
 
-/** ∫₀^π ∫₀^2π sinθ exp(-d²/(2σ²)) dθ dφ — O(1) tensor Gauss–Legendre. */
 export const angularPeakedIntegral = (theta0: number, phi0: number, spread: number): number => {
   let sum = 0;
   for (let muIndex = 0; muIndex < GL_NODES.length; muIndex += 1) {

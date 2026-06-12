@@ -5,7 +5,7 @@
  * restrictive file-picker fallbacks aligned for `.qpucir`, `.qpuio`, and tagged
  * `.txt` variants.
  */
-/** Canonical types remain .qpucir / .qpuio; tagged .txt names are an additive alias for file pickers that mishandle custom extensions. */
+// Canonical types remain .qpucir/.qpuio; tagged .txt aliases support restrictive file pickers.
 export const QPUCIR_TXT_MARKER = '-qpucir';
 export const QPUIO_TXT_MARKER = '-qpuio';
 

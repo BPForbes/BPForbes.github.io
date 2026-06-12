@@ -28,7 +28,7 @@ export type PreconfiguredGateType =
   | 'OR'
   | 'XOR';
 
-/** Built-in gates plus user-registered custom gate ids. */
+// Gate identifiers include the built-in set plus user-registered custom ids.
 export type GateType = PreconfiguredGateType | (string & {});
 
 export type ParticleStartState = '0p' | '1p' | 'sp';
@@ -128,12 +128,11 @@ export type {
   SphericalCoordinates,
 } from './particleTracking';
 
+// Execution results may include optional particle snapshots and per-gate transitions when tracing is enabled.
 export type ExecutionResult = {
   state: Complex[];
   measurements: MeasurementMap;
   log: string[];
-  /** Latest per-qubit spherical snapshots after this execution step. */
   particles?: import('./particleTracking').ParticleSnapshot[];
-  /** Per-gate particle transitions when execution tracing is enabled. */
   transitions?: import('./particleTracking').OperationTransition[];
 };

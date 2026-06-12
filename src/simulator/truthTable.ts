@@ -13,16 +13,13 @@ export type TruthTable = {
 
 export const cloneTruthTable = (table: TruthTable): TruthTable => structuredClone(table);
 
-// Dimensions track both the combinatorial protocol space and the rows actually listed for partial tables.
+// Dimensions cover full combinatorial row counts plus optional listed-row metadata for partial tables.
 export type TruthTableDimensions = {
-  /** Full combinatorial row count from PARAMS (2^n), or 1/0 when there are no state inputs. */
   rowCount: number;
   columnCount: number;
   inputCount: number;
   outputCount: number;
-  /** Rows actually listed in the table, when known. */
   listedRowCount?: number;
-  /** True when listed rows are fewer than the combinatorial maximum. */
   isPartial?: boolean;
 };
 
