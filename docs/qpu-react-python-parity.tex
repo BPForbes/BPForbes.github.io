@@ -7,6 +7,7 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{amsmath,amssymb,amsfonts,mathtools}
 \usepackage{booktabs}
+\usepackage{longtable}
 \usepackage{enumitem}
 \usepackage{hyperref}
 \usepackage{listings}
@@ -95,7 +96,7 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
 \begin{quote}
 \textbf{P1 (semantic parity):} For every supported protocol command, the observable outputs (measurements, return values, truth-table rows, and Hilbert log entries) must match Python within tolerance $\varepsilon_a=10^{-6}$ on amplitudes and $\varepsilon_p=10^{-4}$ on probabilities.
 
-\textbf{P2 (static-site only):} Parity features ship inside the Vite bundle. No \texttt{VITE\_QPU\_API\_URL}, no Express/Fastify host, no server sessions. Long work uses \textbf{Web Workers}; persistence uses \textbf{localStorage}, \textbf{sessionStorage}, \textbf{IndexedDB}, and \textbf{Blob} file I/O (patterns already used by the catalog and \texttt{downloadQpucirSource}).
+\textbf{P2 (static-site first):} The shipped artifact remains the Vite bundle on GitHub Pages. Default execution is in-browser (\texttt{SimulationSession}). An \textbf{optional} remote sidecar may be called via \texttt{fetch}/\texttt{async}/\texttt{await} when \texttt{VITE\_QPU\_API\_URL} is set; the SPA never \emph{requires} a server. Long local work uses \textbf{Web Workers}; persistence uses browser storage and \textbf{Blob} file I/O.
 
 \textbf{P3 (forward-compatible data):} All export formats gain an explicit \texttt{version} field and migration path; protected bundled \texttt{.qpuio} truth tables are never mutated in place.
 
@@ -116,14 +117,16 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
   \node[box, below=of pages] (ui) {React UI\\\texttt{src/components/}};
   \node[box, below right=of pages] (store) {Browser storage\\+\,file I/O};
   \node[box, below=of sim] (worker) {Web Worker\\(correction only)};
+  \node[box, right=1.6cm of store] (sidecar) {Optional sidecar\\(separate deploy)};
   \draw[->] (ui) -- (sim);
   \draw[->] (sim) -- (store);
   \draw[->, dashed] (ui) -- (worker);
   \draw[->, dashed] (worker) -- (sim);
+  \draw[->, dashed] (ui) -- node[above, font=\scriptsize] {fetch} (sidecar);
 \end{tikzpicture}
 \end{center}
 
-\noindent\textbf{Out of scope for this plan:} HTTP session APIs, server-side mutexes, multi-tenant hosting, server GC. Cross-tab sharing is optional via \texttt{BroadcastChannel} + exported \texttt{qpu-session} files, not a backend.
+\noindent\textbf{Optional (not shipped on Pages):} a sidecar HTTP service deployable separately; the static client talks to it only through \texttt{src/simulator/client/qpuFetchClient.ts}. \textbf{Out of scope:} multi-tenant hosting, mandatory backend, bundling Express into \texttt{dist/}.
 
 \subsection{GitHub Actions (CI/CD and scripted validation)}
 
@@ -178,7 +181,7 @@ Secrets are not required for public build/test/deploy. Ollama/LLM integration te
 \begin{itemize}[noitemsep]
   \item \textbf{Browser (Pages):} interactive sim, UI, in-tab \texttt{SimulationSession}, Workers.
   \item \textbf{GitHub Actions:} regression gates, Python parity batches, schema validation, deploy.
-  \item \textbf{Not used:} application server, sidecar API, server-side sim sessions.
+  \item \textbf{Optional sidecar:} separate host; static client uses \texttt{fetch} when configured.
 \end{itemize}
 
 %=============================================================================
@@ -554,10 +557,15 @@ export class StateVector {
 Sparse/dense hybrid remains Phase~II; initial parity uses dense arrays identical to today's \texttt{engine.ts} loops.
 
 %=============================================================================
-\section{Client API (in-browser, no HTTP)}
+\section{Client API (local session + optional \texttt{fetch})}
 %=============================================================================
 
-All ``API'' surface area is \textbf{TypeScript functions and types} imported by React components and tests. There is no network boundary inside the parity plan.
+The client API has two backends with the \textbf{same TypeScript types}:
+\begin{enumerate}[noitemsep]
+  \item \textbf{Local} (default): \texttt{SimulationSession} in the tab---no network.
+  \item \textbf{Remote} (optional): \texttt{qpuFetchClient.ts} calls a sidecar with \texttt{fetch}/\texttt{async}/\texttt{await} when \texttt{VITE\_QPU\_API\_URL} is set.
+\end{enumerate}
+React components call a thin \texttt{QpuClient} interface; the provider selects local vs remote at boot.
 
 \subsection{Core entry points (\texttt{moduleTestApi.ts} + session facade)}
 
@@ -611,15 +619,16 @@ Method & Purpose \\
 \end{tabular}
 \end{center}
 
-Sessions live in a \texttt{Map} inside a React context provider (\texttt{SimulationProvider}) or module singleton; they are \textbf{not} addressable over HTTP.
+Local sessions live in a \texttt{Map} inside \texttt{SimulationProvider}. Remote sessions use a server-issued \texttt{sessionId} obtained via \texttt{fetch}.
 
-\subsection{Result types and error codes (no HTTP)}
+\subsection{Result types and error codes (local and remote)}
 
 Use a uniform discriminated union instead of status codes:
 \begin{lstlisting}[style=protocol]
 type QpuErrorCode =
   | 'COMPILE_ERROR' | 'STATE_CORRUPT' | 'VERSION_UNSUPPORTED'
-  | 'CHECKPOINT_NOT_FOUND' | 'VALIDATION_FAILED' | 'WORKER_FAILED';
+  | 'CHECKPOINT_NOT_FOUND' | 'VALIDATION_FAILED' | 'WORKER_FAILED'
+  | 'HTTP_ERROR' | 'SESSION_NOT_FOUND' | 'SESSION_CONFLICT';
 
 type QpuResult<T> =
   | { ok: true; value: T }
@@ -700,6 +709,101 @@ const onRun = () => {
   setExecution(result.value);
 };
 \end{lstlisting}
+
+\subsection{Optional remote client (\texttt{fetch} + \texttt{async}/\texttt{await})}
+
+When \texttt{import.meta.env.VITE\_QPU\_API\_URL} is defined, \texttt{QpuClient} delegates to the sidecar. Responses use the same JSON shapes as local \texttt{ExecutionResult}, \texttt{HilbertEntry[]}, and \texttt{ParticleSnapshot[]}.
+
+\textbf{Endpoints} (sidecar contract; mirror local session methods):
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+HTTP & Path & Returns \\
+\midrule
+POST & \texttt{/v1/sessions} & \texttt{\{ sessionId, revision \}} \\
+POST & \texttt{/v1/sessions/\{id\}/run} & \texttt{ExecutionResult} (+ particles if \texttt{trackParticles}) \\
+POST & \texttt{/v1/sessions/\{id\}/step} & \texttt{ExecutionResult} \\
+GET  & \texttt{/v1/sessions/\{id\}/state} & global state vector (\textbf{state space} $\C^{2^n}$) \\
+GET  & \texttt{/v1/sessions/\{id\}/hilbert} & \texttt{HilbertEntry[]} ($\HS$ audit log) \\
+GET  & \texttt{/v1/sessions/\{id\}/bloch} & \texttt{ParticleSnapshot[]} + \texttt{OperationTransition[]} \\
+POST & \texttt{/v1/test} & \texttt{ModuleTestResponse} \\
+DELETE & \texttt{/v1/sessions/\{id\}} & void \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Terminology:} \emph{state space} = full amplitude vector $\ket{\Psi}\in\C^{2^n}$; \emph{Hilbert log} $\HS$ = register@cycle audit trail; \emph{particle view} = per-qubit Bloch/\texttt{ParticleSnapshot} and gate \texttt{OperationTransition} deltas.
+
+\textbf{TypeScript fetch client} (pattern):
+\begin{lstlisting}[style=code]
+// simulator/client/qpuFetchClient.ts (proposed)
+const baseUrl = () => import.meta.env.VITE_QPU_API_URL?.replace(/\/$/, '') ?? '';
+
+async function qpuFetch<T>(path: string, init?: RequestInit): Promise<QpuResult<T>> {
+  try {
+    const response = await fetch(`${baseUrl()}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      return {
+        ok: false,
+        error: {
+          code: body?.error?.code ?? 'HTTP_ERROR',
+          message: body?.error?.message ?? `HTTP ${response.status}`,
+          details: body?.error?.details,
+        },
+      };
+    }
+    return { ok: true, value: body as T };
+  } catch (error) {
+    return { ok: false, error: { code: 'HTTP_ERROR', message: String(error) } };
+  }
+}
+
+export async function fetchHilbertLog(sessionId: string): Promise<QpuResult<HilbertEntry[]>> {
+  return qpuFetch<HilbertEntry[]>(`/v1/sessions/${sessionId}/hilbert`);
+}
+
+export async function fetchStateVector(sessionId: string): Promise<QpuResult<Complex[]>> {
+  return qpuFetch<{ amplitudes: Complex[] }>(`/v1/sessions/${sessionId}/state`)
+    .then((r) => (r.ok ? { ok: true, value: r.value.amplitudes } : r));
+}
+
+export async function fetchParticleSnapshots(
+  sessionId: string,
+): Promise<QpuResult<{ particles: ParticleSnapshot[]; transitions: OperationTransition[] }>> {
+  return qpuFetch(`/v1/sessions/${sessionId}/bloch`);
+}
+
+export async function runRemoteStep(sessionId: string, revision: number): Promise<QpuResult<ExecutionResult>> {
+  return qpuFetch<ExecutionResult>(`/v1/sessions/${sessionId}/step`, {
+    method: 'POST',
+    headers: { 'If-Match': String(revision) },
+  });
+}
+\end{lstlisting}
+
+\textbf{React usage} (same \texttt{async}/\texttt{await} style as the Ollama client):
+\begin{lstlisting}[style=code]
+// components/HilbertInspector.tsx (pattern)
+async function loadHilbert(sessionId: string) {
+  try {
+    const result = await fetchHilbertLog(sessionId);
+    if (!result.ok) throw new Error(result.error.message);
+    setEntries(result.value);
+  } catch (error) {
+    console.error('Failed to fetch Hilbert log:', error);
+  }
+}
+\end{lstlisting}
+
+\textbf{Remote error HTTP mapping:} \texttt{400/422} $\rightarrow$ \texttt{VALIDATION\_FAILED}/\texttt{COMPILE\_ERROR}; \texttt{404} $\rightarrow$ \texttt{SESSION\_NOT\_FOUND}; \texttt{409} $\rightarrow$ \texttt{SESSION\_CONFLICT}; body always uses \texttt{\{ error: \{ code, message, details \} \}}.
+
+\textbf{Fallback:} if \texttt{VITE\_QPU\_API\_URL} is unset or \texttt{fetch} fails, \texttt{QpuClient} uses local \texttt{SimulationSession} (offline-capable static site).
 
 %=============================================================================
 \section{Circuit builder updates}
@@ -899,6 +1003,7 @@ For each bundled process $P$ and truth-table row $\mathbf{x}$:
   \item \texttt{qpucir v2}, \texttt{qpucirMigrate.ts}, catalog v2; \texttt{qpu-session} export/import.
   \item \texttt{correctionWorker.ts} for long jobs; optional IndexedDB session cache.
   \item \texttt{ci.yml} (\texttt{npm test} on PR); optional \texttt{parity-python.yml} for scripted cross-impl checks.
+  \item \texttt{qpuFetchClient.ts} + optional sidecar deploy (not bundled into Pages).
   \item Sparse \texttt{StateVector}; WebGPU (\texttt{webGpu.ts} probe exists, no backend yet).
 \end{enumerate}
 
@@ -906,6 +1011,98 @@ For each bundled process $P$ and truth-table row $\mathbf{x}$:
 \section{Summary}
 %=============================================================================
 
-Parity is achievable \textbf{entirely on GitHub Pages}: cycle-capable executor with destructive-pop $\HS$ (Python semantics); math layers extending marginal $\rho_k$, Euler ket, and triple-integral $\langle\rho\rangle$; \texttt{SimulationSession} + \texttt{QpuResult} client API; versioned file exports; Web Workers for heavy correction. \textbf{No application backend} is required; \textbf{GitHub Actions} automates build, test, deploy, and optional Python cross-validation scripts. Verified gaps in \texttt{src/}: HilbertSpace, cycle runtime, checkpoints, noise, \texttt{SimulationSession}, correction Worker, and CI test gate (\texttt{deploy-pages.yml} builds without \texttt{npm test}).
+Parity is achievable on \textbf{GitHub Pages} by default: cycle executor, $\HS$ log, particle math, \texttt{SimulationSession}, Workers, and file exports. An \textbf{optional} sidecar extends the same \texttt{QpuClient} types via \texttt{fetch}. \textbf{GitHub Actions} automates CI/deploy. Verified gaps in \texttt{src/}: HilbertSpace, cycle runtime, checkpoints, noise, \texttt{SimulationSession}, \texttt{qpuFetchClient}, correction Worker.
+
+%=============================================================================
+\appendix
+\section{Symbol and variable glossary}
+\label{app:glossary}
+%=============================================================================
+
+\subsection{State spaces and logs}
+
+\begin{center}
+\small
+\begin{longtable}{@{}p{2.2cm}p{4.2cm}p{7.5cm}@{}}
+\toprule
+Symbol & Name & Meaning \\
+\midrule
+\endhead
+$\ket{\psi}$, $\ket{\Psi}$ & State ket & Complex amplitude vector; $\ket{\Psi}\in\C^{2^n}$ for $n$ qubits (\textbf{state space}). \\
+$\HS$ & Hilbert log & Register@cycle audit map $(r,c)\mapsto\C^{2^k}$; \textbf{not} the full state space. Python \texttt{HilbertSpace}. \\
+\texttt{\_\_all\_\_} & Global snapshot key & Full $\ket{\Psi}$ recorded at cycle $c$ via \texttt{outputAll}. \\
+$M_c$ & Memory map & Register values available at simulation cycle $c$ (cycle mode). \\
+$c$, $c_{\max}$ & Cycle index & Discrete protocol clock; $c_{\max}$ caps Hilbert parity tests. \\
+$n$, $k$ & Qubit counts & $n$ wires in global state; $k$ target wire index ($0\le k<n$). \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{Amplitudes, noise, and device parameters}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{2.2cm}p{4.2cm}p{7.5cm}@{}}
+\toprule
+Symbol & Name & Meaning \\
+\midrule
+$a_i$ & Amplitude & Component of state vector at basis index $i$; JSON \texttt{\{re, im\}}. \\
+$\varepsilon_a$ & Amplitude tolerance & $10^{-6}$; used in parity and Hilbert amplitude compares. \\
+$\varepsilon_p$ & Probability tolerance & $10^{-4}$ for probabilities, purity display. \\
+$\tau$ & Prune threshold & $10^{-12}$; amplitudes with $|a_i|<\tau$ treated as zero. \\
+$\Delta t$ & Time step & Idle noise interval between \texttt{INCREASECYCLE} ticks (model units). \\
+$T_1$ & Relaxation time & Amplitude-damping time constant per qubit (device table col.\ 2). \\
+$T_2$ & Dephasing time & Phase-damping time constant per qubit (device table col.\ 3). \\
+$p_1$ & Amp.\ damping prob. & $p_1 = 1 - e^{-\Delta t/T_1}$; chance of $E_1$ Kraus branch. \\
+$p_\phi$ & Phase damping prob. & $p_\phi = 1 - e^{-\Delta t/T_2}$; dephasing strength per idle step. \\
+$p_{\mathrm{dep}}$ & Depolarizing prob. & Probability of random Pauli $X,Y,Z$ on idle step. \\
+$p_{\mathrm{ro}}$ & Readout error & Classical measurement bit-flip probability on \texttt{MEASURE}. \\
+$E_0,E_1$ & Amp.\ Kraus ops & Amplitude-damping operators (\S2.4). \\
+$K_0,K_1$ & Phase Kraus ops & Phase-damping operators (\S2.4). \\
+$f_g$ & Qubit frequency & Device table col.\ 1 (GHz), Python fingerprint. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Density matrix, Bloch sphere, and particles}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{2.2cm}p{4.2cm}p{7.5cm}@{}}
+\toprule
+Symbol & Name & Meaning \\
+\midrule
+$\rho_k$ & Reduced density matrix & Marginal $2\times2$ state of qubit $k$; \texttt{marginalRho}. \\
+$\rho_{ab}$ & $\rho$ element & $a,b\in\{0,1\}$; $\rho_{01}$ off-diagonal encodes coherence. \\
+$\vec{B}_k$ & Bloch vector & $(B_x,B_y,B_z)$ Pauli expectations; $\|\vec{B}_k\|=r$. \\
+$r$ & Bloch length & Purity proxy for marginal; $r=1$ pure, $r<1$ mixed. \\
+$\theta,\phi$ & Bloch angles & Polar/azimuthal on Bloch ball; $\ket{\psi_k}=\cos\frac{\theta}{2}\ket{0}+e^{i\phi}\sin\frac{\theta}{2}\ket{1}$. \\
+$\alpha,\beta$ & Ket coefficients & $\alpha=\cos(\theta/2)$, $\beta=e^{i\phi}\sin(\theta/2)$; \texttt{PsiKet}. \\
+$\langle\rho\rangle$ & Ball density expectation & Triple-integral particle density on unit Bloch ball; \texttt{blochBallRhoExpectation}. \\
+$\eta$, noise & Mixing weight & $\eta=1-r$; blends peaked kernel with uniform ball density. \\
+$\Delta\vec{B}$ & Bloch displacement & $\vec{B}_{\mathrm{after}}-\vec{B}_{\mathrm{before}}$; gate transition metric. \\
+\texttt{ParticleSnapshot} & Particle record & Per-qubit UI object: Bloch, ket, mixed metrics, optional $c$. \\
+\texttt{OperationTransition} & Gate transition & Before/after snapshots + \texttt{particleDelta} list per gate. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{API and client symbols}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{2.8cm}p{10.5cm}@{}}
+\toprule
+Symbol / name & Meaning \\
+\midrule
+\texttt{VITE\_QPU\_API\_URL} & Optional sidecar base URL; unset $\Rightarrow$ local \texttt{SimulationSession} only. \\
+\texttt{sessionId} & Remote session identifier returned by \texttt{POST /v1/sessions}. \\
+\texttt{revision} & Monotonic session version; send as \texttt{If-Match} on remote mutating \texttt{fetch}. \\
+\texttt{QpuResult<T>} & \texttt{\{ok:true,value\}} or \texttt{\{ok:false,error\}}; local and remote unified envelope. \\
+\texttt{trackParticles} & When true, include \texttt{ParticleSnapshot[]} and \texttt{OperationTransition[]} in run/step results. \\
+\texttt{recordHilbert} & When true, populate $\HS$ during cycle-mode execution. \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 \end{document}
