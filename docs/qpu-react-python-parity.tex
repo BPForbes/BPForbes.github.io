@@ -90,6 +90,14 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
   \item \textbf{Device fingerprint}: per-qubit $f$, $T_1$, $T_2$ property table.
   \item Runtime \textbf{checkpoints} (\texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}) and runtime fingerprints.
   \item Ket formatting for arbitrary register dimension (\texttt{format\_qubit\_state}).
+  \item Process \textbf{section hooks} (\texttt{GLOBALPROLOGUE}, \texttt{MAINPROLOGUE}, \texttt{CHILDPROLOGUE}, \texttt{CHILDRENWRAPUP}, \texttt{MAINWRAPUP}).
+  \item \textbf{ClockFrame} stack for nested subprocess cycle numbering.
+  \item Register helpers \texttt{embed\_registers}, \texttt{apply\_gate\_on\_register}, \texttt{rebuild\_global\_state} (reversed Kronecker order).
+  \item \texttt{generate\_complete\_memory\_snapshot} for LLM/debug context.
+  \item \textbf{BB84} demo (\texttt{bb84.py}: Fernet key exchange + encrypt/decrypt).
+  \item \textbf{XMSS} demo (\texttt{xmss.py}: Ed25519 sign/verify; name is historical).
+  \item \textbf{Frequency fingerprint} API \texttt{compare\_frequency\_fingerprints}.
+  \item CLI commands \texttt{RUNTIMEFP}, \texttt{FPRINTMEM}, \texttt{FINGERPRINTMEMORY}, \texttt{QPUFPRINT}, \texttt{SIGNFPRINT}, \texttt{BB84}.
 \end{itemize}
 
 \subsection{Parity principle}
@@ -129,7 +137,7 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
 \end{tikzpicture}
 \end{center}
 
-\noindent\textbf{Optional (not shipped on Pages):} a sidecar HTTP service deployable separately; the static client talks to it only through \texttt{src/simulator/client/qpuFetchClient.ts}. \textbf{Out of scope:} multi-tenant hosting, mandatory backend, bundling Express into \texttt{dist/}.
+\noindent\textbf{Optional sidecar:} deployable separately; static client uses \texttt{qpuFetchClient.ts}. The Pages bundle never embeds Express. Multi-tenant hosting is a later deployment concern, not excluded from the parity \emph{feature} list.
 
 \subsection{GitHub Actions (CI/CD and scripted validation)}
 
@@ -218,11 +226,38 @@ Python maintains:
   \item \texttt{globalState}: $\C^{2^n}$ (authoritative for entangling gates on physical wires).
   \item \texttt{localStates}: map $r\mapsto\C^{2}$ for physical indices.
   \item \texttt{customStates}: map token $\mapsto\C^{2^k}$.
-  \item \texttt{rebuildGlobal()} via Kronecker product consistent with Python \texttt{rebuild\_global\_state}.
-  \item \texttt{extractQubit(k)}: partial trace marginal for wire $k$, normalized.
+  \item \texttt{rebuildGlobal()} via reversed Kronecker product matching Python:
+        \texttt{data = kron(local\_states[-1], \ldots, local\_states[0])} (last register is LSB in Python rebuild).
+  \item \texttt{embedRegisters(...)}: pad smaller registers with $\ket{0}$ to common dimension before controlled ops.
+  \item \texttt{applyGateOnRegister(state, gate, subIndex)}: Kronecker lift of $2\times2$ gate to sub-qubit index within a $2^n$ register.
+  \item \texttt{extractQubit(k)}: configurable---\textbf{flat mode} uses partial trace (\texttt{marginalRho}); \textbf{cycle/register mode} may match Python amplitude-sum for register-slice parity tests.
 \end{itemize}
 
-After every single-qubit gate on physical wire $k$, refresh $\ket{\psi_k}\leftarrow\texttt{extractQubit}(k)$.
+After every single-qubit gate on physical wire $k$ in register mode, refresh $\ket{\psi_k}$ per the active extraction policy.
+
+\subsubsection{Qubit wire index reconciliation (required)}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+Engine & Wire $k$ bit position & Basis label \\
+\midrule
+React \texttt{hasBit} & MSB-left: mask $2^{n-1-k}$ & \texttt{engine.ts}, \texttt{operations.ts} \\
+Python \texttt{StateVector.strides[k]} & LSB-first: \texttt{1 << k} & \texttt{statevector.py} \\
+\midrule
+\multicolumn{3}{l}{Parity tests must translate wire labels; never compare raw index $k$ without mapping.} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{Controlled-gate parity modes (both required)}
+
+\begin{itemize}
+  \item \textbf{Unitary mode} (default flat sim): full \texttt{applyControlledX} on state-vector indices (current React).
+  \item \textbf{Register-classical mode} (cycle parity): replicate Python \texttt{apply\_controlled\_gate} threshold on register slices when \texttt{executionMode==='cycle'} and operands are custom registers.
+\end{itemize}
+Document active mode in \texttt{qpucir} v2 \texttt{execution.controlModel}.
 
 \subsection{Sparse/dense hybrid (optional Phase~2)}
 
@@ -253,7 +288,11 @@ Equivalently: with probability $p_{\mathrm{dep}}$, apply random Pauli $X$, $Y$, 
 
 \textbf{Readout error} on \texttt{MEASURE}: classical bit-flip with probability $p_{\mathrm{ro}}$ (flip reported outcome $0\leftrightarrow 1$ while leaving collapsed state as measured, matching Python \texttt{readout\_error}).
 
-\textbf{Device table} $\mathbf{P}\in\R^{n\times 3}$: columns $(f_g, T_1, T_2)$ per qubit, serializable in session exports.
+\textbf{Device table} $\mathbf{P}\in\R^{n\times 3}$: columns $(f_g, T_1, T_2)$ per qubit, serializable in session exports. Initialized with seeded PRNG (\texttt{deviceTableSeed}) for reproducible parity tests (Python uses \texttt{np.random} at session creation).
+
+\textbf{Frequency fingerprint:} implement \texttt{compareFrequencyFingerprints}$(\vec{f}_1,\vec{f}_2,\delta_{\mathrm{avg}})$ returning normalized Hamming fraction $\#\{|f_{1i}-f_{2i}|>\delta_{\mathrm{avg}}\}/n$ (Python \texttt{compare\_frequency\_fingerprints}).
+
+\textbf{RNG policy:} measurement and noise use \texttt{crypto.getRandomValues()} in production; tests inject seeded \texttt{RandomSource}. Python uses \texttt{secrets.SystemRandom()} for gates/noise and \texttt{np.random} only for device table init.
 
 \subsection{Checkpointing}
 
@@ -982,36 +1021,113 @@ Plain text & \texttt{parseQpucirPayload} today & unchanged \\
 \end{center}
 
 %=============================================================================
-\section{Verification}
+\section{Full Python parity checklist (all items included)}
+\label{sec:full-checklist}
 %=============================================================================
 
-\subsection{Python $\leftrightarrow$ React discrepancies (verified)}
+Policy: \textbf{AGENTS.md} and \texttt{src/data/catalog/agentRules.ts} govern protected assets and Correction Lab behavior; parity work must comply. Reference \texttt{AGENTS.md} in CI and LLM prompts.
+
+\subsection{Cycle interpreter: sections and clock}
+
+\textbf{Section hooks} (Python \texttt{SECTION\_MAP} in \texttt{ast.py}): parse and execute in order:
+\begin{lstlisting}[style=protocol]
+GLOBALPROLOGUE:  MAINPROLOGUE:  CHILDPROLOGUE:
+CHILDRENWRAPUP:  MAINWRAPUP:
+\end{lstlisting}
+Compiler stores per-process sections; \texttt{RUNCHILD} concatenates \texttt{child\_prologue + body + children\_wrapup}; top-level runs \texttt{global + main + body + main\_wrapup}.
+
+\textbf{ClockFrame stack:} \texttt{type ClockFrame = \{ name, base, local \}}; absolute cycle $c=\mathrm{base}+\mathrm{local}$. Push on \texttt{RUNCHILD}, pop on return. \texttt{hilbert.output(r,c,\cdot)} and $M_c$ always use absolute $c$.
+
+\subsection{Protocol surface (syntax + opcodes)}
+
+\textbf{Syntax} (implement in \texttt{readProtocolLines}, verified partial): \texttt{\textbackslash} line continuation, \texttt{\#} and \texttt{/* */} comments.
+
+\textbf{\texttt{FREE -I <k:c ...>}:} remove $M_c$ entries for listed keys at current cycle; clear \texttt{customStates} token if unlocked; prune matching $\HS$ keys; do \textbf{not} shrink global \texttt{StateVector} width (wire compaction is separate).
+
+\textbf{\texttt{sp} token:} add \texttt{spInit: 'hadamard' | 'random'} to \texttt{SessionOptions}. \texttt{'random'} draws $\alpha,\beta$ via \texttt{crypto.getRandomValues()} and normalizes (Python parity). \texttt{'hadamard'} keeps current React \texttt{applyStartState(...,'sp')} for backward compatibility.
+
+\subsection{Debugging and LLM context}
+
+\textbf{\texttt{generateCompleteMemorySnapshot(sim)}:} serialize $M_c$, \texttt{customStates}, measurements, and \texttt{hilbert.view()} into one string for Correction Lab / Module Lab (richer than $\HS$ alone).
+
+\subsection{Cryptographic CLI demos (static-site via Web Crypto)}
+
+Python \texttt{bb84.py} uses Fernet (symmetric); \texttt{xmss.py} uses Ed25519 (named XMSS). Browser parity:
+
+\begin{lstlisting}[style=code]
+// simulator/crypto/bb84Demo.ts (proposed) — Web Crypto AES-GCM or Fernet-compatible via libs
+export async function bb84KeyExchange(): Promise<Uint8Array> {
+  return crypto.getRandomValues(new Uint8Array(32));
+}
+
+// simulator/crypto/xmssDemo.ts (proposed) — Ed25519
+export async function xmssKeygen(): Promise<CryptoKeyPair> {
+  return crypto.subtle.generateKey({ name: 'Ed25519' }, true, ['sign', 'verify']);
+}
+\end{lstlisting}
+
+Expose Module Lab / toolbar actions: \texttt{BB84}, \texttt{SIGNFPRINT} (sign runtime fingerprint bytes with Ed25519), matching Python CLI command names.
+
+\subsection{Runtime fingerprints}
+
+\begin{itemize}
+  \item \texttt{getRuntimeFingerprint()} --- hash of runtime history string (Python \texttt{get\_runtime\_fingerprint}).
+  \item \texttt{processSummary()} --- history + final memory snapshot + ASCII fingerprint.
+  \item \texttt{compareFrequencyFingerprints} --- device $f_g$ vector comparison (\S2.4).
+\end{itemize}
+
+\subsection{Python $\leftrightarrow$ React reconciliation matrix (verified)}
 
 \begin{center}
-\small
-\begin{tabular}{@{}p{0.5cm}p{3.2cm}p{9.8cm}@{}}
+\scriptsize
+\begin{tabular}{@{}p{0.4cm}p{2.8cm}p{5.5cm}p{5.8cm}@{}}
 \toprule
- & Topic & Status \\
+\# & Topic & React today & Required parity action \\
 \midrule
-1 & Qubit bit index & React: MSB-left, \texttt{1 << (n-1-k)} (\texttt{operations.ts}). Python \texttt{StateVector}: \texttt{1 << k}. Cross-impl tests must map wire labels explicitly; do not assume identical $k$. \\
-2 & \texttt{extract\_qubit} & Python sums amplitudes (product-state approx). React uses full state vector + \texttt{marginalRho} (partial trace). TS is authoritative for Bloch display. \\
-3 & Controlled gates & React: unitary \texttt{applyControlledX} over basis indices. Python: classical threshold \texttt{abs(c\_state[1])>0.5} on register slices---no superposition-controlled entanglement. Cycle-mode parity must choose which model to replicate. \\
-4 & \texttt{HilbertSpace.copy} & Python has \texttt{copy()}; required for checkpoints. Added to TS interface above. \\
-5 & \texttt{bb84.py}, \texttt{xmss.py} & \textbf{Out of scope} for this parity target (future phase). \\
-6 & Section hooks & Python \texttt{GLOBALPROLOGUE}/\texttt{MAINPROLOGUE}/\ldots not in React compiler yet; cycle mode must add or emulate. \\
-7 & \texttt{ClockFrame} stack & Python nested subprocess cycle bases; spec cycle mode must document absolute $c = \mathrm{base}+\mathrm{local}$. \\
-8 & Protocol syntax & \textbf{Already in React:} \texttt{readProtocolLines} supports \texttt{\textbackslash} continuation, \texttt{\#}, \texttt{/* */} (\texttt{qpuAst.ts}). \\
-9 & \texttt{embed\_registers} & Python register-padding helper; relevant only if \texttt{RegisterBank} cycle mode mirrors Python register model. \\
-10 & Memory snapshot & Python \texttt{generate\_complete\_memory\_snapshot}; optional LLM context beyond \texttt{hilbert.view()}. \\
-11 & RNG & React today: \texttt{Math.random()} in \texttt{measureQubit} (injectable for tests). Planned noise: prefer \texttt{crypto.getRandomValues()} or seeded PRNG. \\
-12 & Ket display precision & \textbf{Already aligned:} \texttt{formatComplex} uses 3 decimals (\texttt{complex.ts}), matching Python \texttt{\{:.3f\}}. \\
-13 & Device table RNG & Python \texttt{np.random} at init; parity tests should use fixed \texttt{deviceTable} fixture. \\
-14 & \texttt{sp} token & \textbf{Diverges today:} Python random superposition at QPU init; React applies \texttt{H} via \texttt{applyStartState} ($\approx\ket{+}$ from $\ket{0}$), deterministic. \\
-15 & \texttt{FREE} & React compiler logs only; no memory/$\HS$ removal yet (\texttt{qpuAst.ts}). \\
-16 & Frequency fingerprint & Python \texttt{compare\_frequency\_fingerprints}; out of scope until device UI lands. \\
+1 & Qubit index & MSB-left mask & Wire-map table in cross-impl tests \\
+2 & \texttt{extract\_qubit} & \texttt{marginalRho} & Dual policy: flat=trace; cycle=optional sum \\
+3 & Controlled gates & Unitary & Add \texttt{controlModel} register-classical mode \\
+4 & \texttt{HilbertSpace.copy} & Spec only & Implement \texttt{copy()} for checkpoints \\
+5 & \texttt{bb84.py} & None & \texttt{bb84Demo.ts} + UI command \\
+6 & \texttt{xmss.py} & None & \texttt{xmssDemo.ts} + \texttt{SIGNFPRINT} \\
+7 & Section hooks & None & \texttt{SECTION\_MAP} parser in cycle compiler \\
+8 & \texttt{ClockFrame} & None & Stack in \texttt{CycleSimulator} \\
+9 & Protocol syntax & Partial & Document + test all three comment forms \\
+10 & \texttt{embed\_registers} & None & \texttt{RegisterBank.embedRegisters} \\
+11 & Memory snapshot & None & \texttt{generateCompleteMemorySnapshot} \\
+12 & RNG & \texttt{Math.random} & \texttt{crypto.getRandomValues} + injectable seed \\
+13 & Ket format & \texttt{.toFixed(3)} & Keep; assert in \texttt{formatQubitState.test.ts} \\
+14 & Device table & None & Seeded \texttt{deviceTable} + fingerprint UI \\
+15 & \texttt{sp} & Hadamard & Configurable \texttt{spInit} random vs H \\
+16 & \texttt{FREE} & Log only & Full memory/$\HS$ removal \\
+17 & Fingerprint API & None & \texttt{compareFrequencyFingerprints} \\
+18 & \texttt{rebuildGlobal} & N/A & Reversed Kronecker documented in \S2.2 \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\subsection{Python \texttt{unittests.py} $\rightarrow$ Vitest coverage map}
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+Python test area & Vitest target \\
+\midrule
+Gate matrices / truth tables & \texttt{gates.test.ts}, \texttt{truthTable.test.ts} \\
+Child processes & \texttt{childProcess.test.ts} \\
+Hilbert log / cycles & \texttt{hilbertSpace.test.ts}, \texttt{cycleMode.test.ts} \\
+Checkpoints & \texttt{checkpoint.test.ts} \\
+Noise channels & \texttt{noise.test.ts} (new) \\
+BB84 / sign demos & \texttt{bb84Demo.test.ts}, \texttt{xmssDemo.test.ts} (new) \\
+Cross-impl row parity & \texttt{parity-python.yml} + \texttt{parityExport.test.ts} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+%=============================================================================
+\section{Verification}
+%=============================================================================
 
 \subsection{Cross-implementation tests}
 
@@ -1036,21 +1152,21 @@ For each bundled process $P$ and truth-table row $\mathbf{x}$:
 %=============================================================================
 
 \begin{enumerate}[label=\textbf{Phase \Roman*.}]
-  \item \texttt{HilbertSpace} + \texttt{formatQubitState} + cycle executor; lower \texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}.
-  \item \texttt{SimulationSession} facade + \texttt{QpuResult} errors; wire \texttt{App.tsx} / Module Lab.
-  \item \texttt{RegisterBank}, noise, device table; extend particle math kernels.
-  \item \texttt{qpucir v2}, \texttt{qpucirMigrate.ts}, catalog v2; \texttt{qpu-session} export/import.
-  \item \texttt{correctionWorker.ts} for long jobs; optional IndexedDB session cache.
-  \item \texttt{ci.yml} (\texttt{npm test} on PR); optional \texttt{parity-python.yml} for scripted cross-impl checks.
-  \item \texttt{qpuFetchClient.ts} + optional sidecar deploy (not bundled into Pages).
-  \item Sparse \texttt{StateVector}; WebGPU (\texttt{webGpu.ts} probe exists, no backend yet).
+  \item \texttt{HilbertSpace} + \texttt{copy()} + \texttt{formatQubitState}; cycle executor with \texttt{ClockFrame} + \texttt{SECTION\_MAP}.
+  \item \texttt{RegisterBank}: \texttt{embedRegisters}, \texttt{rebuildGlobal}, dual \texttt{controlModel}; \texttt{FREE} + \texttt{spInit}.
+  \item \texttt{SimulationSession} + \texttt{generateCompleteMemorySnapshot}; wire Module Lab / \texttt{AGENTS.md} rules.
+  \item Noise, device table, \texttt{compareFrequencyFingerprints}, runtime fingerprint commands.
+  \item \texttt{bb84Demo.ts}, \texttt{xmssDemo.ts} (Web Crypto); toolbar CLI parity (\texttt{BB84}, \texttt{SIGNFPRINT}).
+  \item \texttt{qpucir v2}, migration, \texttt{qpu-session} export; RNG via \texttt{crypto.getRandomValues}.
+  \item \texttt{correctionWorker.ts}; \texttt{qpuFetchClient.ts} optional sidecar; \texttt{parity-python.yml}.
+  \item Sparse \texttt{StateVector}; WebGPU; full \texttt{unittests.py} coverage map green.
 \end{enumerate}
 
 %=============================================================================
 \section{Summary}
 %=============================================================================
 
-Parity is achievable on \textbf{GitHub Pages} by default: cycle executor, $\HS$ log, particle math, \texttt{SimulationSession}, Workers, and file exports. An \textbf{optional} sidecar extends the same \texttt{QpuClient} types via \texttt{fetch}. \textbf{GitHub Actions} automates CI/deploy. Verified gaps in \texttt{src/}: HilbertSpace, cycle runtime, checkpoints, noise, \texttt{SimulationSession}, \texttt{qpuFetchClient}, correction Worker.
+Parity on \textbf{GitHub Pages} includes the \textbf{full} Python surface: cycle sections, clock stack, register helpers, Hilbert log, noise/fingerprints, BB84/Ed25519 demos, memory snapshots, \texttt{FREE}/\texttt{sp} semantics, and reconciliation of wire-index and controlled-gate models---all via in-browser TypeScript + Web Crypto + Workers, with \textbf{GitHub Actions} for cross-impl scripts and optional \texttt{fetch} sidecar. See \S\ref{sec:full-checklist} for the complete itemized list.
 
 %=============================================================================
 \appendix
@@ -1141,6 +1257,10 @@ Symbol / name & Meaning \\
 \texttt{QpuResult<T>} & \texttt{\{ok:true,value\}} or \texttt{\{ok:false,error\}}; local and remote unified envelope. \\
 \texttt{trackParticles} & When true, include \texttt{ParticleSnapshot[]} and \texttt{OperationTransition[]} in run/step results. \\
 \texttt{recordHilbert} & When true, populate $\HS$ during cycle-mode execution. \\
+\texttt{spInit} & \texttt{'hadamard'} (current) or \texttt{'random'} (Python-style session RNG). \\
+\texttt{controlModel} & \texttt{'unitary'} (flat) or \texttt{'register-classical'} (cycle Python parity). \\
+$\delta_{\mathrm{avg}}$ & Frequency fingerprint Hamming threshold (GHz). \\
+\texttt{deviceTableSeed} & PRNG seed for reproducible $T_1,T_2,f_g$ table in tests. \\
 \bottomrule
 \end{tabular}
 \end{center}
