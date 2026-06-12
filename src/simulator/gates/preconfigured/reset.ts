@@ -1,6 +1,3 @@
-/**
- * Reset gate forces a measured or superposed qubit back to the zero basis state.
- */
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { prepareZeroQubit } from '../operations';

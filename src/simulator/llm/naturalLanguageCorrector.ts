@@ -203,6 +203,7 @@ const extractRawWireTokens = (raw: string) => (
     .filter((token) => token && !/^(with|from|inputs?|controls?)$/i.test(token))
 );
 
+// Draft extraction keeps raw wire tokens so ambiguous addresses can be clarified before canonicalization.
 const extractGateBindingDraft = (message: string): GateBindingDraft | null => {
   const normalized = message.replace(/\s+/g, ' ').trim();
 
@@ -352,6 +353,7 @@ const detectPartialGateCommand = (message: string, context: NlCorrectionContext)
   return { gate, inputs };
 };
 
+// Row hints update only matching truth-table rows, leaving unspecified inputs/outputs intact.
 const parseTruthTableRowHint = (message: string, context: NlCorrectionContext): TruthTable | null => {
   if (!context.truthTable) return null;
   const whenMatch = message.match(
@@ -414,6 +416,7 @@ export const parseNaturalLanguageCorrection = (
   }
 
   const lower = text.toLowerCase();
+  // Shared extraction happens before intent dispatch so actions can combine gate hints, preferences, and table edits.
   const preferredGates = extractPreferredGates(text);
   const gates = extractGateSpecs(text, context);
   const truthTable = parseTruthTableRowHint(text, context) ?? undefined;
@@ -519,6 +522,7 @@ export const parseNaturalLanguageCorrection = (
     };
   }
 
+  // Ambiguous wire names become clarification intents instead of guessing and editing the wrong register.
   const addressClarification = detectGateAddressClarification(text, context);
   if (addressClarification) {
     return addressClarification;

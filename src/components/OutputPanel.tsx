@@ -1,10 +1,3 @@
-/**
- * Read-only execution summary for simulator results.
- *
- * The panel renders measured bits, non-zero state-vector amplitudes, and the
- * full probability table so users can inspect both collapsed and superposed
- * outcomes after a circuit run.
- */
 import { basisLabel } from '../simulator/engine';
 import { formatComplex, magnitudeSquared } from '../simulator/complex';
 import { Complex } from '../simulator/complex';

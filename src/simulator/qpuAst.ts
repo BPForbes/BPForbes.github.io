@@ -196,6 +196,7 @@ export const parseCommand = (line: string): ParsedCommand => {
   let normalized = rawOp.toUpperCase();
   let phase: number | undefined;
 
+  // Backward gate spellings prefix primitives with B, while PHASE embeds its rotation in the opcode token.
   if (normalized.startsWith('B')) {
     const candidate = normalized.slice(1).split('=', 1)[0];
     if (primitiveGates.has(candidate)) {
@@ -266,7 +267,7 @@ type CompilerState = {
   rootScope: string;
 };
 
-/** Gates shown in the circuit UI; cycle workspace prep is compiler-internal and never rendered. */
+// Gates shown in the circuit UI; cycle workspace prep is compiler-internal and never rendered.
 export const visibleCircuitGates = (gates: CircuitGate[]) => gates.filter((gate) => gate.type !== 'RESET');
 
 const processLibraryFromSources = (sources: Record<string, string>) => {
@@ -280,6 +281,7 @@ const processLibraryFromSources = (sources: Record<string, string>) => {
 
 const childWorkspaceKey = (parentFrame: Frame, base: string) => `${parentFrame.scope}/ws/${base}`;
 
+// Scoped token names keep child-process registers isolated, except PARAMS, aliases, constants, and numeric workspace wires.
 const scopedName = (frame: Frame, token: string, parentFrame?: Frame) => {
   const base = stripCycle(token);
   if (frame.params.has(base)) return frame.params.get(base)!;
@@ -312,6 +314,7 @@ const emitGate = (state: CompilerState, type: GateType, targets: number[], contr
   });
 };
 
+// Zero initialization is batched until the next real operation so internal workspace RESET gates stay off the rendered canvas.
 const scheduleCycleZero = (state: CompilerState, qubit: number) => {
   state.resetQubits.add(qubit);
   state.pendingCycleZeros.add(qubit);
@@ -400,6 +403,7 @@ const executeProcess = (
       const targetName = scopedName(frame, target, parentFrame);
       const targetBase = stripCycle(target);
       if (!value) throw new Error(`SET requires a value in '${line}'`);
+      // State-typed PARAM defaults are runtime controls; non-param constants lower to initializer gates during compile.
       if (isConstant(value)) {
         const declaredParam = frame.process.params.find((param) => param.name === targetBase);
         if (declaredParam?.type === 'state') {
@@ -446,6 +450,7 @@ const executeProcess = (
       const childReturnRegisters = returnRegistersForProcess(child);
       const childOutputBindings = new Map<string, string>();
       const preparedOutputQubits = new Set<number>();
+      // Child RETURNVALS bind directly onto parent outputs, with each output reset once before expansion.
       command.outputs.forEach((output, index) => {
         const childRegister = childReturnRegisters[index];
         if (!childRegister) return;
@@ -523,6 +528,7 @@ const executeProcess = (
         emitGate(state, 'SWAP', swapQubits, [], line);
         continue;
       }
+      // For primitive and derived AST gates, -O names the mutated target and -I names controls/inputs.
       const targetToken = command.outputs[0] ?? command.inputs[0];
       const target = resolveInputQubit(state, frame, targetToken, parentFrame);
       const controls = command.inputs
@@ -547,6 +553,7 @@ const executeProcess = (
   return returns;
 };
 
+// Compaction removes unused symbolic registers after expansion so UI labels and state vectors use dense indices.
 const compactQubitLayout = (
   gates: CircuitGate[],
   tokenMap: Record<string, number>,

@@ -1,6 +1,3 @@
-/**
- * Derived XOR gate mirrors CNOT-style parity behavior for protocol-level logical commands.
- */
 import { createControlledXFamilyGate } from '../factories';
 
 export const xorGate = createControlledXFamilyGate({

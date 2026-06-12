@@ -1,6 +1,3 @@
-/**
- * T gate applies the standard eighth-turn phase rotation.
- */
 import { createFixedPhaseGate } from '../factories';
 import { PHASE_PI_4 } from '../matrices';
 

@@ -1,6 +1,3 @@
-/**
- * Measurement gate collapses the target qubit and records the classical bit for later gates.
- */
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { measureQubit } from '../operations';

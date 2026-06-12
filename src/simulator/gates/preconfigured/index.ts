@@ -1,6 +1,3 @@
-/**
- * Aggregates built-in gates into the registry order used by palettes, metadata, and lookup maps.
- */
 import { xGate } from './x';
 import { yGate } from './y';
 import { zGate } from './z';

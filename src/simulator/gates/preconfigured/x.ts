@@ -1,6 +1,3 @@
-/**
- * Pauli-X gate flips population between the zero and one basis states.
- */
 import { createSingleQubitMatrixGate } from '../factories';
 import { MATRIX_X } from '../matrices';
 

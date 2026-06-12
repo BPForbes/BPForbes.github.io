@@ -20,6 +20,7 @@ export const getReferencedChildProcesses = (source: string): string[] => {
   return Array.from(children);
 };
 
+// Descendant discovery follows nested DECLARE/RUNCHILD/CALL references so fixes can respect child truth tables.
 export const collectDescendantProcesses = (
   processName: string,
   librarySources: Record<string, string>,
@@ -44,6 +45,7 @@ export const collectDescendantProcesses = (
   return descendants;
 };
 
+// Leaf-first ordering corrects dependencies before parents that call them.
 export const orderProcessesLeafFirst = (
   processNames: string[],
   librarySources: Record<string, string>,
@@ -79,6 +81,7 @@ export const correctChildProcessesForCompatibility = (
   const nextLibrary = { ...librarySources };
   const childCorrections: ChildCorrectionResult[] = [];
 
+  // Each corrected child is written into the working library before ancestors are tested against it.
   ordered.forEach((processName) => {
     const truthTable = getTruthTable(processName);
     const source = nextLibrary[processName];

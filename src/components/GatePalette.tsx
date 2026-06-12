@@ -1,9 +1,3 @@
-/**
- * Palette grouped by built-in and user-registered gates.
- *
- * The split mirrors the registry model so custom process gates can appear next
- * to preconfigured operations without changing canvas placement code.
- */
 import { customPaletteGates, preconfiguredPaletteGates } from '../simulator/gates/registry';
 import { GateType } from '../simulator/types';
 import { GateBlock } from './GateBlock';

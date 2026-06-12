@@ -1,6 +1,3 @@
-/**
- * Hadamard gate places a target qubit on the equal-amplitude measurement axis.
- */
 import { createSingleQubitMatrixGate } from '../factories';
 import { MATRIX_H } from '../matrices';
 

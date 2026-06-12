@@ -1,6 +1,3 @@
-/**
- * Controlled-NOT gate definition used by both canvas placement and compiled protocol instructions.
- */
 import { createControlledXFamilyGate } from '../factories';
 
 export const cnotGate = createControlledXFamilyGate({

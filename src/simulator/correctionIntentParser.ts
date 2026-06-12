@@ -13,18 +13,20 @@ export type CorrectionIntentParseOptions = {
   onProgress?: (text: string) => void;
 };
 
-/** Fast regex parser first; optional browser or Ollama LLM for unrecognized messages. */
+// Fast regex parser first; optional browser or Ollama LLM for unrecognized messages.
 export const parseCorrectionIntent = async (
   message: string,
   context: NlCorrectionContext,
   options: CorrectionIntentParseOptions = {},
 ): Promise<ModelCorrectionIntent> => {
   const regexIntent = parseNaturalLanguageCorrection(message, context);
+  // Clarifications and confident regex intents stay local; only fallback intents spend model latency.
   if (isClarificationIntent(regexIntent) || !options.useLlm || !isRegexFallbackIntent(regexIntent)) {
     return regexIntent;
   }
 
   const settings = options.llmSettings;
+  // Model backends share the same intent schema, so failures safely fall back to the regex intent below.
   if (settings?.mode === 'ollama') {
     options.onProgress?.(`Asking Ollama (${settings.ollamaModel})…`);
     return await parseNaturalLanguageWithModel(message, context, {

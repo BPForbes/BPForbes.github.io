@@ -104,6 +104,7 @@ const isPairwiseMajorityOutput = (
   });
 };
 
+// Minterm synthesis flips zero-valued controls into positive controls, applies one gate, then restores inputs.
 const appendMintermGate = (
   lines: string[],
   inputNames: string[],
@@ -150,6 +151,7 @@ const synthesizeOutputGates = (
     return lines;
   }
 
+  // Recognized parity and majority outputs use compact gate patterns instead of a full minterm expansion.
   if (isXorParityOutput(inputNames, rows, inputWidth, outputColumnIndex) && preferredGates.includes('CNOT')) {
     lines.push(`SET ${outputRef} 0p`);
     inputNames.forEach((name) => {
@@ -248,6 +250,7 @@ export const correctCircuit = (
   let current = source;
   let activeGuidance = { ...guidance };
 
+  // Correction escalates from exact template, to user-guided edits, to autonomous truth-table synthesis.
   for (let iteration = 0; iteration < maxIterations; iteration += 1) {
     const testResult = testCircuitAgainstTruthTable(current, table, librarySources);
     if (testResult.passed) {

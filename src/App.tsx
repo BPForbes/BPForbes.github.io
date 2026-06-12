@@ -62,7 +62,6 @@ const newGate = (
 };
 
 function App() {
-  // Builder state lives here because uploads, compiled protocol metadata, simulation output, and view selection all need to stay in sync.
   const [qubitCount, setQubitCount] = useState(QUBIT_COUNT);
   const [simulationQubitCount, setSimulationQubitCount] = useState(QUBIT_COUNT);
   const [runtimeQubitCount, setRuntimeQubitCount] = useState(QUBIT_COUNT);
@@ -116,6 +115,7 @@ function App() {
     return Array.from({ length: qubitCount }, (_, qubit) => ({ name: `q${qubit}`, type: '1', qubitIndex: qubit }));
   }, [processParams, qubitCount, simulationQubitCount]);
   const paramQubitIndices = useMemo(() => controllableParams.map((param) => param.qubitIndex), [controllableParams]);
+  // Compiled processes can use hidden workspace qubits, so result panels project the full state down to RETURNVALS or PARAMS.
   const displayQubitIndices = useMemo(
     () => (returnValues.length > 0 ? returnValues.map((value) => value.qubitIndex) : paramQubitIndices),
     [returnValues, paramQubitIndices],
@@ -202,6 +202,7 @@ function App() {
     return undefined;
   };
 
+  // Canvas edits own the protocol text in canvas mode; compiled process metadata is cleared to avoid stale token labels.
   const syncCanvasProtocol = (nextGates: CircuitGate[], nextQubitCount = simulationQubitCount, nextStartStates = startStates) => {
     setProtocolMode('canvas');
     setProcessParams([]);
@@ -211,6 +212,7 @@ function App() {
     setProtocolSource(serializeCircuitToQpuProtocol(nextGates, nextQubitCount, nextStartStates));
   };
 
+  // New PARAMS receive fresh qubit slots after existing compiled wires so user-added inputs do not collide with workspace registers.
   const processParamsFromProtocolSource = (source: string, previousParams = processParams, firstNewQubit = simulationQubitCount) => {
     let nextNewQubit = firstNewQubit;
     return getProtocolParameterEntries(source).map((param) => {
@@ -222,6 +224,7 @@ function App() {
     });
   };
 
+  // Runtime resets initialize only user-controllable PARAMS when a compiled process has internal ancilla wires.
   const resetRuntime = (
     nextSimulationQubitCount = simulationQubitCount,
     reason?: string,
@@ -270,6 +273,7 @@ function App() {
     resetRuntime();
   };
 
+  // Runs hide compiler-internal RESET chatter while retaining particle snapshots for the visualizer.
   const run = () => {
     const result = runCircuit(
       simulationQubitCount,
@@ -287,6 +291,7 @@ function App() {
     setCursor(orderedGates.length);
   };
 
+  // Step mode resolves the current state-vector width because child-process expansion can allocate qubits lazily.
   const step = () => {
     const gate = orderedGates[cursor];
     if (!gate) return;
@@ -306,6 +311,7 @@ function App() {
 
   const resetCircuit = () => resetRuntime();
 
+  // Start-state edits write back into either the canvas serialization or the matching PARAMS declaration.
   const updateStartState = (qubit: number, value: ParticleStartState) => {
     const nextStartStates = Array.from(
       { length: simulationQubitCount },
@@ -377,6 +383,7 @@ function App() {
     addGate(selectedGate, selectedSimulationQubit, workbenchControlsForGate(selectedGate, selectedSimulationQubit));
   };
 
+  // Particle count controls either raw canvas wires or process PARAMS, depending on which authoring mode is active.
   const addParticle = () => {
     if (protocolMode === 'process') {
       const currentParamCount = getProtocolParameterEntries(protocolSource).length;
@@ -471,6 +478,7 @@ function App() {
     resetRuntime();
   };
 
+  // Loading a canvas example intentionally drops compiled metadata; examples are edited as visual circuits first.
   const loadExample = (index: number) => {
     const example = examples[index];
     const nextStartStates = Array.from({ length: example.qubitCount }, () => '0p' as ParticleStartState);
@@ -572,6 +580,7 @@ function App() {
     if (!files || files.length === 0) return;
 
     try {
+      // QPUCIR drives compilation; companion QPUIO is catalog metadata and cannot overwrite protected bundled tables.
       const fileList = Array.from(files);
       fileList.forEach((file) => validateUploadFileName(file.name));
       const qpucirFile = fileList.find((file) => isQpucirFileName(file.name))

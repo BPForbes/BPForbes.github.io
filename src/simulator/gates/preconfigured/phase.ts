@@ -1,6 +1,3 @@
-/**
- * Parameterized phase gate rotates the target amplitude by a caller-provided angle.
- */
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { applySingleQubitGate } from '../operations';

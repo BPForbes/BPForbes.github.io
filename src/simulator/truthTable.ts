@@ -114,6 +114,7 @@ export const createTruthTableFromColumns = (inputColumns: string[], outputColumn
   return { inputColumns, outputColumns, rows };
 };
 
+// Column remapping preserves user-entered expectations when PARAMS/RETURNVALS order changes.
 const remapTruthTableRow = (
   previous: TruthCellValue[],
   table: TruthTable,
@@ -144,6 +145,7 @@ export const resizeTruthTable = (
     : (outputColumns.length > 0 ? 1 : 0);
   const preservePartial = table.rows.length > 0 && table.rows.length < combinatorialRowCount;
 
+  // Partial tables keep their listed cases instead of expanding to every combinatorial input row.
   if (preservePartial) {
     return {
       inputColumns,
@@ -288,6 +290,7 @@ export const simulateTruthTableOutputs = (
   const compiled = compileQpuProtocol(source, librarySources);
   const inputColumns = compiled.processParams.map((param) => param.name);
   const outputColumns = compiled.returnValues.map((value) => value.name);
+  // Output probing reuses caller-provided input rows for partial tables; otherwise it enumerates every binary input.
   const rows = (inputRows ?? Array.from({ length: 2 ** inputColumns.length }, (_, index) => indexToInputRow(index, inputColumns.length)))
     .map((inputs) => {
       const startStates = Array.from({ length: compiled.qubitCount }, () => '0p' as ParticleStartState);
@@ -359,6 +362,7 @@ export const testCircuitAgainstTruthTable = (
     const measured = measureAll(executed.state, compiled.qubitCount, executed.measurements);
     const actualOutputs = table.outputColumns.map((name) => readMeasuredBit(compiled.tokenMap, measured.measurements, name));
     const passed = expectedOutputs.every((expected, outputIndex) => {
+      // Expected 'sp' is a don't-care marker for truth-table cells where either measured bit is acceptable.
       if (expected === 'sp') return true;
       return expected === actualOutputs[outputIndex];
     });

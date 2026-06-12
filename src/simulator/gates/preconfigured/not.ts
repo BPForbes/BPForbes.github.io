@@ -1,6 +1,3 @@
-/**
- * Derived protocol NOT gate maps to the same state-vector operation as Pauli-X.
- */
 import type { GateDefinition } from '../types';
 import { gateIoArity } from '../types';
 import { applySingleQubitGate } from '../operations';
