@@ -37,7 +37,7 @@
 }
 
 \title{\textbf{QPU React Parity Specification}\\[0.4em]
-\large Physics Engine, Mathematics, API, Circuit Builder, Hilbert Space, and Data Migration}
+\large Static-Site-First: React, TypeScript, HTML, CSS (GitHub Pages)}
 \author{react-qpu-mvp $\rightarrow$ BPForbes/QPU alignment}
 \date{\today}
 
@@ -54,7 +54,7 @@
 \maketitle
 
 \begin{abstract}
-The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \emph{static site} (Vite $\rightarrow$ GitHub Pages). Simulation, compilation, and correction currently execute entirely in the browser. The reference Python implementation (\texttt{BPForbes/QPU}) provides cycle-oriented AST evaluation, a register-indexed \texttt{HilbertSpace} audit log, hybrid sparse/dense state vectors, noise channels, and checkpointing (\texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}). This document specifies the mathematical, architectural, API, UI, and data-object upgrades required to bring the React stack to parity while preserving static-site deployment via an optional sidecar API and in-browser fallback. \textbf{Verified against current code} (2026): \texttt{engine.ts}, \texttt{particleTracking.ts}, \texttt{blochQuadrature.ts}, \texttt{qpuAst.ts}, \texttt{qpucirFile.ts}; HilbertSpace and sidecar are \emph{specified}, not yet implemented.
+The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \emph{static site} (Vite $\rightarrow$ GitHub Pages): React, TypeScript, HTML, and CSS only---no application server, no sidecar, no runtime Node dependency. Simulation, compilation, and correction run entirely in the browser today. The reference Python implementation (\texttt{BPForbes/QPU}) provides cycle-oriented AST evaluation, a register-indexed \texttt{HilbertSpace} audit log, hybrid sparse/dense state vectors, noise channels, and checkpointing (\texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}). This document specifies how to reach Python parity \textbf{within that static constraint}: all new physics, Hilbert logging, and correction flows are implemented as importable TypeScript modules, in-tab \texttt{SimulationSession} objects, optional \textbf{Web Workers} for long jobs, and browser storage (+\,file download/upload). \textbf{Verified against current code} (2026): \texttt{engine.ts}, \texttt{particleTracking.ts}, \texttt{blochQuadrature.ts}, \texttt{qpuAst.ts}, \texttt{qpucirFile.ts}; HilbertSpace and cycle runtime are \emph{specified}, not yet implemented.
 \end{abstract}
 
 \tableofcontents
@@ -95,10 +95,33 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
 \begin{quote}
 \textbf{P1 (semantic parity):} For every supported protocol command, the observable outputs (measurements, return values, truth-table rows, and Hilbert log entries) must match Python within tolerance $\varepsilon_a=10^{-6}$ on amplitudes and $\varepsilon_p=10^{-4}$ on probabilities.
 
-\textbf{P2 (static-site preservation):} The GitHub Pages bundle remains a client; parity features that require shared state or heavy jobs are exposed through an optional HTTP API and degrade gracefully to in-browser execution when no API URL is configured.
+\textbf{P2 (static-site only):} Parity features ship inside the Vite bundle. No \texttt{VITE\_QPU\_API\_URL}, no Express/Fastify host, no server sessions. Long work uses \textbf{Web Workers}; persistence uses \textbf{localStorage}, \textbf{sessionStorage}, \textbf{IndexedDB}, and \textbf{Blob} file I/O (patterns already used by the catalog and \texttt{downloadQpucirSource}).
 
 \textbf{P3 (forward-compatible data):} All export formats gain an explicit \texttt{version} field and migration path; protected bundled \texttt{.qpuio} truth tables are never mutated in place.
+
+\textbf{P4 (allowed runtime deps):} React, TypeScript, browser APIs, Vitest for CI. Existing optional outbound \texttt{fetch} to user-local Ollama (\texttt{llm/config.ts}) remains client-initiated only; it is not required for parity.
 \end{quote}
+
+\subsection{Static-site architecture (authoritative)}
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=1.2cm,
+  box/.style={draw, rounded corners, minimum width=3.2cm, minimum height=0.9cm, align=center, font=\small}
+]
+  \node[box] (pages) {GitHub Pages\\\texttt{dist/} SPA};
+  \node[box, below left=of pages] (sim) {Simulator core\\\texttt{src/simulator/}};
+  \node[box, below=of pages] (ui) {React UI\\\texttt{src/components/}};
+  \node[box, below right=of pages] (store) {Browser storage\\+\,file I/O};
+  \node[box, below=of sim] (worker) {Web Worker\\(correction only)};
+  \draw[->] (ui) -- (sim);
+  \draw[->] (sim) -- (store);
+  \draw[->, dashed] (ui) -- (worker);
+  \draw[->, dashed] (worker) -- (sim);
+\end{tikzpicture}
+\end{center}
+
+\noindent\textbf{Out of scope for this plan:} HTTP session APIs, server-side mutexes, multi-tenant hosting, server GC. Cross-tab sharing is optional via \texttt{BroadcastChannel} + exported \texttt{qpu-session} files, not a backend.
 
 %=============================================================================
 \section{Physics engine upgrades}
@@ -473,10 +496,12 @@ export class StateVector {
 Sparse/dense hybrid remains Phase~II; initial parity uses dense arrays identical to today's \texttt{engine.ts} loops.
 
 %=============================================================================
-\section{API changes}
+\section{Client API (in-browser, no HTTP)}
 %=============================================================================
 
-\subsection{In-process API (\texttt{moduleTestApi.ts})}
+All ``API'' surface area is \textbf{TypeScript functions and types} imported by React components and tests. There is no network boundary inside the parity plan.
+
+\subsection{Core entry points (\texttt{moduleTestApi.ts} + session facade)}
 
 Extend types:
 
@@ -507,118 +532,116 @@ type ModuleTestResponse = {
   \item Never emit intents that rewrite protected \texttt{.qpuio} tables.
 \end{enumerate}
 
-\subsection{Optional HTTP API (static-site sidecar)}
-
-Environment: \texttt{VITE\_QPU\_API\_URL}. When unset, all calls stay in-process (current behavior).
+\subsection{SimulationSession facade (maps former ``HTTP endpoints'' to methods)}
 
 \begin{center}
-\begin{tabular}{@{}lll@{}}
+\begin{tabular}{@{}ll@{}}
 \toprule
-Method & Path & Purpose \\
+Method & Purpose \\
 \midrule
-POST & \texttt{/v1/compile} & protocol $\rightarrow$ gates or AST \\
-POST & \texttt{/v1/sessions} & create session (mode, noise, $n$) \\
-DELETE & \texttt{/v1/sessions/\{id\}} & destroy session \\
-POST & \texttt{/v1/sessions/\{id\}/run} & flat run \\
-POST & \texttt{/v1/sessions/\{id\}/step} & one gate or one cycle \\
-GET  & \texttt{/v1/sessions/\{id\}/hilbert} & $\HS$ entries \\
-GET  & \texttt{/v1/sessions/\{id\}/bloch} & particle snapshots \\
-POST & \texttt{/v1/sessions/\{id\}/checkpoint} & \texttt{SAVE\_STATE} \\
-POST & \texttt{/v1/sessions/\{id\}/restore} & \texttt{LOAD\_STATE} \\
-POST & \texttt{/v1/test} & \texttt{runModuleTest} \\
-POST & \texttt{/v1/jobs} & async correction \\
+\texttt{createSimulationSession(opts)} & new in-memory session \\
+\texttt{session.compile(source)} & protocol $\rightarrow$ gates or AST \\
+\texttt{session.run(gates)} & flat run \\
+\texttt{session.step()} & one gate or one cycle \\
+\texttt{session.getHilbert()} & $\HS$ entries \\
+\texttt{session.getBloch()} & \texttt{ParticleSnapshot[]} \\
+\texttt{session.checkpoint(name)} / \texttt{restore(name)} & \texttt{SAVE\_STATE}/\texttt{LOAD\_STATE} \\
+\texttt{session.destroy()} & release references (GC) \\
+\texttt{runModuleTest(request)} & truth-table test (existing) \\
+\texttt{runCorrectionJob(request)} & Worker-backed correction \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\subsubsection{Error handling and wire format}
+Sessions live in a \texttt{Map} inside a React context provider (\texttt{SimulationProvider}) or module singleton; they are \textbf{not} addressable over HTTP.
 
-\textbf{HTTP status codes:}
-\begin{itemize}
-  \item \texttt{200} success; \texttt{201} session/job created.
-  \item \texttt{400} malformed JSON or schema validation failure.
-  \item \texttt{404} unknown \texttt{sessionId} or checkpoint name.
-  \item \texttt{409} session mutation conflict (see concurrency).
-  \item \texttt{422} compilation error, invalid protocol, or unsupported \texttt{execution.mode}.
-  \item \texttt{500} internal error; \texttt{503} sidecar at session capacity.
-\end{itemize}
+\subsection{Result types and error codes (no HTTP)}
 
-\textbf{Uniform error envelope} (all endpoints):
+Use a uniform discriminated union instead of status codes:
 \begin{lstlisting}[style=protocol]
-{ "error": {
-    "code": "SESSION_NOT_FOUND",
-    "message": "No session with id ...",
-    "details": { ... optional structured fields ... }
-  }}
+type QpuErrorCode =
+  | 'COMPILE_ERROR' | 'STATE_CORRUPT' | 'VERSION_UNSUPPORTED'
+  | 'CHECKPOINT_NOT_FOUND' | 'VALIDATION_FAILED' | 'WORKER_FAILED';
+
+type QpuResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: { code: QpuErrorCode; message: string; details?: unknown } };
 \end{lstlisting}
-Examples: \texttt{COMPILE\_ERROR}, \texttt{STATE\_CORRUPT}, \texttt{VERSION\_UNSUPPORTED}, \texttt{SESSION\_CONFLICT}.
+UI maps codes to toasts; tests assert \texttt{ok===false} and \texttt{error.code}.
 
-\textbf{API versioning:} \texttt{/v1/} prefix is stable for minor additive fields. Breaking changes require \texttt{/v2/}. Clients send optional \texttt{Accept-Version: 1} header; servers include \texttt{X-QPU-API-Version: 1}. Deprecation: \texttt{Sunset} header + 6-month overlap documented in release notes.
+\subsection{Export / import wire format (files and IndexedDB)}
 
-\textbf{Amplitude wire format:}
+Used by \texttt{downloadQpucirContents}, session export, and optional IndexedDB persistence:
 \begin{itemize}
-  \item JSON array of \texttt{\{"re": number, "im": number\}} objects; IEEE-754 \texttt{float64} semantics.
-  \item JSON is text; \textbf{no binary endianness} on the wire. If a future binary codec is added, use big-endian IEEE-754 per field.
-  \item \texttt{NaN}, \texttt{+Inf}, \texttt{-Inf} are \textbf{rejected} on input (\texttt{400}); never emitted on output (normalize or error).
-  \item Length must be exact power of two $2^n$; mismatch $\rightarrow$ \texttt{422}.
-\end{itemize}
-Ket strings may be precomputed server-side for bandwidth; amplitudes remain authoritative.
-
-\subsubsection{Session concurrency and lifecycle}
-
-\textbf{Single-writer per session:} \texttt{POST .../run}, \texttt{POST .../step}, \texttt{POST .../checkpoint}, \texttt{POST .../restore} are serialized through a server-side mutex (FIFO queue). Concurrent mutating requests receive \texttt{409 SESSION\_CONFLICT} with \texttt{details.expectedRevision}.
-
-\textbf{Optimistic revision:} each session has monotonic \texttt{revision} (integer). Mutating requests should include \texttt{If-Match: <revision>}; mismatch $\rightarrow$ \texttt{409}.
-
-\textbf{Concurrent reads allowed:} \texttt{GET .../hilbert}, \texttt{GET .../bloch} may run parallel to each other but see last-committed revision (read-your-writes after mutations complete).
-
-\textbf{Browser tabs:} default \textbf{one session per tab} (client generates \texttt{sessionId} in \texttt{sessionStorage}). Sharing a session across tabs is opt-in via URL hash; clients must coordinate writes (leader election or single-writer tab) to avoid \texttt{409} storms.
-
-\textbf{Lifecycle:}
-\begin{itemize}
-  \item Idle timeout: 30 minutes (configurable); timer resets on any request.
-  \item Explicit \texttt{DELETE /v1/sessions/\{id\}}; idempotent.
-  \item Server GC: sweep expired sessions every 5 minutes.
-  \item Default max concurrent sessions per sidecar instance: 64 (configurable); excess $\rightarrow$ \texttt{503}.
+  \item JSON array of \texttt{\{"re": number, "im": number\}}; IEEE-754 \texttt{float64}.
+  \item \texttt{NaN}/\texttt{±Inf} rejected on import (\texttt{VALIDATION\_FAILED}).
+  \item Length must be $2^n$; ket strings are display-only; amplitudes are authoritative.
 \end{itemize}
 
-\subsection{Sidecar implementation sketch}
+\subsection{Concurrency and lifecycle (browser)}
+
+\textbf{Main thread:} one \texttt{SimulationSession} mutation at a time per tab. \texttt{session.run}/\texttt{step}/\texttt{checkpoint}/\texttt{restore} are synchronous calls from React event handlers (same as today's \texttt{runCircuit}).
+
+\textbf{Revision counter:} monotonic \texttt{session.revision} increments after each mutation; React state updates use the latest revision to ignore stale async Worker callbacks.
+
+\textbf{Web Worker (optional):} \texttt{runCorrectionJob} and large truth-table sweeps post to \texttt{correctionWorker.ts}; one in-flight job per tab; UI shows progress via \texttt{postMessage}. Worker imports the same \texttt{src/simulator/**} modules (Vite worker bundle).
+
+\textbf{Tabs:} each tab owns its session (\texttt{sessionStorage} key \texttt{qpu-tab-session-id}). No shared server state. Optional cross-tab: export/import \texttt{qpu-session} JSON or \texttt{BroadcastChannel} notify (read-only).
+
+\textbf{Lifecycle:} \texttt{session.destroy()} on process switch or tab unload (\texttt{beforeunload}); IndexedDB snapshots optional on idle (\texttt{requestIdleCallback}); no server GC.
+
+\subsection{Static-site implementation sketch}
 
 \begin{lstlisting}[style=code]
-// server/index.ts (proposed Node sidecar)
-import { createServer } from 'node:http';
-import { compileQpuProtocol } from '../src/simulator/compiler/qpuAst';
-import { runCircuit, stepCircuitGate } from '../src/simulator/engine';
-import { runModuleTest } from '../src/simulator/moduleTestApi';
-import { HilbertSpace } from '../src/simulator/physics/hilbertSpace';
+// simulator/simulationSession.ts (proposed)
+import { compileQpuProtocol } from './compiler/qpuAst';
+import { runCircuit, stepCircuitGate } from './engine';
+import { HilbertSpace } from './physics/hilbertSpace';
 
-type Session = {
-  id: string; revision: number; lock: Promise<void>;
-  qubitCount: number; state: Complex[]; measurements: MeasurementMap;
-  hilbert: HilbertSpace; mode: 'flat' | 'cycle'; expiresAt: number;
+export type SimulationSession = {
+  revision: number;
+  mode: 'flat' | 'cycle';
+  state: Complex[];
+  measurements: MeasurementMap;
+  hilbert: HilbertSpace;
+  checkpoints: Map<string, CheckpointPayload>;
+  run(gates: CircuitGate[]): QpuResult<ExecutionResult>;
+  step(): QpuResult<ExecutionResult>;
+  getHilbert(): HilbertEntry[];
+  destroy(): void;
 };
 
-const sessions = new Map<string, Session>();
-
-function json(res, status, body) {
-  res.writeHead(status, { 'Content-Type': 'application/json', 'X-QPU-API-Version': '1' });
-  res.end(JSON.stringify(body));
+export function createSimulationSession(opts: SessionOptions): SimulationSession {
+  const hilbert = new HilbertSpace();
+  let revision = 0;
+  // ... run/step update state, hilbert.output on gate boundaries, revision++
+  return { revision, hilbert, run, step, getHilbert: () => hilbert.entries(), destroy() {} };
 }
-
-createServer(async (req, res) => {
-  if (req.url === '/v1/compile' && req.method === 'POST') {
-    try {
-      const { source, librarySources } = await readJson(req);
-      const compiled = compileQpuProtocol(source, librarySources ?? {});
-      json(res, 200, { compiled });
-    } catch (e) { json(res, 422, { error: { code: 'COMPILE_ERROR', message: String(e) } }); }
-    return;
-  }
-  // POST /v1/sessions, serialized POST .../step with revision check, etc.
-}).listen(process.env.PORT ?? 8787);
 \end{lstlisting}
 
-Deploy sidecar separately from GitHub Pages; SPA reads \texttt{import.meta.env.VITE\_QPU\_API\_URL}.
+\begin{lstlisting}[style=code]
+// simulator/workers/correctionWorker.ts (proposed)
+import { runModuleTest } from '../moduleTestApi';
+
+self.onmessage = (event: MessageEvent<ModuleTestRequest>) => {
+  try {
+    const response = runModuleTest(event.data);
+    self.postMessage({ ok: true, value: response });
+  } catch (error) {
+    self.postMessage({ ok: false, error: { code: 'WORKER_FAILED', message: String(error) } });
+  }
+};
+\end{lstlisting}
+
+\begin{lstlisting}[style=code]
+// App.tsx wiring (pattern)
+const session = useMemo(() => createSimulationSession({ mode, recordHilbert }), [processId]);
+const onRun = () => {
+  const result = session.run(compiled.gates);
+  if (!result.ok) { setError(result.error); return; }
+  setExecution(result.value);
+};
+\end{lstlisting}
 
 %=============================================================================
 \section{Circuit builder updates}
@@ -677,11 +700,11 @@ type QpuFeatureFlags = {
   recordHilbert: boolean;
   trackParticles: boolean;
   noise: boolean;
-  remoteApi: boolean;
+  useCorrectionWorker: boolean;
 };
 \end{lstlisting}
 
-Defaults: \texttt{flat}, \texttt{recordHilbert=false}, \texttt{trackParticles=true}, \texttt{noise=false}.
+Defaults: \texttt{flat}, \texttt{recordHilbert=false}, \texttt{trackParticles=true}, \texttt{noise=false}, \texttt{useCorrectionWorker=true} for Correction Lab jobs.
 
 %=============================================================================
 \section{Data objects and migration}
@@ -813,9 +836,10 @@ For each bundled process $P$ and truth-table row $\mathbf{x}$:
 
 \begin{enumerate}[label=\textbf{Phase \Roman*.}]
   \item \texttt{HilbertSpace} + \texttt{formatQubitState} + cycle executor; lower \texttt{SAVE\_STATE}/\texttt{LOAD\_STATE}.
-  \item \texttt{RegisterBank}, noise, device table; Module Lab Hilbert context; extend particle math kernels.
-  \item \texttt{qpucir v2}, \texttt{qpucirMigrate.ts}, catalog v2.
-  \item HTTP sidecar + \texttt{VITE\_QPU\_API\_URL} client.
+  \item \texttt{SimulationSession} facade + \texttt{QpuResult} errors; wire \texttt{App.tsx} / Module Lab.
+  \item \texttt{RegisterBank}, noise, device table; extend particle math kernels.
+  \item \texttt{qpucir v2}, \texttt{qpucirMigrate.ts}, catalog v2; \texttt{qpu-session} export/import.
+  \item \texttt{correctionWorker.ts} for long jobs; optional IndexedDB session cache.
   \item Sparse \texttt{StateVector}; WebGPU (\texttt{webGpu.ts} probe exists, no backend yet).
 \end{enumerate}
 
@@ -823,6 +847,6 @@ For each bundled process $P$ and truth-table row $\mathbf{x}$:
 \section{Summary}
 %=============================================================================
 
-Parity requires: cycle-capable executor with destructive-pop $\HS$ (Python semantics); math layers extending existing marginal $\rho_k$, Euler ket, and triple-integral $\langle\rho\rangle$; strict API contracts (errors, amplitudes, session locking); versioned exports with validation; sidecar separate from static Pages. Verified gaps in current code: HilbertSpace, cycle runtime, checkpoints, noise, and sidecar are specified here but not yet in \texttt{src/}.
+Parity is achievable \textbf{entirely on GitHub Pages}: cycle-capable executor with destructive-pop $\HS$ (Python semantics); math layers extending marginal $\rho_k$, Euler ket, and triple-integral $\langle\rho\rangle$; \texttt{SimulationSession} + \texttt{QpuResult} client API; versioned file exports; Web Workers for heavy correction. No backend is required. Verified gaps in \texttt{src/}: HilbertSpace, cycle runtime, checkpoints, noise, \texttt{SimulationSession}, and correction Worker.
 
 \end{document}
