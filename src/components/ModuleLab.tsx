@@ -2,46 +2,44 @@
 import { ChangeEvent, FormEvent, memo, useCallback, useMemo, useState } from 'react';
 import {
   buildProcessCatalogSummaries,
+  enforceProtectedTruthTable,
   getCatalogEntries,
   getCatalogEntry,
-  getCatalogTruthTable,
-  resolveCatalogEntry,
   getCatalogLibrarySources,
+  getCatalogTruthTable,
   getCatalogVersion,
   isCatalogTruthTableProtected,
+  isProtectedQpuioProcess,
   persistCatalogArtifacts,
   registerCatalogProcess,
   registerCatalogTruthTable,
-} from '../data/catalog/processCatalog';
-import type { ProcessCatalogOrigin } from '../data/catalog/processCatalog';
-import {
-  enforceProtectedTruthTable,
-  isProtectedQpuioProcess,
+  resolveCatalogEntry,
   warnProtectedTruthTable,
-} from '../data/catalog/protectedQpuio';
+  type ProcessCatalogOrigin,
+} from '../data/catalog';
 import {
   companionQpucirFileName,
+  companionQpuioFileName,
+  downloadQpucirSource,
+  downloadQpucirTxtSource,
+  downloadQpuioContents,
   isLooseQpucirUpload,
   isQpuioFileName,
   isQpucirFileName,
-  processStemFromQpuioFileName,
-  QPU_FILE_UPLOAD_ACCEPT,
-  validateUploadFileName,
-} from '../data/formats/qpuFileNames';
-import {
-  companionQpuioFileName,
-  downloadQpuioContents,
+  parseQpucirPayload,
   parseQpuioPayload,
+  processStemFromQpuioFileName,
   qpuioFileNameForProcess,
   qpuioTxtFileNameForProcess,
+  QPU_FILE_UPLOAD_ACCEPT,
   serializeQpuioText,
-} from '../data/formats/qpuioFile';
-import { downloadQpucirSource, downloadQpucirTxtSource, parseQpucirPayload } from '../data/formats/qpucirFile';
+  validateUploadFileName,
+} from '../data/formats';
 import {
   formatClarificationRetry,
+  parseCorrectionIntent,
   resolveClarificationResponse,
-} from '../simulator/correction/clarification';
-import { parseCorrectionIntent } from '../simulator/correction/correctionIntentParser';
+} from '../simulator/correction';
 import type { ModelCorrectionIntent, PendingClarification } from '../simulator/llm/intentTypes';
 import {
   BROWSER_MODEL_OPTIONS,
@@ -50,8 +48,8 @@ import {
   type LlmSettings,
 } from '../simulator/llm/config';
 import { getCachedBrowserModelId } from '../simulator/llm/config';
-import { hasWebGpu } from '../simulator/physics/webGpu';
-import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/compiler/qpuFormat';
+import { hasWebGpu } from '../simulator/physics';
+import { createBlankProtocol, extractMainProcessName, syncProtocolToTruthTable } from '../simulator/compiler';
 import {
   CorrectionGuidance,
   createEmptyTruthTable,

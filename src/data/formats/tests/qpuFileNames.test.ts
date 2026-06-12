@@ -8,7 +8,7 @@ import {
   qpucirTxtFileNameForProcess,
   qpuioTxtFileNameForProcess,
   validateUploadFileName,
-} from '../formats/qpuFileNames';
+} from '../qpuFileNames';
 
 describe('qpuFileNames', () => {
   it('recognizes qpucir and qpuio txt naming', () => {
