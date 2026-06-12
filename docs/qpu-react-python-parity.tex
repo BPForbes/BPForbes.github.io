@@ -99,7 +99,9 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
 
 \textbf{P3 (forward-compatible data):} All export formats gain an explicit \texttt{version} field and migration path; protected bundled \texttt{.qpuio} truth tables are never mutated in place.
 
-\textbf{P4 (allowed runtime deps):} React, TypeScript, browser APIs, Vitest for CI. Existing optional outbound \texttt{fetch} to user-local Ollama (\texttt{llm/config.ts}) remains client-initiated only; it is not required for parity.
+\textbf{P4 (allowed runtime deps):} React, TypeScript, browser APIs. Existing optional outbound \texttt{fetch} to user-local Ollama (\texttt{llm/config.ts}) remains client-initiated only; it is not required for parity.
+
+\textbf{P5 (GitHub Actions for automation):} Build, test, deploy, and batch validation scripts run in \textbf{GitHub Actions}---not in the browser bundle and not as an application server. Actions may invoke Node (\texttt{npm test}, \texttt{npm run build}), Python (cross-check against \texttt{BPForbes/QPU}), and artifact upload (Pages, parity reports). This satisfies ``we need to automate scripting'' without breaking P2.
 \end{quote}
 
 \subsection{Static-site architecture (authoritative)}
@@ -122,6 +124,62 @@ The React/TypeScript QPU application (\texttt{react-qpu-mvp}) is deployed as a \
 \end{center}
 
 \noindent\textbf{Out of scope for this plan:} HTTP session APIs, server-side mutexes, multi-tenant hosting, server GC. Cross-tab sharing is optional via \texttt{BroadcastChannel} + exported \texttt{qpu-session} files, not a backend.
+
+\subsection{GitHub Actions (CI/CD and scripted validation)}
+
+GitHub Actions is the \textbf{automation layer} alongside the static site. It does not ship to end users; it runs on \texttt{ubuntu-latest} when triggered by \texttt{push}, \texttt{pull\_request}, or \texttt{workflow\_dispatch}.
+
+\textbf{Today} (verified): \texttt{.github/workflows/deploy-pages.yml} --- \texttt{npm ci}, \texttt{npm run build}, deploy \texttt{dist/} to GitHub Pages. It does \textbf{not} yet run \texttt{npm test}.
+
+\textbf{Recommended workflows} (add under \texttt{.github/workflows/}):
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Workflow & Trigger & Purpose \\
+\midrule
+\texttt{deploy-pages.yml} & push \texttt{main} & build + Pages deploy (existing) \\
+\texttt{ci.yml} & PR + push & \texttt{npm ci}, \texttt{npm test}, \texttt{npm run build} \\
+\texttt{parity-python.yml} & nightly / manual & clone Python QPU, run cross-impl Hilbert/truth-table checks \\
+\texttt{export-validate.yml} & manual & validate bundled \texttt{.qpucir}/\texttt{.qpuio} v2 schemas \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\textbf{Example CI job} (Node-only; no runtime server):
+\begin{lstlisting}[style=code]
+# .github/workflows/ci.yml (proposed)
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+\end{lstlisting}
+
+\textbf{Example Python parity job} (scripted cross-check, still static-friendly):
+\begin{lstlisting}[style=code]
+# .github/workflows/parity-python.yml (proposed, workflow_dispatch)
+- run: |
+    git clone --depth 1 https://github.com/BPForbes/QPU /tmp/qpu-py
+    npm test -- --run src/simulator/tests/parityExport.test.ts
+    python /tmp/qpu-py/unittests.py   # or a thin TS script emitting JSON diffs
+\end{lstlisting}
+
+Secrets are not required for public build/test/deploy. Ollama/LLM integration tests stay \textbf{skipped in CI} (optional local-only); use mocked intents in Vitest instead.
+
+\noindent\textbf{Division of labor:}
+\begin{itemize}[noitemsep]
+  \item \textbf{Browser (Pages):} interactive sim, UI, in-tab \texttt{SimulationSession}, Workers.
+  \item \textbf{GitHub Actions:} regression gates, Python parity batches, schema validation, deploy.
+  \item \textbf{Not used:} application server, sidecar API, server-side sim sessions.
+\end{itemize}
 
 %=============================================================================
 \section{Physics engine upgrades}
@@ -840,6 +898,7 @@ For each bundled process $P$ and truth-table row $\mathbf{x}$:
   \item \texttt{RegisterBank}, noise, device table; extend particle math kernels.
   \item \texttt{qpucir v2}, \texttt{qpucirMigrate.ts}, catalog v2; \texttt{qpu-session} export/import.
   \item \texttt{correctionWorker.ts} for long jobs; optional IndexedDB session cache.
+  \item \texttt{ci.yml} (\texttt{npm test} on PR); optional \texttt{parity-python.yml} for scripted cross-impl checks.
   \item Sparse \texttt{StateVector}; WebGPU (\texttt{webGpu.ts} probe exists, no backend yet).
 \end{enumerate}
 
@@ -847,6 +906,6 @@ For each bundled process $P$ and truth-table row $\mathbf{x}$:
 \section{Summary}
 %=============================================================================
 
-Parity is achievable \textbf{entirely on GitHub Pages}: cycle-capable executor with destructive-pop $\HS$ (Python semantics); math layers extending marginal $\rho_k$, Euler ket, and triple-integral $\langle\rho\rangle$; \texttt{SimulationSession} + \texttt{QpuResult} client API; versioned file exports; Web Workers for heavy correction. No backend is required. Verified gaps in \texttt{src/}: HilbertSpace, cycle runtime, checkpoints, noise, \texttt{SimulationSession}, and correction Worker.
+Parity is achievable \textbf{entirely on GitHub Pages}: cycle-capable executor with destructive-pop $\HS$ (Python semantics); math layers extending marginal $\rho_k$, Euler ket, and triple-integral $\langle\rho\rangle$; \texttt{SimulationSession} + \texttt{QpuResult} client API; versioned file exports; Web Workers for heavy correction. \textbf{No application backend} is required; \textbf{GitHub Actions} automates build, test, deploy, and optional Python cross-validation scripts. Verified gaps in \texttt{src/}: HilbertSpace, cycle runtime, checkpoints, noise, \texttt{SimulationSession}, correction Worker, and CI test gate (\texttt{deploy-pages.yml} builds without \texttt{npm test}).
 
 \end{document}
